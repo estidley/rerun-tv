@@ -20,6 +20,7 @@ import com.rerun.tv.ui.channels.ChannelManager
 import com.rerun.tv.ui.crt.CrtLevel
 import com.rerun.tv.ui.crt.CrtOverlay
 import com.rerun.tv.ui.crt.PowerTransition
+import com.rerun.tv.ui.crt.ProvideCrtLevel
 import com.rerun.tv.ui.guide.GuideScreen
 import com.rerun.tv.ui.onboarding.OnboardingScreen
 import com.rerun.tv.ui.player.PlayerScreen
@@ -98,7 +99,8 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit) {
     val screen by controller.screen.collectAsState()
     val crt by controller.crtLevel.collectAsState()
     val exiting by controller.exiting.collectAsState()
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    val level = CrtLevel.from(crt)
+    ProvideCrtLevel(level) { Box(Modifier.fillMaxSize().background(Color.Black)) {
         when (val s = screen) {
             Screen.Onboarding -> OnboardingScreen(controller)
             Screen.Player -> PlayerScreen(controller)
@@ -107,7 +109,7 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit) {
             is Screen.Editor -> ChannelEditor(controller, s.channelId)
             Screen.Settings -> SettingsScreen(controller)
         }
-        CrtOverlay(CrtLevel.from(crt))
+        CrtOverlay(level)
         PowerTransition(on = !exiting, onOffDone = onPoweredOff)
-    }
+    } }
 }

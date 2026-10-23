@@ -34,6 +34,7 @@ import coil.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.tv.data.ChannelRow
+import com.rerun.tv.ui.crt.RetroText
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -57,8 +58,8 @@ fun clockTime(ms: Long): String = clock.format(Date(ms))
 fun ChannelOsd(channel: ChannelRow?, modifier: Modifier = Modifier) {
     if (channel == null) return
     Column(modifier.padding(top = 36.dp, end = 56.dp), horizontalAlignment = Alignment.End) {
-        BasicText(channel.number.toString(), style = Retro.Osd)
-        BasicText(channel.name.uppercase(), style = Retro.OsdSmall)
+        RetroText(channel.number.toString(), style = Retro.Osd)
+        RetroText(channel.name.uppercase(), style = Retro.OsdSmall)
     }
 }
 

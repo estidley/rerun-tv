@@ -40,6 +40,16 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val _bannerUntil = MutableStateFlow(0L)
     val bannerUntil: StateFlow<Long> = _bannerUntil.asStateFlow()
 
+    val crtLevel: StateFlow<String> = app.settings.crtLevel().stateIn(scope, SharingStarted.Eagerly, "SUBTLE")
+
+    fun cycleCrt() {
+        scope.launch { app.settings.setCrtLevel(com.rerun.tv.ui.crt.CrtLevel.from(crtLevel.value).next().name) }
+    }
+
+    fun setCrt(level: com.rerun.tv.ui.crt.CrtLevel) {
+        scope.launch { app.settings.setCrtLevel(level.name) }
+    }
+
     /** Set to true when the user asks to leave the app; the activity plays power-off and finishes. */
     private val _exiting = MutableStateFlow(false)
     val exiting: StateFlow<Boolean> = _exiting.asStateFlow()
