@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A sideloadable Fire TV app that signs into Plex, builds network/curated/theme/custom channels from the library, keeps a locked 48h schedule, and tunes in mid-program with static, info banner, guide and Up Next filler, already wearing its full retro CRT look so testing happens on the real look and feel.
+**Goal:** A sideloadable Fire TV app that signs into Plex, builds network/curated/theme/custom channels from the library (routing streaming originals into their owner family's classic network), keeps a locked 48h schedule, and tunes in mid-program with static, info banner, guide and Up Next filler, already wearing its full retro CRT look so testing happens on the real look and feel.
 
 **Architecture:** Two Gradle modules.
 - `:core` is pure Kotlin (JVM) and holds every decision that can be tested: models, catalog, resolver, scheduler, tune math, Plex JSON parsing, playback policy.
@@ -22,7 +22,7 @@
 - Never send Plex timeline or scrobble requests.
 - Program slots round up to the next :00/:30 (`GRID_MS = 30 min`). Schedule horizon 48h; top up when < 24h remains; written entries are never modified.
 - Channel is dormant when its pool totals < 4h (`DORMANT_MS = 4h`).
-- Number ranges: network/curated 100–199, theme 300–399, custom 400+.
+- Number ranges: network/curated 100–199, theme 300–399, custom 400+. (Live TV keeps real numbers in Phase 2.)
 - Tune-in: a program with < 5s remaining is skipped to the next entry.
 - Items with `durationMs < 60_000` are excluded from all pools.
 - Time zone for time blocks: device zone (`ZoneId.systemDefault()`); entry times are UTC epoch ms.
@@ -110,7 +110,7 @@ tools/ktest/               kotlin.test shim + runner for compiling :core without
   - `data class MediaItem(val key: String, val kind: MediaKind, val title: String, val year: Int?, val durationMs: Long, val genres: Set<String>, val network: String?, val studio: String?, val contentRating: String?, val showKey: String?, val showTitle: String?, val season: Int?, val episode: Int?, val tmdbId: String?, val labels: Set<String>, val collections: Set<String>, val partKey: String?, val container: String?, val videoCodec: String?, val audioCodec: String?, val thumb: String?)`
   - `data class ShowMeta(val key: String, val title: String, val year: Int?, val studio: String?, val genres: Set<String>, val contentRating: String?, val tmdbId: String?, val labels: Set<String>, val collections: Set<String>)`
   - `enum class ChannelKind { NETWORK, CURATED, THEME, CUSTOM }`, `enum class PlayOrder { SHUFFLE, IN_ORDER }`
-  - `data class Rules(val networks: Set<String> = emptySet(), val titles: Set<String> = emptySet(), val tmdbIds: Set<String> = emptySet(), val labels: Set<String> = emptySet(), val collections: Set<String> = emptySet(), val genres: Set<String> = emptySet(), val excludeGenres: Set<String> = emptySet(), val decades: Set<Int> = emptySet(), val ratings: Set<String> = emptySet(), val kinds: Set<MediaKind> = MediaKind.entries.toSet())` with `fun matches(item: MediaItem): Boolean`
+  - `data class Rules(val networks: Set<String> = emptySet(), val titles: Set<String> = emptySet(), val tmdbIds: Set<String> = emptySet(), val labels: Set<String> = emptySet(), val collections: Set<String> = emptySet(), val genres: Set<String> = emptySet(), val excludeGenres: Set<String> = emptySet(), val decades: Set<Int> = emptySet(), val ratings: Set<String> = emptySet(), val kinds: Set<MediaKind> = MediaKind.entries.toSet())` with `fun matches(item: MediaItem, networkId: String? = item.network): Boolean` (the `networks` include source is compared against `networkId`)
   - `data class TimeBlock(val days: Set<DayOfWeek>, val start: LocalTime, val end: LocalTime, val rules: Rules)` with `fun activeAt(t: ZonedDateTime): Boolean` (handles `end < start` as overnight; an overnight block belongs to the day it starts)
   - `data class ChannelDef(val id: String, val number: Int, val name: String, val kind: ChannelKind, val rules: Rules, val order: PlayOrder = PlayOrder.SHUFFLE, val blocks: List<TimeBlock> = emptyList(), val kidsSafe: Boolean = false, val hidden: Boolean = false, val movieEveryMs: Long = 6 * 3_600_000L)`
 
@@ -132,61 +132,116 @@ tools/ktest/               kotlin.test shim + runner for compiling :core without
 - [ ] **Step 4:** Run; expect PASS.
 - [ ] **Step 5:** Commit `feat(core): media and channel models`.
 
-### Task 3: Catalog + resolver
+### Task 3: Catalog, owner-family router, resolver
 
 **Files:**
-- Create: `core/.../catalog/Catalog.kt`, `core/.../catalog/Curated.kt`, `core/.../resolve/Resolver.kt`
-- Test: `core/.../catalog/CatalogTest.kt`, `core/.../resolve/ResolverTest.kt`
+- Create: `core/.../catalog/Catalog.kt`, `core/.../catalog/Curated.kt`, `core/.../catalog/Router.kt`, `core/.../resolve/Resolver.kt`
+- Test: `core/.../catalog/CatalogTest.kt`, `core/.../catalog/RouterTest.kt`, `core/.../resolve/ResolverTest.kt`
 
 **Interfaces:**
-- Consumes: Task 2 models.
+- Consumes: Task 2 models (`Rules.matches(item, networkId)`).
 - Produces:
   - `data class NetworkDef(val id: String, val name: String, val number: Int, val aliases: List<String>, val kidsSafe: Boolean)`
   - `object Catalog`:
     - `val networks: List<NetworkDef>`
-    - `fun canonicalNetwork(raw: String?): String?` (returns `NetworkDef.id`)
+    - `fun canonicalNetwork(raw: String?): String?` (alias → `NetworkDef.id`)
     - `fun builtInChannels(): List<ChannelDef>`
     - `fun validateNumbers(defs: List<ChannelDef>): List<String>` (one error message per duplicated number; empty = OK)
   - `object Curated { val boomerangShows: List<String>; val toonamiShows: List<String> }`
+  - `object Router { fun route(item: MediaItem): String? }` (owner-family routing; returns a `NetworkDef.id` or null)
   - `object Resolver`:
     - `const val DORMANT_MS = 4 * 3_600_000L`
     - `const val MIN_ITEM_MS = 60_000L`
-    - `fun pool(def: ChannelDef, library: List<MediaItem>): List<MediaItem>`
+    - `fun networkOf(item: MediaItem): String?` = `Catalog.canonicalNetwork(item.network) ?: Catalog.canonicalNetwork(item.studio) ?: Router.route(item)`
+    - `fun pool(def: ChannelDef, library: List<MediaItem>): List<MediaItem>` = items with `durationMs >= MIN_ITEM_MS` and `def.rules.matches(item, networkOf(item))`
     - `fun isDormant(pool: List<MediaItem>): Boolean`
-    - `fun networkOf(item: MediaItem): String?` (canonical id)
 
 Catalog contents:
-- **Networks (100s):** Disney Channel 101, Nickelodeon 102, Cartoon Network 103, Boomerang 104, Toonami 105 (CURATED), PBS 106, PBS Kids 107, SYFY 110, USA 111, TNT 112, TBS 113, FX 114, AMC 115, MTV 116, Comedy Central 117, ABC Family/Freeform 118, Discovery 120, History 121, Food Network 122, HGTV 123, Adult Swim 124, Nick Jr. 125, Disney Junior 126.
-- **Aliases** include at least:
-  - Disney: "Disney Channel", "Disney XD", "Toon Disney"
-  - Nickelodeon: "Nickelodeon", "Nicktoons", "Nick"
-  - SYFY: "Syfy", "Sci Fi Channel", "SciFi"
-  - ABC Family/Freeform: "ABC Family", "Freeform", "Fox Family"
-  - Cartoon Network: "Cartoon Network", "CN"
-  - Boomerang: "Boomerang"
-  - PBS: "PBS"
-  - PBS Kids: "PBS Kids", "PBS KIDS"
-  - Adult Swim: "Adult Swim", "[adult swim]"
-- **Kids-safe:** Disney, Nick, Cartoon Network, Boomerang, Toonami, PBS Kids, Nick Jr., Disney Junior.
-- **Boomerang (curated):** title list (Scooby-Doo variants, The Flintstones, The Jetsons, Looney Tunes, Tom and Jerry, Yogi Bear, Huckleberry Hound, Top Cat, Wacky Races, Jonny Quest, Space Ghost, The Pink Panther Show, Popeye, Dexter's Laboratory reruns, Johnny Bravo, The Smurfs, Captain Caveman, Josie and the Pussycats) **plus** network Boomerang.
+- **Networks (100s):** Disney Channel 101, Nickelodeon 102, Cartoon Network 103, Boomerang 104, Toonami 105 (CURATED), PBS 106, PBS Kids 107, Disney XD 108, Touchstone 109, SYFY 110, USA 111, TNT 112, TBS 113, FX 114, AMC 115, MTV 116, Comedy Central 117, ABC Family/Freeform 118, Paramount Network 119, Discovery 120, History 121, Food Network 122, HGTV 123, Adult Swim 124, Nick Jr. 125, Disney Junior 126, HBO 130.
+- **Aliases** (case-insensitive, trimmed) include at least:
+  - disney: "Disney Channel", "Toon Disney"
+  - disneyxd: "Disney XD", "Jetix"
+  - disneyjr: "Disney Junior", "Disney Jr.", "Playhouse Disney"
+  - nick: "Nickelodeon", "Nicktoons", "Nick", "TeenNick"
+  - nickjr: "Nick Jr.", "Nick Jr"
+  - syfy: "Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"
+  - freeform: "ABC Family", "Freeform", "Fox Family"
+  - cn: "Cartoon Network", "CN"
+  - boomerang: "Boomerang"
+  - adultswim: "Adult Swim", "[adult swim]"
+  - pbs: "PBS"
+  - pbskids: "PBS Kids", "PBS KIDS"
+  - hbo: "HBO", "Cinemax"
+  - fx: "FX", "FXX", "FX Networks"
+  - paramountnet: "Paramount Network", "Spike", "Spike TV"
+  - the rest by their own names (USA Network, TNT, TBS, AMC, MTV, Comedy Central, Discovery, History, Food Network, HGTV)
+- **Touchstone** has no aliases; only the router fills it.
+- **Kids-safe:** disney, disneyxd, disneyjr, nick, nickjr, cn, boomerang, toonami, pbskids.
+- **Boomerang (curated):** title list (Scooby-Doo variants, The Flintstones, The Jetsons, Looney Tunes, Tom and Jerry, Yogi Bear, Huckleberry Hound, Top Cat, Wacky Races, Jonny Quest, Space Ghost, The Pink Panther Show, Popeye, Dexter's Laboratory, Johnny Bravo, The Smurfs, Captain Caveman, Josie and the Pussycats) **plus** network id boomerang.
 - **Toonami (curated):** Dragon Ball, Dragon Ball Z, Dragon Ball GT, Sailor Moon, Mobile Suit Gundam Wing, Gundam 0080, Mobile Suit Gundam, G Gundam, Tenchi Muyo!, Tenchi Universe, Outlaw Star, Yu Yu Hakusho, Rurouni Kenshin, Cowboy Bebop, The Big O, Zoids, Blue Submarine No. 6, Ronin Warriors, ThunderCats, Voltron, ReBoot, Beast Wars, Robotech, Naruto, One Piece, Bleach, Hikaru no Go, IGPX, Samurai Jack, Teen Titans, Megas XLR, Duck Dodgers, Inuyasha, Fullmetal Alchemist, Gurren Lagann, Space Dandy, Dragon Ball Super, Attack on Titan, Sword Art Online, Black Clover, My Hero Academia. The list stays conservative; the owner edits it on the TV.
 - **Cartoon Network** has a TimeBlock: Mon–Fri 16:00–19:00 → Toonami titles.
 - **Themes (300s):** Horror 301 (genres Horror, Thriller), Sci-Fi 302 (Science Fiction, Sci-Fi & Fantasy), Comedy 303, Action 304 (Action, Adventure), Family 305 (Family, Animation; ratings G, PG, TV-Y, TV-Y7, TV-G, TV-PG; kidsSafe), 80s Movies 306 (MOVIE, decade 1980), 90s Movies 307, Saturday Morning 308 (Animation episodes, TV-Y/TV-Y7/TV-G; kidsSafe).
 
+Router (spec §3.2a). Family is found from `item.network` then `item.studio`, matched case-insensitively against these strings:
+- **Disney:** "Disney+", "Walt Disney Pictures", "Walt Disney Animation Studios", "Walt Disney Television", "Disney Television Animation", "Pixar", "Marvel Studios", "Marvel Animation", "Marvel Television", "Lucasfilm", "Lucasfilm Animation"
+- **Paramount:** "Paramount+", "Nickelodeon Animation Studio", "Nickelodeon Productions", "Nickelodeon Movies"
+- **Warner:** "Max", "HBO Max", "Warner Bros. Animation", "Cartoon Network Studios", "Williams Street"
+- **NBCU:** "Peacock"
+- **Hulu:** "Hulu"
+- **Streamers:** "Netflix", "Prime Video", "Amazon", "Amazon Studios", "Amazon MGM Studios", "Apple TV+", "Apple TV"
+
+Ratings:
+- *preschool* = {TV-Y}
+- *kids* = {TV-Y7, TV-Y7-FV, TV-G, G}
+- *family* = kids + {TV-PG, PG}
+- *grown-up* = anything else, including null
+
+Genres are matched case-insensitively:
+- *action* = {Action, Adventure, Science Fiction, Sci-Fi & Fantasy, Action & Adventure}
+- *scifi* = {Science Fiction, Sci-Fi & Fantasy, Fantasy, Horror}
+- *animated* = has the genre Animation
+
+Rows are checked in this order:
+
+| Family | Rule → channel |
+|---|---|
+| Disney | preschool → disneyjr; family & animated & (action genre or studio Marvel*/Lucasfilm*) → disneyxd; family → disney; else → touchstone |
+| Paramount | preschool → nickjr; family → nick; Comedy → comedycentral; else → paramountnet |
+| Warner | family → cn; animated → adultswim; else → hbo |
+| NBCU | scifi → syfy; else → usa |
+| Hulu | → fx |
+| Streamers | preschool → pbskids; family & animated → cn; scifi → syfy; Comedy → comedycentral; Documentary → (History genre → history, else discovery); else → usa |
+
 Steps:
 - [ ] **Step 1:** Write tests:
-  - `aliasLookup`: "Sci Fi Channel" → "syfy"; "Toon Disney" → "disney"; unknown → null.
-  - `validateNumbersRejectsDuplicates`: two defs with 301 → one message containing "301".
-  - `builtInsHaveUniqueNumbers`
-  - `toonamiFindsDbzByTitle`: an episode with `showTitle` "Dragon Ball Z" and network "Fuji TV" lands in the Toonami pool.
-  - `boomerangFindsScooby`
-  - `poolExcludesShortAndZeroDuration`: items of 0ms and 30s are dropped. *(Review Focus 3)*
-  - `dormantUnderFourHours`: 3h59m is dormant; 4h is not.
-  - `cartoonNetworkHasToonamiBlock`
+  - Catalog:
+    - `aliasLookup`: "Sci Fi Channel" → "syfy"; "Toon Disney" → "disney"; "Disney XD" → "disneyxd"; unknown → null.
+    - `validateNumbersRejectsDuplicates`: two defs with 301 → one message containing "301". *(Review Focus 5)*
+    - `builtInsHaveUniqueNumbers`
+    - `cartoonNetworkHasToonamiBlock`
+  - Router:
+    - `disneyPlusKidsShowGoesToDisneyChannel` (TV-G live action)
+    - `disneyPreschoolGoesToJunior` (TV-Y)
+    - `marvelAnimationGoesToDisneyXd` (studio "Marvel Animation", TV-Y7, Animation+Action)
+    - `marvelMovieGoesToTouchstone` (studio "Marvel Studios", PG-13)
+    - `paramountPlusAvatarGoesToNickelodeon` (network "Paramount+", TV-Y7, Animation)
+    - `paramountPlusDramaGoesToParamountNetwork`
+    - `maxDramaGoesToHbo`
+    - `huluGoesToFx`
+    - `netflixSciFiGoesToSyfy`
+    - `netflixKidsAnimationGoesToCartoonNetwork`
+    - `appleComedyGoesToComedyCentral`
+    - `unknownStudioRoutesNowhere` → null
+  - Resolver:
+    - `aliasBeatsRouter`: network "Disney XD" with a PG-13 rating → disneyxd, not touchstone.
+    - `toonamiFindsDbzByTitle`: an episode with `showTitle` "Dragon Ball Z" and network "Fuji TV" lands in the Toonami pool.
+    - `boomerangFindsScooby`
+    - `poolExcludesShortAndZeroDuration`: items of 0ms and 30s are dropped. *(Review Focus 3)*
+    - `dormantUnderFourHours`: 3h59m is dormant; 4h is not.
 - [ ] **Step 2:** Run; FAIL.
-- [ ] **Step 3:** Implement. Resolver: `def.rules.matches(item)` plus duration ≥ `MIN_ITEM_MS`. For NETWORK kind, `rules.networks` holds canonical ids compared against `networkOf(item)`. For CURATED, `titles` comes from `Curated` and `networks` holds its own network id.
+- [ ] **Step 3:** Implement.
 - [ ] **Step 4:** Run; PASS.
-- [ ] **Step 5:** Commit `feat(core): channel catalog, curated Boomerang/Toonami, resolver`.
+- [ ] **Step 5:** Commit `feat(core): channel catalog, owner-family router, curated Boomerang/Toonami, resolver`.
 
 ### Task 4: Schedule model + padding
 
@@ -544,4 +599,4 @@ On-TV checklist:
 
 ---
 
-Phases 2–5 (HDHomeRun live TV, commercials, streaming channels, idle timer + captions) each get their own plan after Phase 1 is on the TV.
+Phases 2–5 (HDHomeRun live TV, commercials incl. the download/split/upscale prep tool, smarter TMDb routing, idle timer + captions) each get their own plan after Phase 1 is on the TV.

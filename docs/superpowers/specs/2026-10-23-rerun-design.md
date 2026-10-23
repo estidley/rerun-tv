@@ -16,7 +16,7 @@ A sideloaded Android app on the Fire TV that makes a personal Plex library behav
 - Pulls from his **Plex** server.
 - Channels mix **movies and TV shows**; shows play their episodes **in order**.
 - **Network channels**: Disney Channel, PBS, SYFY, Nickelodeon, and so on, built from what he owns. A network with no content stays **hidden but kept in the background** and turns on by itself when content shows up.
-- **Streaming channels**: Netflix, HBO, Disney+, and so on, split into **Movies** and **TV** channels (Netflix Movies, Netflix TV). They come from **originals plus whatever is currently streaming there**. Nothing launches the real apps.
+- **Streaming content lives on the classic networks**, not on app-named channels. Shows and movies are routed by **owner family + audience**. Disney+ kids shows go to Disney Channel, preschool to Disney Junior, animated action to **Disney XD** (its own channel), and Disney's grown-up material (Marvel, live-action Star Wars) to a new **Touchstone** channel. Paramount+ kids shows (the new *Avatar* series) go to **Nickelodeon**. Max originals go to HBO, Hulu originals to FX, Peacock originals to SYFY/USA. Netflix, Prime Video and Apple TV+ have no cable twin, so their originals are spread **by genre** into existing networks (sci-fi → SYFY, comedy → Comedy Central, kids animation → Cartoon Network, documentary → Discovery/History, other drama → USA). Nothing launches the real apps.
 - **Custom channels** he builds himself ("Fright Night").
 - **Real live TV** from his **HDHomeRun** tuner, mixed into the same lineup. **No DVR**; Plex already handles recording.
 - **Always-on schedule**: tune in mid-program at the exact spot. No restart, no pause.
@@ -53,7 +53,7 @@ One Android app, Kotlin + Jetpack Compose (same stack as Kyber), Media3/ExoPlaye
  ┌───────────── Sources ─────────────┐   ┌──────── Brain ────────┐   ┌──── Screen ────┐
  │ Plex server  (library, streams)   │──▶│ Library cache (Room)  │   │ Player + OSD   │
  │ HDHomeRun    (live TS, lineup)    │──▶│ Channel catalog       │──▶│ Guide grid     │
- │ TMDb         (streaming metadata) │──▶│ Scheduler (48h ahead) │   │ Channel mgr    │
+ │ TMDb         (studio metadata)    │──▶│ Scheduler (48h ahead) │   │ Channel mgr    │
  │ Commercials  (Plex folder + IA)   │──▶│ Tuner engine          │   │ Settings       │
  └───────────────────────────────────┘   └───────────────────────┘   └────────────────┘
 ```
@@ -68,9 +68,9 @@ One Android app, Kotlin + Jetpack Compose (same stack as Kyber), Media3/ExoPlaye
 | `plex/PlexStreams` | Builds the play URL for an item and start offset: direct play if codecs are safe, else Plex universal transcode (HLS) | PlexServers |
 | `hdhr/HdhrClient` | Finds the HDHomeRun (Plex's tuner list → UDP discovery → manual IP); reads `lineup.json`; builds `http://<ip>:5004/auto/v<ch>` | network |
 | `hdhr/HdhrGuide` | Now/next guide for live channels from the HDHomeRun guide service (uses `DeviceAuth` from `discover.json`) | HdhrClient |
-| `meta/Tmdb` | For each item (via its TMDb GUID): production companies or networks (originals) and US watch providers (currently streaming). Weekly refresh | user's free TMDb key |
+| `meta/Tmdb` | Phase 4, optional: for items whose Plex studio is only a production company, look up TMDb networks/production companies (via the item's TMDb GUID) to find the owner family | user's free TMDb key |
 | `library/` | Room DB of items, shows, episodes, network aliases, TMDb facts | — |
-| `channels/Catalog` | Built-in channel definitions (networks, streaming, themes) with name aliases and default numbers | — |
+| `channels/Catalog` | Built-in channel definitions (networks, curated, themes) and the owner-family routing table with name aliases and default numbers | — |
 | `channels/Resolver` | Rules → content pool; decides active vs **dormant** | library |
 | `schedule/Scheduler` | Writes the **locked** schedule 48h ahead per channel | Resolver |
 | `filler/` | Fills gaps at play time: commercials → "Up Next" card | Plex, Internet Archive |
@@ -86,9 +86,24 @@ Every channel is a **definition** (rules) plus a **lineup number**.
 | Live | 4.1 KDFW, 8.1 WFAA | HDHomeRun lineup | Real numbers (4.1, 5.1…) |
 | Network | Disney Channel, Nickelodeon, PBS, SYFY, Cartoon Network, MTV, USA, TNT, Comedy Central, ABC Family… | Show's network (Plex `studio` on shows) matched through an **alias table** (e.g. "Disney Channel", "Disney XD", "Toon Disney" → Disney Channel). Movies: TMDb production company or a Plex label/collection | 100–199 |
 | Curated | **Boomerang**, **Toonami** | Shows that *aired on* the channel but whose Plex network points elsewhere (e.g. *Dragon Ball Z* → Fuji TV, *Scooby-Doo* → CBS). Ships with a built-in title list matched by TMDb ID, then title + year. **Boomerang**: classic Hanna-Barbera, Looney Tunes, MGM and other classic cartoons, plus anything tagged with the Boomerang network. **Toonami**: the Cartoon Network action/anime lineup (DBZ, Sailor Moon, Gundam Wing, Tenchi, Outlaw Star, Yu Yu Hakusho, Rurouni Kenshin, ThunderCats, Voltron, Reboot…). Also available as a **block on Cartoon Network** (weekdays 4–7 PM, Saturday late night) | 100–199 |
-| Streaming | Netflix Movies / Netflix TV, HBO Movies / HBO TV, Disney+, Hulu, Prime Video, Apple TV+, Paramount+, Peacock | Originals (TMDb network or production company, Plex studio) **plus** currently streaming (TMDb US watch providers), split by type | 200–299 |
+| *(routing, not a channel kind)* | Owner families: Disney, Paramount, Warner, NBCU, Hulu, Netflix/Prime/Apple | `Router`: item's network or studio (e.g. "Disney+", "Marvel Studios", "Lucasfilm", "Paramount+", "Max", "Hulu", "Netflix") picks the family; content rating and genre pick the channel inside it (table in §3.2a) | — |
 | Theme | Horror, Sci-Fi, Family, Comedy, Action, 80s Movies, Saturday Morning | Genre, decade, rating | 300–399 |
 | Custom | "Fright Night" | Editor on the TV: genres, shows, collections, labels, decades, ratings, movies/shows/both, order, time blocks | 400+ |
+
+### 3.2a Owner-family routing
+
+Used when an item's network/studio isn't itself a classic network name. Ratings: *preschool* = TV-Y; *kids* = TV-Y7, TV-Y7-FV, TV-G, G; *family* = kids + TV-PG, PG; *grown-up* = everything else (PG-13, TV-14, R, TV-MA, unrated).
+
+| Family (network/studio strings) | → Channel |
+|---|---|
+| **Disney** (Disney+, Walt Disney Pictures/Animation/Television, Pixar, Marvel Studios/Animation/Television, Lucasfilm, Disney Television Animation) | preschool → Disney Junior · animation that is action/sci-fi/adventure or from Marvel/Lucasfilm, family-rated → **Disney XD** · other family → Disney Channel · grown-up → **Touchstone** |
+| **Paramount** (Paramount+, Nickelodeon Animation Studio, Nickelodeon Productions, Nickelodeon Movies) | preschool → Nick Jr. · family → Nickelodeon · grown-up comedy → Comedy Central · other grown-up → Paramount Network |
+| **Warner** (HBO, Max, HBO Max, Warner Bros. Animation, Cartoon Network Studios, Williams Street) | family → Cartoon Network · grown-up animation → Adult Swim · other grown-up → HBO |
+| **NBCU** (Peacock) | sci-fi/fantasy/horror → SYFY · other → USA |
+| **Hulu** | → FX |
+| **Netflix / Prime Video / Amazon Studios / Apple TV+** | preschool → PBS Kids · family animation → Cartoon Network · sci-fi/fantasy/horror → SYFY · comedy → Comedy Central · documentary → Discovery (history topics → History) · reality → TLC-style lands on USA · other → USA |
+
+An item routed nowhere still appears in theme and custom channels.
 
 **Dormant rule.** A channel stays hidden when its pool holds **less than 4 hours** of content. That keeps three movies from looping all weekend. Dormant channels are still listed (grayed out) in the channel manager, can be renumbered or used as a source inside custom channels, and switch on by themselves after a sync.
 
@@ -124,8 +139,9 @@ While a channel plays, the engine queues the next entry so programs roll over se
 The source of each gap is decided in this order:
 
 1. **Your own commercial library.** A Plex library or collection named **"Commercials"**. Optional subfolders or labels by decade (`1990s`) or channel (`Nickelodeon`), so Nick gets Nick bumpers.
-2. **Internet Archive: AdViews.** Duke University's collection of thousands of digitized vintage commercials (1950s–1980s) on archive.org. Found with the archive.org search API and **streamed** from archive.org, not downloaded or stored.
-3. **"Up Next" card.** Channel logo, next program's poster and a countdown. Always works, offline too.
+2. **Prepared commercial packs (owner's PC, one-time).** A prep tool in `tools/commercials/` downloads a chosen archive.org item (first target: `2000VariousCommercials`), splits compilation reels into single spots by black-frame detection, **upscales** them (Real-ESRGAN via Video2X if a GPU is present, else ffmpeg denoise + Lanczos), and writes them into the Plex "Commercials" library folder with decade labels. The files stay on the owner's machine; the public repo ships only the tool, never the videos.
+3. **Internet Archive: AdViews.** Duke University's collection of thousands of digitized vintage commercials (1950s–1980s) on archive.org. Found with the archive.org search API and **streamed** from archive.org, not downloaded or stored.
+4. **"Up Next" card.** Channel logo, next program's poster and a countdown. Always works, offline too.
 
 Rules:
 - Fill the gap with as many commercials as fit, and finish with the Up Next card for any remainder under ~30s.
@@ -148,7 +164,7 @@ Fire TV remote mapping:
 | ⏯ | Toggles captions ("CC") | — |
 
 **Screens:**
-- **Onboarding:** Plex link code, server choice, HDHomeRun found or not, optional TMDb key.
+- **Onboarding:** Plex link code, server choice, HDHomeRun found or not.
 - **Player:** full screen, with these overlays:
   - static noise
   - channel number (VCR-style green)
@@ -167,8 +183,8 @@ Fire TV remote mapping:
 |---|---|---|---|
 | R1 | **Plex network names are messy** ("Disney Channel" vs "Disney XD" vs "Disney Junior"; "Syfy" vs "Sci Fi Channel") | High | Alias table per network, matched case-insensitively. Unmatched networks are listed in the manager so the owner can map them by hand |
 | R1b | **Block-era channels (Toonami, Boomerang) can't be found from network data** at all | High | Curated title lists shipped in the app (§3.2), editable on the TV. the owner's Plex label "Toonami"/"Boomerang" also counts. Toonami bumpers can live in his Commercials folder labeled "Toonami" |
-| R2 | **Movies rarely carry the network or streamer** in Plex | High | TMDb production companies + watch providers; Plex labels/collections as a manual override ("Netflix", "DCOM") |
-| R3 | **"Currently streaming" needs TMDb** (free key) and changes monthly; data comes from JustWatch, which requires attribution | Medium | Optional feature; originals still work without it. Weekly refresh; JustWatch credit on the About screen. Changes only affect schedules generated *after* the refresh |
+| R2 | **Movies and some originals list only a production company** in Plex (not "Disney+" or "Netflix") | High | Routing table includes the big production studios (Marvel Studios, Lucasfilm, Pixar, Nickelodeon Movies…). Plex labels/collections as a manual override ("Netflix", "DCOM"). Phase 4 adds TMDb lookups for the rest |
+| R3 | **Routing misfiles a show** (a PG-13 Disney+ show that *feels* like Disney Channel lands on Touchstone) | Medium | Rating-based rules are predictable; the channel manager can pin any show to a channel, and pins win over routing |
 | R4 | **Library changes break an in-progress schedule** | High | 48h locked schedule (§3.3). A deleted item still in the schedule falls back to the Up Next card for its slot |
 | R5 | **Tiny pools loop constantly** (2 SYFY shows) | Medium | 4-hour dormant threshold; repeat-distance rules in the deck shuffle |
 | R6 | **Tune-in lag** (seeking into a big remote file takes 1–3s; transcode start 3–6s) | Medium | Static covers it; offset adds the lag. Prefer direct play. Pre-resolve URLs for ±1 channel |
@@ -177,7 +193,7 @@ Fire TV remote mapping:
 | R9 | **HDHomeRun tuners busy** (Plex DVR recording) or **ATSC 3.0 / DRM channels** (HEVC + AC-4 audio, encryption) won't play | Medium | Handle 503 ("all tuners in use") with a "No Signal" card. Skip lineup entries tagged `drm`. Mark channels that fail AC-4 as unsupported |
 | R10 | **Live guide data**: Plex's EPG endpoints are undocumented | Medium | Use the HDHomeRun guide service instead. Fallback: channel name + "Live" |
 | R11 | **Commercial content**: tobacco/alcohol ads on a kids channel | High | Keyword/subject filter on kids channels (§3.5). Per-channel off switch |
-| R12 | **Commercial rights**: vintage ads are generally still copyrighted | Medium | Stream from archive.org for private home viewing only; never download, store or redistribute. the owner's own folder is his call |
+| R12 | **Commercial rights**: vintage ads are generally still copyrighted | Medium | Private home viewing only. Downloaded packs live only in the owner's own Plex library; the repo contains the prep tool, never media |
 | R13 | **AdViews skews 50s–80s**; 90s ads are sparse there | Low | Decade filter per channel. the owner's Plex "Commercials" folder covers the 90s. Up Next card as fallback |
 | R14 | **archive.org slow or down** | Low | Short timeout (3s) → skip to next commercial → Up Next card. Never stalls the channel |
 | R15 | **Left running all night**: Plex transcodes and an HDHomeRun tuner stay busy for hours | Medium | Idle timer (default 4h without a button press) → "Are you still watching?" → stop streams |
@@ -197,6 +213,8 @@ Fire TV remote mapping:
 - No mid-show commercial breaks.
 - Captions off by default.
 - 4-hour idle timeout.
+- Disney's grown-up channel is named **Touchstone**.
+- Netflix / Prime Video / Apple TV+ originals are spread **by genre** into existing networks (no app-named channels).
 
 ---
 
@@ -206,8 +224,8 @@ Fire TV remote mapping:
 |---|---|---|
 | **1 — Core TV + look & feel** | Plex sign-in, library sync, network + curated + theme + custom channels, scheduler (incl. time blocks), tune-in-mid-show, info banner, guide, channel manager/editor, Up Next filler, **and the full retro look**: CRT overlay (scanlines, vignette, glow, rounded-tube mask; Off/Subtle/Full), channel-change static with vertical roll, power-on/off line collapse, VCR-green OSD, 90s cable-guide styling | the owner can flip between auto-built channels, land mid-program at the right spot, and it already *looks* like a 90s TV for testing |
 | **2 — Live TV** | HDHomeRun discovery, live channels in lineup and guide | Flip from Disney Channel to 8.1 and back |
-| **3 — Commercials** | Plex "Commercials" library + AdViews streaming + kids filter | Gaps play vintage ads, kids channels stay clean |
-| **4 — Streaming channels** | TMDb originals + currently-streaming, Movies/TV splits | Netflix TV / HBO Movies populate from his library |
+| **3 — Commercials** | Commercial prep tool (download → split → upscale → Plex folder), Plex "Commercials" library, AdViews streaming, kids filter | Gaps play clean, upscaled vintage ads; kids channels stay clean |
+| **4 — Smarter routing** | TMDb lookups for items whose Plex studio is only a production company; per-show channel pins UI | Netflix/Disney+ originals with odd studio names land on the right network |
 | **5 — Polish** | Idle timer, captions | Overnight idle stops streams; CC works |
 
 ---
