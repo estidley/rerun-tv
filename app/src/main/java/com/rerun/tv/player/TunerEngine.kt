@@ -3,7 +3,6 @@ package com.rerun.tv.player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -48,6 +47,7 @@ data class TunerState(
  * "Turn to channel X": find what's on now, start it at the right spot, and roll over to the
  * next entry when this one ends. One ExoPlayer for the app's lifetime.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class TunerEngine(
     context: Context,
     private val repo: ScheduleRepo,
@@ -66,9 +66,7 @@ class TunerEngine(
     private val _state = MutableStateFlow(TunerState())
     val state: StateFlow<TunerState> = _state.asStateFlow()
 
-    private val player: ExoPlayer = ExoPlayer.Builder(context)
-        .setSeekBackIncrementMs(C.DEFAULT_SEEK_BACK_INCREMENT_MS)
-        .build().apply {
+    private val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {

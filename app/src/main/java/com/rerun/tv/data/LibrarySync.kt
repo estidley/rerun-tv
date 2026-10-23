@@ -4,7 +4,9 @@ import com.rerun.core.catalog.Catalog
 import com.rerun.core.model.MediaItem
 import com.rerun.core.plex.PlexParse
 import com.rerun.core.resolve.Resolver
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flow
 
 data class SyncProgress(val stage: String, val done: Int, val total: Int, val finished: Boolean = false)
@@ -48,7 +50,7 @@ class LibrarySync(
         settings.setLastSyncMs(System.currentTimeMillis())
         onLibraryChanged()
         emit(SyncProgress("Done", items.size, items.size, finished = true))
-    }
+    }.flowOn(Dispatchers.IO)
 
     private suspend fun pages(
         base: String, path: String, token: String,
