@@ -23,6 +23,10 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
 
     suspend fun item(key: String?): MediaItem? = key?.let { lib()[it] }
 
+    suspend fun libraryItems(): List<MediaItem> = lib().values.toList()
+
+    suspend fun allChannelRows(): List<ChannelRow> = db.channels().all()
+
     fun activeChannels(): Flow<List<ChannelRow>> = db.channels().observeActive()
     fun allChannels(): Flow<List<ChannelRow>> = db.channels().observeAll()
     suspend fun channel(id: String): ChannelRow? = db.channels().byId(id)

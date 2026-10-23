@@ -67,14 +67,20 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun go(screen: Screen) {
-        if (_screen.value == Screen.Guide && screen == Screen.Player) guideClosedAt = System.currentTimeMillis()
         _screen.value = screen
+    }
+
+    /** Back from the guide: return to the picture, and arm "Back again exits". */
+    fun closeGuideWithBack() {
+        guideClosedAt = System.currentTimeMillis()
+        _screen.value = Screen.Player
     }
 
     /** Start watching: last channel if still active, else the lowest-numbered one. */
     fun startWatching() {
         scope.launch {
             serverBase = app.settings.serverBase()
+            if (serverBase == null) { _screen.value = Screen.Onboarding; return@launch }
             app.schedule.invalidateLibrary()
             val list = app.schedule.active()
             val last = app.settings.lastChannel()
