@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Rerun TV</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="stage">
+        <!-- Player Screen (persistent underneath menu screens when needed) -->
+        <div id="screen-player" class="screen" style="display:none;">
+            <video id="video-player" playsinline></video>
+            <canvas id="static-canvas" width="1920" height="1080" style="display:none;"></canvas>
+            <canvas id="roll-canvas" width="1920" height="1080"></canvas>
+
+            <div id="upnext-card" style="display:none;">
+                <img id="upnext-poster" src="" alt="" style="display:none;">
+                <div>
+                    <div id="upnext-ch" class="text-guide-num"></div>
+                    <div style="height:12px;"></div>
+                    <div class="text-osd" style="color:var(--yellow);">UP NEXT</div>
+                    <div id="upnext-title" class="text-title" style="max-width:720px; margin-top:4px;"></div>
+                    <div style="height:24px;"></div>
+                    <div id="upnext-countdown" class="text-osd">0:00</div>
+                </div>
+            </div>
+
+            <div id="difficulties-card" style="display:none;">
+                <div id="difficulties-bars">
+                    <div class="bars-top">
+                        <div style="background:#C0C0C0;"></div>
+                        <div style="background:#C0C000;"></div>
+                        <div style="background:#00C0C0;"></div>
+                        <div style="background:#00C000;"></div>
+                        <div style="background:#C000C0;"></div>
+                        <div style="background:#C00000;"></div>
+                        <div style="background:#0000C0;"></div>
+                    </div>
+                    <div class="bars-bottom"></div>
+                </div>
+                <div class="difficulties-box">
+                    <div class="text-title">WE ARE EXPERIENCING</div>
+                    <div class="text-title">TECHNICAL DIFFICULTIES</div>
+                    <div style="height:12px;"></div>
+                    <div class="text-body" style="color:var(--vcr);">Please stand by</div>
+                </div>
+            </div>
+
+            <div id="empty-channels-card" style="display:none; position:absolute; inset:0; background:var(--guide-blue); align-items:center; justify-content:center; z-index:25;">
+                <div class="text-title">No channels yet. Open Settings and run a library sync.</div>
+            </div>
+
+            <div id="channel-osd" class="hidden">
+                <div id="osd-num" class="text-osd retro-fringe"></div>
+                <div id="osd-name" class="text-osd-small retro-fringe"></div>
+            </div>
+
+            <div id="info-banner" class="hidden">
+                <div style="width:150px; flex-shrink:0;">
+                    <div id="banner-num" class="text-osd"></div>
+                    <div id="banner-ch" class="text-caption" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                </div>
+                <div style="flex:1; overflow:hidden;">
+                    <div id="banner-title" class="text-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                    <div id="banner-meta" class="text-body" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                    <div id="banner-next" class="text-caption" style="color:var(--cyan); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overlay Screens (Onboarding, Guide, Channels, Editor, Settings) -->
+        <div id="screen-modal" class="screen" style="display:none; z-index:40;"></div>
+
+        <!-- Global CRT & Power Transitions -->
+        <canvas id="crt-canvas" width="1920" height="1080"></canvas>
+        <canvas id="power-canvas" width="1920" height="1080"></canvas>
+    </div>
+
+    <script src="js/core.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/effects.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

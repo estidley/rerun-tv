@@ -1,6 +1,6 @@
 # Rerun
 
-Old-school cable TV, built from your own Plex library. For Fire TV and Android TV.
+Old-school cable TV, built from your own Plex library. For Fire TV, Android TV, and Samsung Smart TVs (Tizen).
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
@@ -107,6 +107,33 @@ Commit the reviewed `data/tmdb/rerun/tmdb-networks.json` through a pull request.
 TMDB doesn't track which theatrical movies a channel showed. Movies outside a network's own studios still use the studio-owner rules.
 
 This product uses the TMDB API but is not endorsed or certified by TMDB.
+
+## Install on a Samsung Smart TV (Tizen)
+
+Samsung TVs run Tizen OS rather than Android. The `tizen/` directory contains the native Tizen TV port of Rerun (same 1920×1080 retro UI, 48-hour scheduler, channel routing, CRT & static effects, and Samsung remote support). It is a separate JavaScript implementation written against the October 23 Android app, so newer Android features (touch controls, guide layouts, channel wordmarks, ads, decade stations and others) are not in it yet.
+
+### Option A: Native Tizen App (`.wgt` over Wi-Fi)
+
+1. On the Samsung TV, open **Apps**, press `12345` on the remote, turn **Developer Mode** **ON**, enter your PC's IP address, and hold **Power** for 5s to reboot the TV.
+2. On your PC (with Tizen Studio CLI installed):
+
+```powershell
+.\scripts\install-samsung.ps1 -TvIp 10.95.76.xxx
+```
+
+To build `build\tizen\Rerun.wgt` without pushing to a TV:
+
+```powershell
+.\scripts\install-samsung.ps1 -PackageOnly
+```
+
+### Option B: Instant LAN Mode (Samsung TV Internet Browser)
+
+No Developer Mode or Tizen SDK required — run the built-in LAN server on your PC and open the printed URL in the Samsung TV's **Internet** app (you can bookmark/pin it to the TV's home bar):
+
+```powershell
+.\scripts\serve-samsung.ps1 -Port 8090
+```
 
 ## Remote
 
