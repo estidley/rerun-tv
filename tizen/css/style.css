@@ -1,0 +1,456 @@
+@font-face {
+    font-family: 'VT323';
+    src: url('../assets/vt323.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+:root {
+    --vcr: #39FF14;
+    --guide-blue: #0B1E5B;
+    --guide-blue-deep: #071341;
+    --guide-blue-light: #1B3A8C;
+    --yellow: #FFD200;
+    --cyan: #00E5FF;
+    --white: #F2F2F2;
+    --dim: #9AA6C8;
+    --black: #000000;
+    --banner-bg: rgba(5, 8, 20, 0.85);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+html, body {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #000;
+    font-family: 'VT323', monospace;
+    color: var(--white);
+}
+
+/* Fixed 1920x1080 logical canvas scaled to the TV viewport */
+#stage {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    transform-origin: top left;
+    overflow: hidden;
+    background: #000;
+}
+
+.screen {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+}
+
+/* Typography matching Retro object in Theme.kt */
+.text-osd {
+    font-size: 64px;
+    color: var(--vcr);
+    text-shadow: 2px 2px 0 #000;
+    line-height: 1;
+}
+
+.text-osd-small {
+    font-size: 32px;
+    color: var(--vcr);
+    text-shadow: 2px 2px 0 #000;
+    line-height: 1.05;
+}
+
+.text-title {
+    font-size: 40px;
+    color: var(--white);
+    text-shadow: 2px 2px 0 #000;
+    line-height: 1.1;
+}
+
+.text-body {
+    font-size: 28px;
+    color: var(--white);
+    text-shadow: 2px 2px 0 #000;
+    line-height: 1.15;
+}
+
+.text-caption {
+    font-size: 22px;
+    color: var(--dim);
+    line-height: 1.15;
+}
+
+.text-guide-num {
+    font-size: 30px;
+    color: var(--yellow);
+    text-shadow: 2px 2px 0 #000;
+}
+
+.text-guide-cell {
+    font-size: 26px;
+    color: var(--white);
+}
+
+.text-huge {
+    font-size: 120px;
+    color: var(--yellow);
+    text-shadow: 2px 2px 0 #000;
+    letter-spacing: 6px;
+}
+
+/* RGB fringe when CRT is FULL */
+body.crt-full .retro-fringe {
+    text-shadow: -2px 0 0 rgba(255, 32, 32, 0.65), 2px 0 0 rgba(32, 80, 255, 0.65), 2px 2px 0 #000;
+}
+
+/* Standard TV frame (Onboarding, Channels, Editor, Settings) */
+.tv-frame {
+    width: 1920px;
+    height: 1080px;
+    background: linear-gradient(180deg, var(--guide-blue) 0%, var(--guide-blue-deep) 100%);
+    padding: 40px 64px;
+    display: flex;
+    flex-direction: column;
+}
+
+.tv-frame-header {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-bottom: 16px;
+}
+
+.tv-frame-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 12px;
+}
+
+.tv-frame-body::-webkit-scrollbar {
+    width: 6px;
+}
+.tv-frame-body::-webkit-scrollbar-thumb {
+    background: rgba(74, 107, 200, 0.5);
+}
+
+.tv-frame-footer {
+    margin-top: 12px;
+}
+
+/* TvButton */
+.tv-btn {
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    background: rgba(7, 19, 65, 0.4);
+    border: 2px solid rgba(74, 107, 200, 0.25);
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: transform 0.08s ease;
+}
+
+.tv-btn.selected {
+    background: #14306E;
+    border-color: var(--cyan);
+}
+
+.tv-btn.focused {
+    background: var(--guide-blue-light);
+    border-color: var(--yellow);
+    transform: scale(1.03);
+    z-index: 2;
+}
+
+.tv-btn-label {
+    font-size: 28px;
+    color: var(--white);
+}
+
+.tv-btn.selected .tv-btn-label {
+    color: var(--cyan);
+}
+
+.tv-btn-sub {
+    font-size: 22px;
+    color: var(--dim);
+}
+
+/* Player screen */
+#video-player {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    background: #000;
+    object-fit: contain;
+}
+
+#static-canvas, #roll-canvas, #crt-canvas, #power-canvas {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    pointer-events: none;
+}
+
+#crt-canvas {
+    z-index: 90;
+}
+
+#power-canvas {
+    z-index: 100;
+}
+
+/* Channel OSD top-right */
+#channel-osd {
+    position: absolute;
+    top: 36px;
+    right: 56px;
+    text-align: right;
+    z-index: 30;
+    transition: opacity 0.25s ease;
+}
+
+/* Bottom InfoBanner */
+#info-banner {
+    position: absolute;
+    left: 56px;
+    right: 56px;
+    bottom: 40px;
+    background: linear-gradient(180deg, #26304F 0px, var(--banner-bg) 28px);
+    border: 1px solid rgba(57, 255, 20, 0.35);
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    z-index: 30;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+#info-banner.hidden, #channel-osd.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#info-banner.hidden {
+    transform: translateY(40px);
+}
+
+/* UpNextCard & DifficultiesCard */
+#upnext-card {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, var(--guide-blue) 0%, var(--guide-blue-deep) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 48px;
+    z-index: 20;
+}
+
+#upnext-poster {
+    width: 240px;
+    height: 360px;
+    object-fit: cover;
+    border: 3px solid var(--yellow);
+}
+
+#difficulties-card {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#difficulties-bars {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.bars-top {
+    flex: 3;
+    display: flex;
+}
+.bars-top > div {
+    flex: 1;
+}
+.bars-bottom {
+    flex: 1;
+    background: #101010;
+}
+
+.difficulties-box {
+    position: relative;
+    background: rgba(0, 0, 0, 0.88);
+    padding: 28px 48px;
+    text-align: center;
+}
+
+/* Guide Screen */
+.guide-screen {
+    width: 1920px;
+    height: 1080px;
+    background: linear-gradient(180deg, var(--guide-blue) 0%, var(--guide-blue-deep) 100%);
+    padding: 32px 48px;
+    display: flex;
+    flex-direction: column;
+}
+
+.guide-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.guide-detail {
+    height: 170px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(74, 107, 200, 0.25);
+    padding: 12px;
+    display: flex;
+    gap: 20px;
+    margin-bottom: 12px;
+}
+
+.guide-detail-poster {
+    width: 98px;
+    height: 146px;
+    object-fit: cover;
+}
+
+.guide-grid-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.guide-time-header {
+    display: flex;
+    height: 36px;
+}
+
+.guide-time-spacer {
+    width: 230px;
+    flex-shrink: 0;
+}
+
+.guide-time-slot {
+    flex: 1;
+    background: var(--guide-blue-deep);
+    border: 1px solid rgba(74, 107, 200, 0.25);
+    padding-left: 8px;
+    display: flex;
+    align-items: center;
+    font-size: 26px;
+    color: var(--yellow);
+}
+
+.guide-row {
+    display: flex;
+    height: 60px;
+}
+
+.guide-ch-cell {
+    width: 230px;
+    flex-shrink: 0;
+    background: var(--guide-blue-deep);
+    border: 1px solid rgba(74, 107, 200, 0.25);
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+}
+
+.guide-ch-num {
+    width: 70px;
+    font-size: 30px;
+    color: var(--yellow);
+    text-shadow: 2px 2px 0 #000;
+}
+
+.guide-ch-name {
+    font-size: 26px;
+    color: var(--white);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.guide-timeline {
+    position: relative;
+    flex: 1;
+    height: 60px;
+    overflow: hidden;
+}
+
+.guide-cell {
+    position: absolute;
+    top: 0;
+    height: 60px;
+    background: var(--guide-blue);
+    border: 1px solid rgba(74, 107, 200, 0.35);
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 26px;
+    color: var(--white);
+}
+
+.guide-cell.selected {
+    background: var(--yellow);
+    border-color: var(--white);
+    color: var(--guide-blue-deep);
+    z-index: 2;
+}
+
+.guide-now-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--cyan);
+    z-index: 5;
+}
+
+/* Channel Editor inputs & chip rows */
+.editor-section {
+    margin-bottom: 16px;
+}
+
+.editor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.tv-input {
+    font-family: 'VT323', monospace;
+    font-size: 40px;
+    color: var(--white);
+    background: rgba(7, 19, 65, 0.4);
+    border: 2px solid rgba(74, 107, 200, 0.25);
+    padding: 8px 14px;
+    outline: none;
+}
+
+.tv-input.focused, .tv-input:focus {
+    background: var(--guide-blue-light);
+    border-color: var(--yellow);
+}
