@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.rerun.tv"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.rerun.tv"
