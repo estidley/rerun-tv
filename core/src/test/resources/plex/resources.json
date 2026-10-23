@@ -1,0 +1,9 @@
+[
+  {"name": "Living Room Phone", "product": "Plex for Android", "clientIdentifier": "phone1", "provides": "client,player", "accessToken": null, "connections": []},
+  {"name": "Basement Server", "product": "Plex Media Server", "clientIdentifier": "pms-1", "provides": "server", "owned": true, "accessToken": "server-token-1",
+   "connections": [
+     {"protocol": "https", "address": "203.0.113.5", "port": 32400, "uri": "https://203-0-113-5.abc.plex.direct:32400", "local": false, "relay": false, "IPv6": false},
+     {"protocol": "https", "address": "plex-relay", "port": 8443, "uri": "https://relay-1.abc.plex.direct:8443", "local": false, "relay": true, "IPv6": false},
+     {"protocol": "https", "address": "192.168.1.20", "port": 32400, "uri": "https://192-168-1-20.abc.plex.direct:32400", "local": true, "relay": false, "IPv6": false}
+   ]}
+]

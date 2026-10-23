@@ -1,0 +1,8 @@
+{"MediaContainer": {"size": 2, "totalSize": 2, "Metadata": [
+  {"ratingKey": "5001", "type": "episode", "title": "The Arrival of Raditz", "grandparentRatingKey": "500", "grandparentTitle": "Dragon Ball Z",
+   "parentIndex": 1, "index": 1, "duration": 1380000, "year": 1996,
+   "Media": [{"container": "mkv", "videoCodec": "hevc", "audioCodec": "aac", "Part": [{"key": "/library/parts/900/1/file.mkv"}]}]},
+  {"ratingKey": "6001", "type": "episode", "title": "Pilot", "grandparentRatingKey": "600", "grandparentTitle": "Avatar Next",
+   "parentIndex": 1, "index": 2, "duration": 1500000, "contentRating": "TV-Y7-FV",
+   "Media": [{"container": "mp4", "videoCodec": "h264", "audioCodec": "eac3", "Part": [{"key": "/library/parts/901/1/file.mp4"}]}]}
+]}}

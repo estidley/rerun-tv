@@ -1,0 +1,5 @@
+{"MediaContainer": {"size": 3, "Directory": [
+  {"key": "1", "type": "movie", "title": "Movies", "agent": "tv.plex.agents.movie"},
+  {"key": "2", "type": "show", "title": "TV Shows", "agent": "tv.plex.agents.series"},
+  {"key": "3", "type": "artist", "title": "Music"}
+]}}

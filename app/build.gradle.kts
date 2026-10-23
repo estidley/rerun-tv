@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.rerun.tv"
-        minSdk = 25
+        minSdk = 26
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"

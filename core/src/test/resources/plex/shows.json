@@ -1,0 +1,6 @@
+{"MediaContainer": {"size": 2, "Metadata": [
+  {"ratingKey": "500", "type": "show", "title": "Dragon Ball Z", "year": 1996, "studio": "Fuji TV", "contentRating": "TV-PG",
+   "Genre": [{"tag": "Animation"}, {"tag": "Action & Adventure"}], "Guid": [{"id": "tmdb://12971"}], "Label": [{"tag": "Toonami"}]},
+  {"ratingKey": "600", "type": "show", "title": "Avatar Next", "year": 2026, "studio": "Paramount+", "contentRating": "TV-Y7",
+   "Genre": [{"tag": "Animation"}]}
+]}}

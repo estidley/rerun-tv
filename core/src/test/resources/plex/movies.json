@@ -1,0 +1,11 @@
+{"MediaContainer": {"size": 2, "totalSize": 412, "offset": 0, "Metadata": [
+  {"ratingKey": "1001", "type": "movie", "title": "Galaxy Defenders", "year": 2019, "duration": 8820000,
+   "contentRating": "PG-13", "studio": "Marvel Studios", "thumb": "/library/metadata/1001/thumb/1700000000",
+   "Genre": [{"tag": "Action"}, {"tag": "Science Fiction"}], "Label": [{"tag": "Favorites"}],
+   "Collection": [{"tag": "Marvel Cinematic Universe"}],
+   "Guid": [{"id": "imdb://tt0000001"}, {"id": "tmdb://299534"}, {"id": "tvdb://5555"}],
+   "Media": [{"id": 9, "duration": 8820000, "container": "mkv", "videoCodec": "h264", "audioCodec": "dca",
+              "Part": [{"id": 77, "key": "/library/parts/77/1700000000/file.mkv", "size": 123}]}]},
+  {"ratingKey": "1002", "type": "movie", "title": "Quiet Field", "duration": 5400000,
+   "Media": [{"container": "mp4", "videoCodec": "h264", "audioCodec": "aac", "Part": [{"key": "/library/parts/78/1/file.mp4"}]}]}
+]}}
