@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 320x180 TV banner: retro CRT-ish frame with "RERUN" color bars -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#0B1E5B" android:pathData="M0,0h320v180h-320z"/>
+    <path android:fillColor="#C0C0C0" android:pathData="M20,128h40v32h-40z"/>
+    <path android:fillColor="#E8D200" android:pathData="M60,128h40v32h-40z"/>
+    <path android:fillColor="#00C8C8" android:pathData="M100,128h40v32h-40z"/>
+    <path android:fillColor="#00C800" android:pathData="M140,128h40v32h-40z"/>
+    <path android:fillColor="#C800C8" android:pathData="M180,128h40v32h-40z"/>
+    <path android:fillColor="#C80000" android:pathData="M220,128h40v32h-40z"/>
+    <path android:fillColor="#0000C8" android:pathData="M260,128h40v32h-40z"/>
+    <!-- R -->
+    <path android:fillColor="#39FF14" android:pathData="M28,30h10v70h-10z M28,30h28v10h-28z M50,30h10v35h-10z M28,58h28v10h-28z M42,68h10v10h-10z M48,78h10v22h-10z"/>
+    <!-- E -->
+    <path android:fillColor="#39FF14" android:pathData="M72,30h10v70h-10z M72,30h30v10h-30z M72,60h24v10h-24z M72,90h30v10h-30z"/>
+    <!-- R -->
+    <path android:fillColor="#39FF14" android:pathData="M114,30h10v70h-10z M114,30h28v10h-28z M136,30h10v35h-10z M114,58h28v10h-28z M128,68h10v10h-10z M134,78h10v22h-10z"/>
+    <!-- U -->
+    <path android:fillColor="#39FF14" android:pathData="M158,30h10v70h-10z M184,30h10v70h-10z M158,90h36v10h-36z"/>
+    <!-- N -->
+    <path android:fillColor="#39FF14" android:pathData="M206,30h10v70h-10z M236,30h10v70h-10z M216,40h8v20h-8z M222,56h8v20h-8z M228,72h8v18h-8z"/>
+    <!-- scanlines -->
+    <path android:fillColor="#22000000" android:pathData="M0,2h320v1h-320z M0,8h320v1h-320z M0,14h320v1h-320z M0,20h320v1h-320z M0,26h320v1h-320z M0,32h320v1h-320z M0,38h320v1h-320z M0,44h320v1h-320z M0,50h320v1h-320z M0,56h320v1h-320z M0,62h320v1h-320z M0,68h320v1h-320z M0,74h320v1h-320z M0,80h320v1h-320z M0,86h320v1h-320z M0,92h320v1h-320z M0,98h320v1h-320z M0,104h320v1h-320z M0,110h320v1h-320z M0,116h320v1h-320z M0,122h320v1h-320z"/>
+</vector>
