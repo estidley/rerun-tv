@@ -11,6 +11,10 @@ enum class PlayOrder { SHUFFLE, IN_ORDER }
 private fun norm(s: String) = s.trim().lowercase()
 private fun Set<String>.normed() = mapTo(HashSet()) { norm(it) }
 
+/** Title key that ignores case, punctuation and a leading "The" ("Tenchi Muyo!" == "tenchi muyo"). */
+fun titleKey(s: String): String =
+    s.trim().lowercase().removePrefix("the ").filter { it.isLetterOrDigit() }
+
 /**
  * What a channel plays.
  *
@@ -30,7 +34,7 @@ data class Rules(
     val kinds: Set<MediaKind> = MediaKind.entries.toSet(),
 ) {
     private val nNetworks by lazy { networks.normed() }
-    private val nTitles by lazy { titles.normed() }
+    private val nTitles by lazy { titles.mapTo(HashSet()) { titleKey(it) } }
     private val nTmdb by lazy { tmdbIds.normed() }
     private val nLabels by lazy { labels.normed() }
     private val nCollections by lazy { collections.normed() }
@@ -58,7 +62,7 @@ data class Rules(
 
         if (networkId != null && norm(networkId) in nNetworks) return true
         val title = if (item.kind == MediaKind.EPISODE) item.showTitle else item.title
-        if (title != null && norm(title) in nTitles) return true
+        if (title != null && titleKey(title) in nTitles) return true
         if (item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true
         if (item.labels.any { norm(it) in nLabels }) return true
         if (item.collections.any { norm(it) in nCollections }) return true
