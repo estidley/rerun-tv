@@ -99,7 +99,12 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit) {
     val screen by controller.screen.collectAsState()
     val crt by controller.crtLevel.collectAsState()
     val exiting by controller.exiting.collectAsState()
+    val fx by controller.effects.collectAsState()
     val level = CrtLevel.from(crt)
+    // Lay everything out on a fixed 1920×1080 canvas, whatever the TV's density.
+    val view = androidx.compose.ui.platform.LocalView.current
+    val canvas = androidx.compose.ui.unit.Density(density = view.resources.displayMetrics.widthPixels / 1920f, fontScale = 1f)
+    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides canvas) {
     ProvideCrtLevel(level) { Box(Modifier.fillMaxSize().background(Color.Black)) {
         when (val s = screen) {
             Screen.Onboarding -> OnboardingScreen(controller)
@@ -110,6 +115,7 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit) {
             Screen.Settings -> SettingsScreen(controller)
         }
         CrtOverlay(level)
-        PowerTransition(on = !exiting, onOffDone = onPoweredOff)
-    } }
+        if (fx.power) PowerTransition(on = !exiting, onOffDone = onPoweredOff)
+        else if (exiting) androidx.compose.runtime.LaunchedEffect(Unit) { onPoweredOff() }
+    } } }
 }

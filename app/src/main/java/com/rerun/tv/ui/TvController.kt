@@ -17,6 +17,21 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 
+data class Effects(
+    val static: Boolean = true,
+    val sound: Boolean = true,
+    val roll: Boolean = true,
+    val power: Boolean = true,
+) {
+    companion object {
+        const val STATIC = "fx_static"
+        const val SOUND = "fx_sound"
+        const val ROLL = "fx_roll"
+        const val POWER = "fx_power"
+        val KEYS = listOf(STATIC, SOUND, ROLL, POWER)
+    }
+}
+
 sealed interface Screen {
     data object Onboarding : Screen
     data object Player : Screen
@@ -48,6 +63,22 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     fun setCrt(level: com.rerun.tv.ui.crt.CrtLevel) {
         scope.launch { app.settings.setCrtLevel(level.name) }
+    }
+
+    /** Each retro effect can be switched off on its own (Settings → Effects). */
+    val effects: StateFlow<Effects> = kotlinx.coroutines.flow.combine(
+        app.settings.flag(Effects.STATIC), app.settings.flag(Effects.SOUND),
+        app.settings.flag(Effects.ROLL), app.settings.flag(Effects.POWER),
+    ) { st, so, ro, po -> Effects(st, so, ro, po) }.stateIn(scope, SharingStarted.Eagerly, Effects())
+
+    fun setEffect(key: String, on: Boolean) { scope.launch { app.settings.setFlag(key, on) } }
+
+    /** Everything off (CRT included), or everything back on with CRT at Subtle. */
+    fun setAllEffects(on: Boolean) {
+        scope.launch {
+            Effects.KEYS.forEach { app.settings.setFlag(it, on) }
+            app.settings.setCrtLevel(if (on) "SUBTLE" else "OFF")
+        }
     }
 
     /** Set to true when the user asks to leave the app; the activity plays power-off and finishes. */
@@ -95,7 +126,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     fun tuneTo(id: String, sound: Boolean = true) {
         if (id != currentId) previousId = currentId
         currentId = id
-        if (sound) NoiseBurst.play()
+        if (sound && effects.value.sound) NoiseBurst.play()
         engine.tune(id)
         showBanner()
     }

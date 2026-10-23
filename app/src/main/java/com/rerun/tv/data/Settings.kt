@@ -53,6 +53,9 @@ class Settings(context: Context, private val dao: SettingDao) {
     fun crtLevel(): Flow<String> = dao.observe(CRT_LEVEL).map { it ?: "SUBTLE" }
     suspend fun setCrtLevel(v: String) = dao.put(SettingRow(CRT_LEVEL, v))
 
+    fun flag(key: String, default: Boolean = true): Flow<Boolean> = dao.observe(key).map { it?.toBooleanStrictOrNull() ?: default }
+    suspend fun setFlag(key: String, on: Boolean) = dao.put(SettingRow(key, on.toString()))
+
     suspend fun signOut() {
         secure.edit().remove(ACCOUNT_TOKEN).remove(SERVER_TOKEN).apply()
         listOf(SERVER_BASE, SERVER_NAME, SERVER_ID, LAST_SYNC).forEach { dao.remove(it) }

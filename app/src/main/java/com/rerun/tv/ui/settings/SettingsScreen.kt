@@ -4,7 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -18,6 +20,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
+import com.rerun.tv.ui.Effects
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -32,6 +35,7 @@ fun SettingsScreen(controller: TvController) {
     val app = RerunApp.instance
     val scope = rememberCoroutineScope()
     val crt by controller.crtLevel.collectAsState()
+    val fx by controller.effects.collectAsState()
     var server by remember { mutableStateOf("") }
     var lastSync by remember { mutableStateOf(0L) }
     var syncStatus by remember { mutableStateOf<String?>(null) }
@@ -45,8 +49,19 @@ fun SettingsScreen(controller: TvController) {
     }
 
     TvFrame("Settings", "BACK guide") {
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            BasicText("PICTURE", style = Retro.GuideNumber)
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            BasicText("EFFECTS", style = Retro.GuideNumber)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton("All effects on", { controller.setAllEffects(true) })
+                TvButton("All effects off", { controller.setAllEffects(false) })
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton("Static", { controller.setEffect(Effects.STATIC, !fx.static) }, selected = fx.static, sub = if (fx.static) "on" else "off")
+                TvButton("Static sound", { controller.setEffect(Effects.SOUND, !fx.sound) }, selected = fx.sound, sub = if (fx.sound) "on" else "off")
+                TvButton("Picture roll", { controller.setEffect(Effects.ROLL, !fx.roll) }, selected = fx.roll, sub = if (fx.roll) "on" else "off")
+                TvButton("Power on/off", { controller.setEffect(Effects.POWER, !fx.power) }, selected = fx.power, sub = if (fx.power) "on" else "off")
+            }
+            BasicText("CRT LOOK", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 CrtLevel.entries.forEachIndexed { i, level ->
                     val label = when (level) { CrtLevel.OFF -> "CRT Off"; CrtLevel.SUBTLE -> "CRT Subtle"; CrtLevel.FULL -> "CRT Full" }

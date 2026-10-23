@@ -37,6 +37,7 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
     val state by controller.engine.state.collectAsState()
     val bannerUntil by controller.bannerUntil.collectAsState()
     val channels by controller.channels.collectAsState()
+    val fx by controller.effects.collectAsState()
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -67,10 +68,10 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
                 UpNextCard(state.channel, nextItem, entry?.endMs ?: now, controller.posterUrl(nextItem))
             }
             Phase.DIFFICULTIES -> DifficultiesCard()
-            Phase.TUNING -> StaticNoise(Modifier.fillMaxSize())
+            Phase.TUNING -> if (fx.static) StaticNoise(Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize().background(Color.Black))
             Phase.PLAYING -> Unit
         }
-        VerticalRoll(active = state.phase == Phase.TUNING, key = state.tuneId)
+        if (fx.roll) VerticalRoll(active = state.phase == Phase.TUNING, key = state.tuneId)
 
         if (channels.isEmpty() && state.channel == null) {
             Box(Modifier.fillMaxSize().background(Retro.GuideBlue), contentAlignment = Alignment.Center) {
