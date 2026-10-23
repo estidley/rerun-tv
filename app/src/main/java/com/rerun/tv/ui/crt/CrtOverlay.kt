@@ -66,6 +66,7 @@ fun CrtOverlay(level: CrtLevel, modifier: Modifier = Modifier) {
             }
             val scan = ShaderBrush(ImageShader(tile.asImageBitmap(), TileMode.Repeated, TileMode.Repeated))
             val r = maxOf(size.width, size.height) * 0.75f
+            val center = Offset(size.width / 2f, size.height / 2f)
             val vignette = Brush.radialGradient(
                 0.55f to Color.Transparent,
                 1f to Color.Black.copy(alpha = s.vignetteEdge),
