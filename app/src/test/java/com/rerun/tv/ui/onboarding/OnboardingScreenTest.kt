@@ -11,6 +11,8 @@ import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.TvController
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.flowOf
+import com.rerun.tv.data.SyncProgress
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -42,6 +44,8 @@ class OnboardingScreenTest {
         `when`(api.pickConnection(server)).thenReturn("http://127.0.0.1:32400")
         `when`(sync.adLibraries()).thenReturn(listOf(Section("ads", "movie", "Retro Ads")))
         `when`(sync.libraries()).thenReturn(listOf(Section("tv", "show", "TV Shows")))
+        `when`(sync.syncAds("ads")).thenReturn(flowOf(SyncProgress("Ads synced", 1, 1, true)))
+        `when`(sync.syncAds(null)).thenReturn(flowOf(SyncProgress("Ads disabled", 0, 0, true)))
     }
 
     @Test
@@ -55,7 +59,7 @@ class OnboardingScreenTest {
         compose.onNodeWithText("Which libraries should Rerun include?").assertExists()
         compose.onNodeWithText("+ TV Shows").assertExists()
         compose.onNodeWithText("Retro Ads").assertDoesNotExist()
-        verify(settings).setAdLibrary("ads")
+        verify(sync).syncAds("ads")
         verify(sync).libraries()
     }
 
@@ -67,6 +71,6 @@ class OnboardingScreenTest {
         compose.onNodeWithText("■ Disable ads").assertExists()
         compose.onNodeWithText("Continue").performScrollTo().performClick()
         compose.onNodeWithText("Which libraries should Rerun include?").assertExists()
-        verify(settings).setAdLibrary(null)
+        verify(sync).syncAds(null)
     }
 }

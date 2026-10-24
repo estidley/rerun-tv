@@ -3,6 +3,7 @@ package com.rerun.tv.player
 import android.app.Application
 import android.os.Looper
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.common.C
@@ -19,6 +20,7 @@ import com.rerun.core.plex.PlexParse
 import com.rerun.core.schedule.EntryKind
 import com.rerun.core.schedule.ScheduleEntry
 import com.rerun.tv.data.ChannelRow
+import com.rerun.tv.data.AdRow
 import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
@@ -50,6 +52,7 @@ class TunerEngineTest {
     private lateinit var api: PlexApi
     private lateinit var listener: Player.Listener
     private val sources = mutableListOf<MediaSource>()
+    private var wallTime: Long? = null
 
     @Before
     fun setUp() = runBlocking {
@@ -66,7 +69,10 @@ class TunerEngineTest {
         `when`(settings.clientId).thenReturn("test-client")
         doAnswer { listener = it.getArgument(0); null }.`when`(player).addListener(any(Player.Listener::class.java))
         doAnswer { sources += it.getArgument<MediaSource>(0); null }.`when`(player).setMediaSource(any(MediaSource::class.java))
-        engine = TunerEngine(RuntimeEnvironment.getApplication(), repo, settings, OkHttpClient(), api) { player }
+        engine = TunerEngine(
+            RuntimeEnvironment.getApplication(), repo, settings, OkHttpClient(), api,
+            clock = { wallTime ?: System.currentTimeMillis() },
+        ) { player }
     }
 
     @After
@@ -213,6 +219,79 @@ class TunerEngineTest {
         assertNull(engine.state.value.channel)
         assertNull(engine.state.value.item)
         assertEquals(Phase.OFF_AIR, engine.state.value.phase)
+    }
+
+    @Test
+    fun adsSeekIntoTheBreakAndRollOverWithoutUnmutingMenus() = runBlocking {
+        val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 30_000)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        prepare("east", ad)
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 10_000, now + 55_000, EntryKind.FILLER, null),
+            ScheduleEntry("east", now + 55_000, now + 600_000, EntryKind.PROGRAM, ad.key),
+        ))
+        engine.setVisible(false)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals(EntryKind.FILLER, engine.state.value.located!!.entry.kind)
+        assertEquals("ad", engine.state.value.item!!.key)
+        val seeks = ArgumentCaptor.forClass(Long::class.javaObjectType)
+        verify(player).seekTo(seeks.capture())
+        assertTrue(seeks.value in 10_000L..15_000L)
+        wallTime = now + 21_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(21))
+        await { sources.size == 2 }
+        wallTime = now + 51_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(30))
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        wallTime = now + 56_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(5))
+        await { sources.size == 3 }
+        assertEquals(EntryKind.PROGRAM, engine.state.value.located!!.entry.kind)
+        verify(player, never()).volume = 1f
+        engine.setVisible(true)
+        verify(player).volume = 1f
+    }
+
+    @Test
+    fun emptyAdCatalogKeepsUpNextAndUnsupportedCodecsUseTranscoding() = runBlocking {
+        val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 30_000, audioCodec = "dca")
+        prepare("east", ad)
+        val now = System.currentTimeMillis()
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 10_000, now + 50_000, EntryKind.FILLER, null),
+        ))
+        `when`(repo.adCatalog()).thenReturn(emptyList())
+        engine.tune("east")
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        assertTrue(sources.isEmpty())
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(sources.single().mediaItem.localConfiguration!!.uri.path!!.endsWith("start.m3u8"))
+    }
+
+    @Test
+    fun failedAdDoesNotCancelTheNextProgramsDeadline() = runBlocking {
+        val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 10_000)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        prepare("east", ad)
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now, now + 10_000, EntryKind.FILLER, null),
+            ScheduleEntry("east", now + 10_000, now + 600_000, EntryKind.PROGRAM, ad.key),
+        ))
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onPlayerError(PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_IO_UNSPECIFIED))
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        wallTime = now + 11_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11))
+        await { sources.size == 2 }
+        assertEquals(EntryKind.PROGRAM, engine.state.value.located!!.entry.kind)
     }
 
     private fun videoWithSubtitle(codec: String): String =

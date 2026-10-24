@@ -12,6 +12,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rerun.core.codec.ChannelCodec
 import com.rerun.core.codec.SetCodec
 import com.rerun.core.model.ChannelDef
@@ -58,6 +60,46 @@ data class ItemRow(
             SetCodec.encode(i.collections), i.partKey, i.container, i.videoCodec, i.audioCodec, i.thumb,
         )
     }
+}
+
+@Entity(tableName = "ads")
+data class AdRow(
+    @PrimaryKey val key: String,
+    val title: String,
+    val durationMs: Long,
+    val year: Int?,
+    val partKey: String,
+    val container: String?,
+    val videoCodec: String?,
+    val audioCodec: String?,
+    val thumb: String?,
+) {
+    fun toItem() = MediaItem(
+        key = key, kind = MediaKind.MOVIE, title = title, year = year, durationMs = durationMs,
+        genres = emptySet(), network = null, studio = null, contentRating = null,
+        showKey = null, showTitle = null, season = null, episode = null, tmdbId = null,
+        labels = emptySet(), collections = emptySet(), partKey = partKey, container = container,
+        videoCodec = videoCodec, audioCodec = audioCodec, thumb = thumb,
+    )
+
+    companion object {
+        fun of(item: MediaItem) = AdRow(
+            item.key, item.title, item.durationMs, item.year, requireNotNull(item.partKey),
+            item.container, item.videoCodec, item.audioCodec, item.thumb,
+        )
+    }
+}
+
+@Dao
+interface AdDao {
+    @Query("SELECT * FROM ads ORDER BY `key`")
+    suspend fun all(): List<AdRow>
+
+    @Query("DELETE FROM ads")
+    suspend fun clear()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(rows: List<AdRow>)
 }
 
 @Entity(tableName = "channels")
@@ -169,6 +211,12 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE endMs > :fromMs AND startMs < :toMs ORDER BY channelId, startMs")
     suspend fun rangeAll(fromMs: Long, toMs: Long): List<EntryRow>
 
+    @Query(
+        "SELECT p.* FROM entries p INNER JOIN entries f ON p.channelId = f.channelId AND p.endMs = f.startMs " +
+            "WHERE p.kind = 'PROGRAM' AND f.kind = 'FILLER' AND f.startMs <= :fromMs AND f.endMs > :fromMs",
+    )
+    suspend fun programsBeforeBreak(fromMs: Long): List<EntryRow>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(rows: List<EntryRow>)
 
@@ -199,6 +247,34 @@ interface StateDao {
 
 @Dao
 interface SettingDao {
+    @Query("DELETE FROM entries")
+    suspend fun clearEntries()
+
+    @Query("DELETE FROM states")
+    suspend fun clearStates()
+
+    @Query("DELETE FROM channels")
+    suspend fun clearChannels()
+
+    @Query("DELETE FROM items")
+    suspend fun clearItems()
+
+    @Transaction
+    suspend fun clearConnection() {
+        clearEntries()
+        clearStates()
+        clearChannels()
+        clearItems()
+        clearAds()
+        listOf(
+            Settings.SERVER_BASE, Settings.SERVER_NAME, Settings.SERVER_ID, Settings.LAST_SYNC,
+            Settings.LAST_CHANNEL, Settings.SELECTED_LIBRARIES, Settings.AD_LIBRARY, Settings.AD_LAST_SYNC,
+        ).forEach { remove(it) }
+    }
+
+    @Query("DELETE FROM ads")
+    suspend fun clearAds()
+
     @Query("SELECT value FROM settings WHERE `key` = :key")
     suspend fun get(key: String): String?
 
@@ -213,8 +289,8 @@ interface SettingDao {
 }
 
 @Database(
-    entities = [ItemRow::class, ChannelRow::class, EntryRow::class, StateRow::class, SettingRow::class],
-    version = 1,
+    entities = [ItemRow::class, AdRow::class, ChannelRow::class, EntryRow::class, StateRow::class, SettingRow::class],
+    version = 2,
     exportSchema = false,
 )
 abstract class RerunDb : RoomDatabase() {
@@ -223,11 +299,22 @@ abstract class RerunDb : RoomDatabase() {
     abstract fun entries(): EntryDao
     abstract fun states(): StateDao
     abstract fun settings(): SettingDao
+    abstract fun ads(): AdDao
 
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS ads (`key` TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, " +
+                        "durationMs INTEGER NOT NULL, year INTEGER, partKey TEXT NOT NULL, container TEXT, " +
+                        "videoCodec TEXT, audioCodec TEXT, thumb TEXT)",
+                )
+            }
+        }
+
         fun open(context: Context): RerunDb =
             Room.databaseBuilder(context, RerunDb::class.java, "rerun.db")
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

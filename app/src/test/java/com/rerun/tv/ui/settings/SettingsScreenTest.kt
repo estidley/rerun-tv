@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
@@ -21,6 +22,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -40,6 +43,7 @@ class SettingsScreenTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var settings: Settings
     private lateinit var sync: LibrarySync
+    private lateinit var controller: TvController
     private lateinit var refresh: Continuation<Unit>
     private val eastWest = MutableStateFlow(false)
 
@@ -48,10 +52,11 @@ class SettingsScreenTest {
         val app = mock(RerunApp::class.java)
         settings = mock(Settings::class.java)
         sync = mock(LibrarySync::class.java)
-        val controller = mock(TvController::class.java)
+        controller = mock(TvController::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
         `when`(settings.lastSyncMs()).thenReturn(0L)
+        `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         `when`(settings.flag(Settings.EAST_WEST, false)).thenReturn(eastWest)
         `when`(controller.crtLevel).thenReturn(MutableStateFlow("OFF"))
@@ -157,5 +162,26 @@ class SettingsScreenTest {
         compose.onNodeWithText("■ Music").assertExists()
         verify(settings).setFlag(Settings.MUSIC, true)
         verify(sync).sync()
+    }
+
+    @Test
+    fun signOutUsesControllerResetAndDisplaysFailures() = runBlocking<Unit> {
+        doAnswer { throw IllegalStateException("Storage unavailable") }.`when`(controller).signOut()
+        compose.onNodeWithText("Sign out").performScrollTo().performClick()
+        compose.onNodeWithText("Sign out failed: Storage unavailable").performScrollTo().assertIsDisplayed()
+        verify(controller).signOut()
+    }
+
+    @Test
+    fun settingsPanelHasSymmetricMarginsAndLeftAlignedContent() {
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val panel = compose.onNodeWithTag("settings-panel").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithText("EFFECTS").fetchSemanticsNode().boundsInRoot
+        val nextHeading = compose.onNodeWithText("CRT LOOK").fetchSemanticsNode().boundsInRoot
+        assertTrue(panel.left > screen.left)
+        assertTrue(panel.right < screen.right)
+        assertEquals(panel.left - screen.left, screen.right - panel.right, 1f)
+        assertTrue(heading.left > panel.left)
+        assertEquals(heading.left, nextHeading.left, 1f)
     }
 }

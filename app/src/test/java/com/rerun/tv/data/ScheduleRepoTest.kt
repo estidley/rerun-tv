@@ -93,6 +93,26 @@ class ScheduleRepoTest {
         assertTrue(repo.entries("movies:1:w", 0, Long.MAX_VALUE).isEmpty())
     }
 
+    @Test
+    fun guideStartingInABreakIncludesThePreviousProgramButNotAdTitles() = runBlocking {
+        val program = com.rerun.core.schedule.ScheduleEntry(
+            "east", now - 1_800_000, now - 480_000, com.rerun.core.schedule.EntryKind.PROGRAM, "show",
+        )
+        val filler = com.rerun.core.schedule.ScheduleEntry(
+            "east", program.endMs, now + 120_000, com.rerun.core.schedule.EntryKind.FILLER, null,
+        )
+        val next = com.rerun.core.schedule.ScheduleEntry(
+            "east", filler.endMs, now + 1_920_000, com.rerun.core.schedule.EntryKind.PROGRAM, "next",
+        )
+        db.entries().insertAll(listOf(program, filler, next).map(EntryRow::of))
+        val entries = repo.allEntries(now, next.endMs).getValue("east")
+        assertEquals(listOf(program, filler, next), entries)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(now, filler.endMs, "show"),
+            com.rerun.core.schedule.GuideBlock(next.startMs, next.endMs, "next"),
+        ), com.rerun.core.schedule.guideBlocks(entries, now, next.endMs))
+    }
+
     private fun movie(key: String): MediaItem = PlexParse.movies(
         """{"MediaContainer":{"Metadata":[{"ratingKey":"$key","title":"$key","duration":14400000}]}}""",
     ).single()

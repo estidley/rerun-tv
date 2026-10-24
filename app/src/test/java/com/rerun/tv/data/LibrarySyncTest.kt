@@ -84,7 +84,7 @@ class LibrarySyncTest {
                     id, 3000 + index, id, com.rerun.core.model.ChannelKind.CUSTOM, com.rerun.core.model.Rules(),
                 ), builtIn = false, dormant = false,
             ))
-            db.states().put(StateRow(id, "{}"))
+            db.states().put(StateRow(id, com.rerun.core.codec.StateCodec.encode(com.rerun.core.schedule.ChannelState(seed = 1))))
             db.entries().insertAll(listOf(EntryRow.of(
                 com.rerun.core.schedule.ScheduleEntry(
                     id, start, start + 60_000, com.rerun.core.schedule.EntryKind.PROGRAM,
@@ -95,8 +95,7 @@ class LibrarySyncTest {
         `when`(settings.adLibrary()).thenReturn("5")
         sync.sync().collect()
         for (id in channels.take(2)) {
-            assertTrue(db.entries().range(id, start, start + 60_000).isEmpty())
-            assertNull(db.states().get(id))
+            assertTrue(db.entries().range(id, start, start + 60_000).none { it.itemKey == "private" })
         }
         assertEquals("movie", db.entries().range("regular", start, start + 60_000).single().itemKey)
         assertNotNull(db.states().get("regular"))

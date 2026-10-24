@@ -63,6 +63,8 @@ import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.player.describe
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private const val WINDOW_MS = 3 * 3_600_000L
@@ -74,6 +76,7 @@ private val TIME_HEADER_H = 36.dp
 fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.instance.schedule) {
     val rows by controller.channels.collectAsState()
     val density by controller.guideDensity.collectAsState()
+    val revision by schedule.guideRevision.collectAsState()
     val focus = remember { FocusRequester() }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -83,30 +86,63 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     var headerIndex by remember { mutableIntStateOf(0) }
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
+    var loading by remember { mutableStateOf(true) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableIntStateOf(0) }
+    var elapsedSeconds by remember { mutableLongStateOf(0L) }
+    var refreshTick by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            now = System.currentTimeMillis()
+            windowStart = maxOf(windowStart, gridFloor(now))
+            focusTime = maxOf(focusTime, now)
+            refreshTick++
+        }
+    }
+    LaunchedEffect(loading, windowStart, revision, attempt) {
+        elapsedSeconds = 0
+        val started = android.os.SystemClock.elapsedRealtime()
+        while (loading) {
+            delay(1_000)
+            elapsedSeconds = (android.os.SystemClock.elapsedRealtime() - started) / 1_000
+        }
+    }
 
     LaunchedEffect(rows) {
         val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
         focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, rows.lastIndex.coerceAtLeast(-1))
     }
-    LaunchedEffect(windowStart, rows) {
+    LaunchedEffect(windowStart, rows, revision, attempt, refreshTick) {
+        loading = true
+        loadError = null
         now = System.currentTimeMillis()
-        val (b, i) = withContext(Dispatchers.IO) {
-            schedule.ensure(now)
-            val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
-            val mapped = rows.associate { row ->
-                val entries = all[row.id].orEmpty()
-                row.id to if (row.def.kind == ChannelKind.MUSIC) {
-                    val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
-                    musicGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, title)
-                } else {
-                    guideBlocks(entries, windowStart, windowStart + WINDOW_MS)
+        try {
+            val (b, i) = withContext(Dispatchers.IO) {
+                schedule.ensure(now)
+                val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
+                val mapped = rows.associate { row ->
+                    val entries = all[row.id].orEmpty()
+                    row.id to if (row.def.kind == ChannelKind.MUSIC) {
+                        val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
+                        musicGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, title)
+                    } else {
+                        guideBlocks(entries, windowStart, windowStart + WINDOW_MS)
+                    }
                 }
+                val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
+                mapped to keys.mapNotNull { k -> schedule.item(k)?.let { k to it } }.toMap()
             }
-            val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
-            mapped to keys.mapNotNull { k -> schedule.item(k)?.let { k to it } }.toMap()
+            blocks = b
+            items = i
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            loadError = "Couldn't update guide: ${e.message}"
+        } finally {
+            loading = false
         }
-        blocks = b
-        items = i
     }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
@@ -144,7 +180,8 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                     Key.DirectionLeft -> if (header) headerIndex = 0 else moveTime(false)
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> when {
                         header -> controller.go(if (headerIndex == 0) Screen.Channels else Screen.Settings)
-                        focusedChannel != null -> { controller.go(Screen.Player); controller.tuneTo(focusedChannel.id) }
+                        loadError != null -> attempt++
+                        !loading && focusedChannel != null -> { controller.go(Screen.Player); controller.tuneTo(focusedChannel.id) }
                     }
                     Key.Menu -> focusedChannel?.let { controller.go(Screen.Editor(it.id)) }
                     else -> return@onPreviewKeyEvent false
@@ -167,6 +204,20 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem))
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                if (loading || loadError != null || rows.isEmpty()) {
+                    Column(Modifier.align(Alignment.Center).testTag("guide-status")) {
+                        BasicText(
+                            loadError ?: if (loading) "Updating guide..." else "No channels yet. Open Settings and run a library sync.",
+                            style = Retro.Title,
+                        )
+                        BasicText(
+                            if (loadError != null) "Press OK to retry, or UP for Settings."
+                            else if (loading) "Elapsed: ${elapsedSeconds}s" else "Press UP for Settings.",
+                            style = Retro.Body,
+                        )
+                    }
+                    return@BoxWithConstraints
+                }
                 val timelineW = maxWidth - CHANNEL_W
                 val pxPerMs = timelineW.value / WINDOW_MS
                 val layout = guideRows((maxHeight - TIME_HEADER_H).value, rows.size, focusRow, GuideDensity.from(density))

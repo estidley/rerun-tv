@@ -3,7 +3,9 @@ package com.rerun.tv.data
 import com.rerun.core.model.MediaItem
 import com.rerun.core.plex.PlexParse
 import com.rerun.core.plex.Section
+import com.rerun.core.plex.ServerUri
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flow
@@ -20,12 +22,41 @@ class LibrarySync(
 ) {
     private val mutex = Mutex()
 
+    suspend fun signOut() = mutex.withLock {
+        schedule.signOut(settings)
+    }
+
     suspend fun libraries(): List<Section> {
         val adLibrary = settings.adLibrary()
         return serverLibraries().filter { it.type in setOf("movie", "show", "artist") && it.key != adLibrary }
     }
 
     suspend fun adLibraries(): List<Section> = serverLibraries().filter { it.type == "movie" }
+
+    suspend fun adCount(): Int = withContext(Dispatchers.IO) { schedule.adCatalog().size }
+
+    fun syncAds(source: String?): Flow<SyncProgress> = flow {
+        mutex.withLock {
+            if (source == null) {
+                schedule.replaceAds(null, emptyList())
+                emit(SyncProgress("Ads disabled", 0, 0, finished = true))
+            } else {
+                val base = requireNotNull(settings.serverBase()) { "No Plex server chosen" }
+                val token = requireNotNull(settings.serverToken ?: settings.accountToken) { "Not signed in" }
+                require(adLibraries().any { it.key == source }) { "Ad library is unavailable. Choose another library or Off." }
+                val clips = ArrayList<AdRow>()
+                pages(base, "/library/sections/$source/all?type=1&includeGuids=1", token) { json, done, total ->
+                    clips += PlexParse.movies(json)
+                        .filter { it.key.isNotBlank() && it.durationMs > 0 && ServerUri.isLibraryPath(it.partKey) }
+                        .map(AdRow::of)
+                    emit(SyncProgress("Reading ads", done, total))
+                }
+                val catalog = clips.distinctBy { it.key }
+                schedule.replaceAds(source, catalog)
+                emit(SyncProgress("Ads synced", catalog.size, catalog.size, finished = true))
+            }
+        }
+    }.flowOn(Dispatchers.IO)
 
     private suspend fun serverLibraries(): List<Section> {
         val base = requireNotNull(settings.serverBase()) { "No Plex server chosen" }
@@ -88,6 +119,8 @@ class LibrarySync(
                 items = items,
                 selectedLibraries = selectedLibraries,
             )
+            emit(SyncProgress("Updating guide", 0, 0))
+            schedule.ensure(System.currentTimeMillis())
             settings.setLastSyncMs(System.currentTimeMillis())
             emit(SyncProgress("Done", items.size, items.size, finished = true))
         }
@@ -109,6 +142,7 @@ class LibrarySync(
 
     /** Rebuilds the dial from the library and the lineup switches. */
     suspend fun refreshChannels() = mutex.withLock {
+        if (settings.serverBase() == null) return@withLock
         schedule.refreshChannels(
             eastWest = settings.isOn(Settings.EAST_WEST),
             music = settings.isOn(Settings.MUSIC),

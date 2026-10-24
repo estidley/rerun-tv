@@ -127,7 +127,7 @@ fun OnboardingScreen(controller: TvController, app: RerunApp = RerunApp.instance
                 ) {
                     BasicText("Choose an ad library, or disable ads", style = Retro.Title)
                     BasicText("Use a Plex Other Videos or Movies library of commercial clips.", style = Retro.Caption)
-                    BasicText("This saves the source only. Playback of ads during gaps is not available yet.", style = Retro.Caption)
+                    BasicText("The ad catalog syncs before continuing. Clips play between programs without delaying the next show.", style = Retro.Caption)
                     TvButton(
                         "Disable ads", { step = s.copy(selected = null) },
                         Modifier.width(640.dp).focusRequester(first), selected = s.selected == null,
@@ -143,7 +143,7 @@ fun OnboardingScreen(controller: TvController, app: RerunApp = RerunApp.instance
                         step = Step.Syncing("Saving ad library choice", 0, 0)
                         scope.launch {
                             try {
-                                app.settings.setAdLibrary(s.selected)
+                                app.sync.syncAds(s.selected).collect { p -> step = Step.Syncing(p.stage, p.done, p.total) }
                                 val libraries = app.sync.libraries()
                                 require(libraries.isNotEmpty()) {
                                     "No regular libraries available. Disable ads or choose a different ad library."

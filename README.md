@@ -23,11 +23,13 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 - **Theme colors:** Settings offers Standard blue, 70s earth tones, and 50s diner colors. The choice applies immediately to the guide, menus, and overlays and is saved between sessions.
 - **Guide density:** choose Compact, Comfortable, or Large rows in Settings. All three fill the guide area when enough channels exist; taller rows allow more channel-name lines.
 - **Manage libraries:** change your included libraries from Settings without signing out. Library pickers show `+` for included libraries and `x` for excluded libraries, with text labels in every theme. Save and sync updates the selection only after a successful fetch and rebuilds the guide, including delayed West feeds, so excluded content no longer airs.
-- **Ad library:** setup asks you to select a Plex Other Videos or Movies library or Disable ads before choosing regular libraries. Change the source later in Settings, or choose Off. The source is saved per server and excluded from regular library pickers/imports; re-sync after selecting a previously imported library. This currently configures the source only; playback of ads during filler gaps is not implemented yet.
+- **Ad library:** setup asks you to select a Plex Other Videos or Movies library or Disable ads before choosing regular libraries. Selecting a source syncs its clips to a separate, persistent ad catalog; Settings also offers Force ad sync to refresh additions/removals. Failed syncs preserve the previous source and catalog. Off clears the catalog. The source is saved per server and excluded from regular library pickers/imports; re-sync regular libraries after selecting a previously imported library. Ads fill scheduled breaks without delaying programs; gaps too short for a clip show Up Next.
+- **Guide updates:** rebuilding the guide shows an updating message and elapsed time instead of an empty grid. The guide refreshes after syncs and while open. Playback stays muted in the guide and other menus, even when a new program starts.
 - **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel. The temporary channel stays out of the channel editor and last-channel history; channel 999 is reserved for it.
 - **Empty channels stay hidden** until you have at least 4 hours of content for them. Extra channels are not listed at all until they qualify.
 - **Locked 48-hour schedule.** The guide never lies, and library changes never yank you out of a movie.
 - **Read-only.** Nothing you watch is reported back to Plex. Your Continue Watching stays clean.
+- **Updates and sign-out:** database upgrades preserve server/library choices using explicit migrations, never a silent database reset. Missing server configuration returns to setup. Sign out clears Plex credentials and the local library/lineup while keeping display preferences.
 
 ## Install on a Fire TV
 
@@ -66,7 +68,7 @@ Channels and Settings sit at the top of the guide: press ▲ from the first row.
 
 ## Commercials (optional)
 
-`tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Rerun will play them between shows starting in Phase 3. Until then, those scheduled breaks show an "Up Next" card. Times with no schedule say Off Air.
+`tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Choose that library as the ad source during setup or in Settings. Rerun plays clips that fit between shows, seeking to the current ad position when you tune into a break. Clip choices are stable for a given channel, break, and catalog; consecutive repeats are avoided when another clip fits. Ads never appear as guide entries: each program's displayed time includes its following break, ending when the next program starts. Disabled ads, empty catalogs, and remaining gaps too short for a clip show an "Up Next" card. Times with no schedule say Off Air.
 
 Vintage commercials are generally still under copyright. Keep downloaded copies for personal viewing, and never commit media to this repository.
 

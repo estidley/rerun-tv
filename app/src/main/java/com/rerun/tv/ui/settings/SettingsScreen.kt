@@ -1,9 +1,14 @@
 package com.rerun.tv.ui.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +24,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.Effects
@@ -48,6 +54,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     var lastSync by remember { mutableStateOf(0L) }
     var syncStatus by remember { mutableStateOf<String?>(null) }
     var lineupBusy by remember { mutableStateOf(false) }
+    var signingOut by remember { mutableStateOf(false) }
     val eastWest by remember(app.settings) { app.settings.flag(Settings.EAST_WEST, false) }.collectAsState(false)
     val musicOn by remember(app.settings) { app.settings.flag(Settings.MUSIC, false) }.collectAsState(false)
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
@@ -78,15 +85,25 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     LaunchedEffect(eastWest) { if (pendingEastWest == eastWest) pendingEastWest = null }
     LaunchedEffect(musicOn) { if (pendingMusic == musicOn) pendingMusic = null }
 
-    BackHandler { controller.go(Screen.Guide) }
+    BackHandler { if (!signingOut) controller.go(Screen.Guide) }
     LaunchedEffect(Unit) {
         server = app.settings.serverName() ?: "—"
         lastSync = app.settings.lastSyncMs()
+        if (app.settings.serverBase() == null) {
+            controller.go(Screen.Onboarding)
+            return@LaunchedEffect
+        }
         focusRows.first().first().requestFocus()
     }
 
     TvStage("BACK guide") {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(
+            modifier = Modifier.widthIn(max = 1600.dp).fillMaxWidth().testTag("settings-panel")
+                .background(Retro.GuideBlueDeep.copy(alpha = 0.4f))
+                .border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(24.dp),
+            horizontalAlignment = Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
             BasicText("EFFECTS", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("All effects on", { controller.setAllEffects(true) }, modifier = buttonFocus(0, 0))
@@ -239,12 +256,21 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                 }, modifier = buttonFocus(7, 1))
                 TvButton("Channels", { controller.go(Screen.Channels) }, modifier = buttonFocus(7, 2))
                 TvButton("Sign out", {
-                    scope.launch {
-                        controller.engine.stop()
-                        app.settings.signOut()
-                        controller.go(Screen.Onboarding)
+                    if (!signingOut) {
+                        signingOut = true
+                        syncStatus = "Signing out..."
+                        scope.launch {
+                            try {
+                                controller.signOut()
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                syncStatus = "Sign out failed: ${e.message}"
+                            } finally {
+                                signingOut = false
+                            }
+                        }
                     }
-                }, modifier = buttonFocus(7, 3))
+                }, modifier = buttonFocus(7, 3), sub = if (signingOut) "Signing out..." else null)
             }
             syncStatus?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
             TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(8, 0))

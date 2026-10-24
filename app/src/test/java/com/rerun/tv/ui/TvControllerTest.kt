@@ -31,13 +31,18 @@ import org.robolectric.annotation.Config
 class TvControllerTest {
     private lateinit var controller: TvController
     private lateinit var engine: TunerEngine
+    private lateinit var app: RerunApp
+    private lateinit var settings: Settings
+    private lateinit var sync: com.rerun.tv.data.LibrarySync
     private val rows = MutableStateFlow<List<ChannelRow>>(emptyList())
 
     @Before
     fun setUp() = runBlocking {
-        val app = mock(RerunApp::class.java)
+        app = mock(RerunApp::class.java)
         val repo = mock(ScheduleRepo::class.java)
-        val settings = mock(Settings::class.java)
+        settings = mock(Settings::class.java)
+        sync = mock(com.rerun.tv.data.LibrarySync::class.java)
+        `when`(app.sync).thenReturn(sync)
         engine = mock(TunerEngine::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(repo)
@@ -79,6 +84,18 @@ class TvControllerTest {
     }
 
     @Test
+    fun guideAndSettingsStayMutedUntilReturningToThePlayer() {
+        controller.go(Screen.Player)
+        verify(engine).setVisible(true)
+        clearInvocations(engine)
+        controller.go(Screen.Guide)
+        controller.go(Screen.Settings)
+        verify(engine, times(2)).setVisible(false)
+        controller.closeGuideWithBack()
+        verify(engine).setVisible(true)
+    }
+
+    @Test
     fun guideAndChannelSurfingKeepWestNextToEastDespiteRenumbering() {
         fun channel(id: String, number: Int) =
             ChannelRow.of(ChannelDef(id, number, id, ChannelKind.CUSTOM, Rules()), builtIn = false, dormant = false)
@@ -101,5 +118,30 @@ class TvControllerTest {
         rows.value = rows.value.filterNot { Lineup.isWest(it.id) }
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(listOf("one", "two", "three"), controller.channels.value.map { it.id })
+    }
+
+    @Test
+    fun signingOutClearsPlaybackAndNavigationHistory() = runBlocking<Unit> {
+        controller.tuneTo("east", sound = false)
+        controller.tuneTo("other", sound = false)
+        controller.go(Screen.Settings)
+        controller.signOut()
+        assertEquals(Screen.Onboarding, controller.screen.value)
+        assertEquals(null, controller.currentChannelId())
+        controller.lastChannel()
+        assertEquals(null, controller.currentChannelId())
+        verify(engine).clear()
+        verify(sync).signOut()
+    }
+
+    @Test
+    fun missingServerConfigurationReturnsToSetupInsteadOfAnEmptyPlayer() = runBlocking<Unit> {
+        `when`(settings.isSignedIn).thenReturn(true)
+        `when`(settings.lastSyncMs()).thenReturn(123L)
+        controller.go(Screen.Player)
+        controller.startWatching()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(Screen.Onboarding, controller.screen.value)
+        verify(engine).clear()
     }
 }

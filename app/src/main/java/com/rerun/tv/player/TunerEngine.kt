@@ -30,6 +30,7 @@ import com.rerun.core.plex.planPlayback
 import com.rerun.core.schedule.EntryKind
 import com.rerun.core.schedule.Located
 import com.rerun.core.schedule.locate
+import com.rerun.core.schedule.adFiller
 import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.ScheduleRepo
@@ -72,6 +73,7 @@ class TunerEngine(
     private val settings: Settings,
     httpClient: OkHttpClient,
     private val api: PlexApi = PlexApi({ settings.clientId }, httpClient),
+    private val clock: () -> Long = System::currentTimeMillis,
     playerFactory: (Context) -> ExoPlayer = { ExoPlayer.Builder(it).build() },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -132,6 +134,11 @@ class TunerEngine(
 
     fun player(): ExoPlayer = player
 
+    /** Muting survives media replacement and wall-clock rollovers while menus are open. */
+    fun setVisible(visible: Boolean) {
+        player.volume = if (visible) 1f else 0f
+    }
+
     /** Remember which channel to restore when the start-over episode ends. */
     fun armReturn(channelId: String) {
         restartReturn = channelId
@@ -153,7 +160,7 @@ class TunerEngine(
         transcoded = false
         val seq = ++tuneSeq
         tuneJob = scope.launch {
-            val t0 = System.currentTimeMillis()
+            val t0 = clock()
             val channel = repo.channel(channelId)
             _state.value = TunerState(channel = channel, phase = Phase.TUNING, tuneId = seq)
             if (channel == null) return@launch difficulties()
@@ -165,7 +172,7 @@ class TunerEngine(
                 }
                 subtitlesOn = subs
                 subtitleLanguage = settings.subtitleLanguageValue()
-                val now = System.currentTimeMillis()
+                val now = clock()
                 val entries = withContext(Dispatchers.IO) { repo.entries(channelId, now - 1, now + 6 * 3_600_000L) }
                 val loc = locate(entries, now)
                 if (loc == null) {
@@ -184,15 +191,20 @@ class TunerEngine(
                     scheduleRollover(channelId, upcoming.startMs)
                     return@launch
                 }
-                val item = repo.item(loc.entry.itemKey)
+                val ad = if (loc.entry.kind == EntryKind.FILLER) {
+                    withContext(Dispatchers.IO) {
+                        adFiller(loc.entry, repo.adCatalog().map { it.toItem() }, now)
+                    }
+                } else null
+                val item = if (loc.entry.kind == EntryKind.FILLER) ad?.item else repo.item(loc.entry.itemKey)
                 val nextItem = loc.next?.let { n ->
                     if (n.kind == EntryKind.PROGRAM) repo.item(n.itemKey)
                     else entries.firstOrNull { it.startMs >= n.endMs && it.kind == EntryKind.PROGRAM }?.let { repo.item(it.itemKey) }
                 }
                 _state.value = _state.value.copy(located = loc, item = item, nextItem = nextItem)
-                scheduleRollover(channelId, loc.entry.endMs)
+                scheduleRollover(channelId, ad?.endMs ?: loc.entry.endMs)
 
-                if (loc.entry.kind == EntryKind.FILLER) {
+                if (loc.entry.kind == EntryKind.FILLER && ad == null) {
                     player.stop()
                     _state.value = _state.value.copy(phase = Phase.UP_NEXT)
                     return@launch
@@ -211,8 +223,8 @@ class TunerEngine(
                 // Only the first tune starts at zero; retries and subtitle changes keep position.
                 val fromStart = channelId == Lineup.RESTART_ID && restartFresh
                 restartFresh = false
-                val lag = System.currentTimeMillis() - now
-                val offset = if (fromStart) 0L else loc.offsetMs + lag
+                val lag = clock() - now
+                val offset = if (fromStart) 0L else (ad?.let { now - it.startMs } ?: loc.offsetMs) + lag
                 when (val plan = planPlayback(
                     item, base, settings.clientId, session, offset, subtitlesOn && subtitleAvailable,
                     subtitleStreamId = subtitle?.id,
@@ -234,7 +246,7 @@ class TunerEngine(
                         }
                         player.setMediaSource(DefaultMediaSourceFactory(http).createMediaSource(media.build()))
                         player.prepare()
-                        player.seekTo(if (fromStart) 0L else plan.startMs + (System.currentTimeMillis() - now - lag))
+                        player.seekTo(if (fromStart) 0L else plan.startMs + (clock() - now - lag))
                     }
                     is PlaybackPlan.Transcoded -> {
                         transcoded = true
@@ -261,7 +273,7 @@ class TunerEngine(
         if (channelId == Lineup.RESTART_ID) return
         val r = Runnable { tune(channelId) }
         rollover = r
-        handler.postDelayed(r, (endMs - System.currentTimeMillis()).coerceAtLeast(0))
+        handler.postDelayed(r, (endMs - clock()).coerceAtLeast(0))
     }
 
     private fun leaveRestart() {
@@ -302,7 +314,7 @@ class TunerEngine(
         player.stop()
         _state.value = _state.value.copy(phase = Phase.DIFFICULTIES)
         val id = _state.value.channel?.id ?: return
-        clearTimers()
+        retry?.let(handler::removeCallbacks)
         val r = Runnable { tune(id) }
         retry = r
         handler.postDelayed(r, RETRY_MS)

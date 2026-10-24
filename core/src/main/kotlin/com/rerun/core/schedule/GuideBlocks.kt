@@ -11,22 +11,22 @@ data class GuideBlock(
 
 /** Turns a channel's entries into guide cells, clipped to [fromMs, toMs). */
 fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<GuideBlock> {
+    if (fromMs >= toMs) return emptyList()
     val scheduled = ArrayList<GuideBlock>()
     for (e in entries.sortedBy { it.startMs }) {
-        if (e.endMs <= fromMs || e.startMs >= toMs) continue
-        val s = maxOf(e.startMs, fromMs)
-        val end = minOf(e.endMs, toMs)
+        if (e.startMs >= toMs) continue
         val last = scheduled.lastOrNull()
-        if (e.kind == EntryKind.FILLER && last != null && last.endMs == s) {
-            scheduled[scheduled.size - 1] = last.copy(endMs = end)
+        if (e.kind == EntryKind.FILLER && last != null && last.endMs == e.startMs) {
+            scheduled[scheduled.size - 1] = last.copy(endMs = e.endMs)
         } else {
-            scheduled += GuideBlock(s, end, if (e.kind == EntryKind.PROGRAM) e.itemKey else null)
+            scheduled += GuideBlock(e.startMs, e.endMs, if (e.kind == EntryKind.PROGRAM) e.itemKey else null)
         }
     }
-    if (fromMs >= toMs) return scheduled
     val out = ArrayList<GuideBlock>(scheduled.size + 2)
     var cursor = fromMs
-    for (b in scheduled) {
+    for (block in scheduled) {
+        if (block.endMs <= fromMs) continue
+        val b = block.copy(startMs = maxOf(block.startMs, fromMs), endMs = minOf(block.endMs, toMs))
         if (b.startMs > cursor) out += GuideBlock(cursor, b.startMs, null, offAir = true)
         out += b
         cursor = maxOf(cursor, b.endMs)

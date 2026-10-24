@@ -106,4 +106,48 @@ class LibrarySettingsTest {
         settings.signOut()
         assertNull(settings.adLibrary())
     }
+
+    @Test
+    fun signOutClearsTheOldAccountAndKeepsDisplayPreferences() = runBlocking {
+        settings.accountToken = "test-placeholder"
+        settings.serverToken = "test-server-placeholder"
+        settings.setServerId("server-a")
+        settings.setServerBase("http://127.0.0.1:32400")
+        settings.setServerName("Plex")
+        settings.setSelectedLibraries(setOf("tv"))
+        settings.setLastSyncMs(123)
+        settings.setLastChannel("old")
+        settings.setColorTheme("FIFTIES")
+        settings.setGuideDensity("LARGE")
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"old-item","title":"Old","duration":14400000}]}}""",
+        ).single()
+        db.items().insertAll(listOf(ItemRow.of(item)))
+        db.channels().upsert(ChannelRow.of(
+            com.rerun.core.model.ChannelDef("old", 10, "Old", com.rerun.core.model.ChannelKind.CUSTOM, com.rerun.core.model.Rules()),
+            builtIn = false, dormant = false,
+        ))
+        db.entries().insertAll(listOf(EntryRow.of(
+            com.rerun.core.schedule.ScheduleEntry("old", 0, 14400000, com.rerun.core.schedule.EntryKind.PROGRAM, item.key),
+        )))
+        db.states().put(StateRow("old", "{}"))
+        LibrarySync(
+            org.mockito.Mockito.mock(PlexApi::class.java), settings,
+            ScheduleRepo(db, com.rerun.core.schedule.Scheduler(java.time.ZoneId.of("UTC"))),
+        ).signOut()
+        val reopened = Settings(RuntimeEnvironment.getApplication(), db.settings())
+        assertFalse(reopened.isSignedIn)
+        assertNull(reopened.serverToken)
+        assertNull(reopened.serverBase())
+        assertNull(reopened.serverId())
+        assertNull(reopened.selectedLibraries())
+        assertNull(reopened.lastChannel())
+        assertEquals(0L, reopened.lastSyncMs())
+        assertTrue(db.items().all().isEmpty())
+        assertTrue(db.channels().all().isEmpty())
+        assertTrue(db.entries().rangeAll(0, Long.MAX_VALUE).isEmpty())
+        assertNull(db.states().get("old"))
+        assertEquals("FIFTIES", reopened.colorTheme().first())
+        assertEquals("LARGE", reopened.guideDensity().first())
+    }
 }

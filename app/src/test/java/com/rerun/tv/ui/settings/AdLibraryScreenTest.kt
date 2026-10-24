@@ -9,6 +9,8 @@ import com.rerun.tv.data.LibrarySync
 import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.TvController
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.flowOf
+import com.rerun.tv.data.SyncProgress
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,16 +30,22 @@ class AdLibraryScreenTest {
         val sync = mock(LibrarySync::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
+        `when`(sync.adCount()).thenReturn(0)
+        `when`(sync.syncAds("ads")).thenReturn(flowOf(SyncProgress("Ads synced", 2, 2, true)))
+        `when`(sync.syncAds(null)).thenReturn(flowOf(SyncProgress("Ads disabled", 0, 0, true)))
         `when`(sync.adLibraries()).thenReturn(listOf(Section("ads", "movie", "Retro Ads")))
         val controller = mock(TvController::class.java)
         compose.setContent { AdLibraryScreen(controller, app) }
         compose.onNodeWithText("■ Off").assertExists()
         compose.onNodeWithText("Retro Ads").performClick()
         compose.onNodeWithText("■ Retro Ads").assertExists()
-        verify(settings).setAdLibrary("ads")
+        verify(sync).syncAds("ads")
+        compose.onNodeWithText("Force ad sync").performScrollTo().performClick()
+        verify(sync, times(2)).syncAds("ads")
         compose.onNodeWithText("Off").performClick()
         compose.onNodeWithText("■ Off").assertExists()
-        verify(settings).setAdLibrary(null)
+        verify(sync).syncAds(null)
+        compose.onNodeWithText("Force ad sync").assertIsNotEnabled()
     }
 
     @Test
@@ -47,6 +55,7 @@ class AdLibraryScreenTest {
         val sync = mock(LibrarySync::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
+        `when`(sync.adCount()).thenReturn(0)
         `when`(sync.adLibraries()).thenAnswer { throw IllegalStateException("Offline") }.thenReturn(emptyList())
         val controller = mock(TvController::class.java)
         compose.setContent { AdLibraryScreen(controller, app) }
@@ -63,14 +72,16 @@ class AdLibraryScreenTest {
         val sync = mock(LibrarySync::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
+        `when`(sync.adCount()).thenReturn(0)
+        `when`(sync.syncAds(null)).thenReturn(flowOf(SyncProgress("Ads disabled", 0, 0, true)))
         `when`(sync.adLibraries()).thenReturn(listOf(Section("ads", "movie", "Retro Ads")))
-        doAnswer { throw IllegalStateException("Save failed") }.`when`(settings).setAdLibrary("ads")
+        `when`(sync.syncAds("ads")).thenAnswer { throw IllegalStateException("Save failed") }
         val controller = mock(TvController::class.java)
         compose.setContent { AdLibraryScreen(controller, app) }
         compose.onNodeWithText("Retro Ads").performScrollTo().performClick()
-        compose.onNodeWithText("Couldn't save ad library: Save failed").assertExists()
+        compose.onNodeWithText("Ad sync failed: Save failed").assertExists()
         compose.onNodeWithText("■ Off").performScrollTo().performClick()
-        compose.onNodeWithText("Couldn't save ad library: Save failed").assertDoesNotExist()
-        verify(settings).setAdLibrary(null)
+        compose.onNodeWithText("Ad sync failed: Save failed").assertDoesNotExist()
+        verify(sync).syncAds(null)
     }
 }

@@ -16,6 +16,19 @@ class GuideBlocksTest {
     }
 
     @Test
+    fun windowStartingDuringAdsStillLabelsTheBreakAsThePrecedingProgram() {
+        val blocks = guideBlocks(
+            listOf(p(-30, -8, "previous"), f(-8, 0), p(0, 22, "current"), f(22, 30), p(30, 52, "next")),
+            t0 - 5 * MIN, t0 + 40 * MIN,
+        )
+        assertEquals(listOf(
+            GuideBlock(t0 - 5 * MIN, t0, "previous"),
+            GuideBlock(t0, t0 + 30 * MIN, "current"),
+            GuideBlock(t0 + 30 * MIN, t0 + 40 * MIN, "next"),
+        ), blocks)
+    }
+
+    @Test
     fun clipsToWindow() {
         val blocks = guideBlocks(listOf(p(-60, 47, "movie"), f(47, 60), p(60, 82, "ep")), t0, t0 + 70 * MIN)
         assertEquals(listOf(GuideBlock(t0, t0 + 60 * MIN, "movie"), GuideBlock(t0 + 60 * MIN, t0 + 70 * MIN, "ep")), blocks)

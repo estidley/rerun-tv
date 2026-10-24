@@ -120,12 +120,14 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private var previousId: String? = null
     private var channelBeforeRestart: String? = null
     private var guideClosedAt = 0L
+    private var connectionGeneration = 0L
 
     @Volatile var serverBase: String? = null
         private set
     private val token: String? get() = app.settings.serverToken ?: app.settings.accountToken
 
     init {
+        engine.setVisible(_screen.value == Screen.Player)
         engine.onReturned = { id ->
             currentId = id
             previousId = channelBeforeRestart
@@ -136,30 +138,49 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun go(screen: Screen) {
+        engine.setVisible(screen == Screen.Player)
         _screen.value = if (screen is Screen.Editor && screen.channelId != null) {
             Screen.Editor(Lineup.eastOf(screen.channelId))
         } else screen
     }
 
+    suspend fun signOut() {
+        connectionGeneration++
+        engine.clear()
+        app.sync.signOut()
+        currentId = null
+        previousId = null
+        channelBeforeRestart = null
+        serverBase = null
+        _bannerUntil.value = 0L
+        go(Screen.Onboarding)
+    }
+
     /** Back from the guide: return to the picture, and arm "Back again exits". */
     fun closeGuideWithBack() {
         guideClosedAt = System.currentTimeMillis()
-        _screen.value = Screen.Player
+        go(Screen.Player)
     }
 
     /** Start watching: last channel if still active, else the lowest-numbered one. */
     fun startWatching() {
+        val generation = connectionGeneration
         scope.launch {
-            serverBase = app.settings.serverBase()
-            if (serverBase == null || app.settings.lastSyncMs() == 0L) {
-                _screen.value = Screen.Onboarding
+            val base = app.settings.serverBase()
+            val lastSync = app.settings.lastSyncMs()
+            if (generation != connectionGeneration) return@launch
+            serverBase = base
+            if (serverBase == null || lastSync == 0L) {
+                engine.clear()
+                go(Screen.Onboarding)
                 return@launch
             }
             app.schedule.invalidateLibrary()
             val list = app.schedule.active()
             val last = app.settings.lastChannel()
+            if (generation != connectionGeneration) return@launch
             val pick = list.firstOrNull { it.id == last } ?: list.firstOrNull()
-            _screen.value = Screen.Player
+            go(Screen.Player)
             currentId = currentId?.takeIf { id -> list.any { it.id == id } }
             previousId = previousId?.takeIf { id -> list.any { it.id == id } }
             if (pick != null) {
@@ -171,7 +192,13 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
-    fun resume() { currentId?.let { engine.tune(it) } ?: startWatching() }
+    fun resume() {
+        engine.setVisible(screen.value == Screen.Player)
+        if (!app.settings.isSignedIn) {
+            engine.clear()
+            go(Screen.Onboarding)
+        } else currentId?.let { engine.tune(it) } ?: startWatching()
+    }
 
     fun tuneTo(id: String, sound: Boolean = true) {
         if (currentId == Lineup.RESTART_ID && id != Lineup.RESTART_ID) {

@@ -28,12 +28,15 @@ fun AdLibraryScreen(controller: TvController, app: RerunApp = RerunApp.instance)
     var selected by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var count by remember { mutableIntStateOf(0) }
     var attempt by remember { mutableIntStateOf(0) }
     BackHandler { controller.go(Screen.Settings) }
     LaunchedEffect(attempt) {
         try {
             selected = app.settings.adLibrary()
             libraries = app.sync.adLibraries()
+            count = app.sync.adCount()
             error = null
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -48,12 +51,18 @@ fun AdLibraryScreen(controller: TvController, app: RerunApp = RerunApp.instance)
         busy = true
         scope.launch {
             try {
-                app.settings.setAdLibrary(key)
+                error = null
+                status = "Syncing ads..."
+                app.sync.syncAds(key).collect { p ->
+                    status = if (p.finished) p.stage else "${p.stage} ${p.done}/${p.total}"
+                }
                 selected = key
+                count = app.sync.adCount()
                 error = null
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                error = "Couldn't save ad library: ${e.message}"
+                status = null
+                error = "Ad sync failed: ${e.message}"
             } finally {
                 busy = false
             }
@@ -62,9 +71,10 @@ fun AdLibraryScreen(controller: TvController, app: RerunApp = RerunApp.instance)
     TvStage("BACK settings") {
         BasicText("AD LIBRARY", style = Retro.Title)
         BasicText("Choose a Plex Other Videos or Movies library containing your commercial clips.", style = Retro.Caption)
-        BasicText("Source selection only: ad playback during gaps is not available yet.", style = Retro.Caption)
+        BasicText("Selecting a library syncs its ad catalog. Clips fill breaks without delaying the next program.", style = Retro.Caption)
         BasicText("The chosen library is excluded from regular imports. Re-sync to remove previously imported clips.", style = Retro.Caption)
         error?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
+        status?.let { BasicText(it, style = Retro.Body) }
         val available = libraries
         if (available == null) {
             if (error == null) BasicText("Loading libraries...", style = Retro.Body)
@@ -82,6 +92,8 @@ fun AdLibraryScreen(controller: TvController, app: RerunApp = RerunApp.instance)
                         selected = selected == library.key, enabled = !busy,
                     )
                 }
+                BasicText("$count ad clips synced", style = Retro.Caption)
+                TvButton("Force ad sync", { save(selected) }, enabled = !busy && selected != null)
             }
         }
     }

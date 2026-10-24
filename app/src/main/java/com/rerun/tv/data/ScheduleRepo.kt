@@ -16,6 +16,8 @@ import com.rerun.core.schedule.ScheduleEntry
 import com.rerun.core.schedule.Scheduler
 import com.rerun.core.schedule.needsTopUp
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -23,8 +25,16 @@ import kotlinx.coroutines.sync.withLock
 class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     private val mutex = Mutex()
     @Volatile private var library: Map<String, MediaItem>? = null
+    private val _guideRevision = MutableStateFlow(0L)
+    val guideRevision = _guideRevision.asStateFlow()
 
     fun invalidateLibrary() { library = null }
+
+    suspend fun signOut(settings: Settings) = mutex.withLock {
+        settings.signOut()
+        invalidateLibrary()
+        _guideRevision.value++
+    }
 
     private suspend fun lib(): Map<String, MediaItem> =
         library ?: db.items().all().map { it.toItem() }.associateBy { it.key }.also { library = it }
@@ -34,6 +44,22 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     suspend fun libraryItems(): List<MediaItem> = lib().values.toList()
 
     suspend fun allChannelRows(): List<ChannelRow> = db.channels().all()
+
+    suspend fun adCatalog(): List<AdRow> = db.ads().all()
+
+    suspend fun replaceAds(source: String?, ads: List<AdRow>) = mutex.withLock {
+        db.withTransaction {
+            db.ads().clear()
+            db.ads().insertAll(ads)
+            if (source == null) {
+                db.settings().remove(Settings.AD_LIBRARY)
+                db.settings().remove(Settings.AD_LAST_SYNC)
+            } else {
+                db.settings().put(SettingRow(Settings.AD_LIBRARY, source))
+                db.settings().put(SettingRow(Settings.AD_LAST_SYNC, System.currentTimeMillis().toString()))
+            }
+        }
+    }
 
     fun activeChannels(): Flow<List<ChannelRow>> = db.channels().observeActive()
     fun allChannels(): Flow<List<ChannelRow>> = db.channels().observeAll()
@@ -73,6 +99,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             for (id in planned.deleteIds) removeChannel(id)
         }
         invalidateLibrary()
+        _guideRevision.value++
     }
 
     /** Tops up any active channel with less than a day of schedule left. */
@@ -148,8 +175,12 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     suspend fun entries(channelId: String, fromMs: Long, toMs: Long): List<ScheduleEntry> =
         db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
 
-    suspend fun allEntries(fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> =
-        db.entries().rangeAll(fromMs, toMs).map { it.toEntry() }.groupBy { it.channelId }
+    /** Include the preceding program when the guide window starts during its ad break. */
+    suspend fun allEntries(fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
+        (db.entries().programsBeforeBreak(fromMs) + db.entries().rangeAll(fromMs, toMs))
+            .distinctBy { it.channelId to it.startMs }
+            .map { it.toEntry() }.groupBy { it.channelId }
+    }
 
     /**
      * After a channel is edited: keep what's on now, rebuild everything after it.
@@ -166,6 +197,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             db.entries().deleteChannel(west.id)
             mirrorWest(west, nowMs)
         }
+        _guideRevision.value++
     }
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {

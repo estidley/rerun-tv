@@ -58,6 +58,7 @@ class GuideScreenTest {
     private lateinit var controller: TvController
     private lateinit var schedule: ScheduleRepo
     private val channels = MutableStateFlow<List<ChannelRow>>(emptyList())
+    private val revision = MutableStateFlow(0L)
 
     @Before
     fun setUp() = runBlocking {
@@ -69,6 +70,7 @@ class GuideScreenTest {
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         schedule = mock(ScheduleRepo::class.java)
+        `when`(schedule.guideRevision).thenReturn(revision)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(schedule)
         channels.value = (0 until 50).map {
@@ -147,6 +149,39 @@ class GuideScreenTest {
             compose.onAllNodesWithText("Blues Music").fetchSemanticsNodes().size >= 3
         }
         verify(schedule, never()).item(anyString())
+    }
+
+    @Test
+    fun scheduleRevisionReloadsEvenWhenChannelsHaveNotChanged() {
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+        }
+        clearInvocations(schedule)
+        compose.runOnIdle { revision.value++ }
+        compose.waitUntil(10_000) {
+            mockingDetails(schedule).invocations.any { it.method.name == "allEntries" }
+        }
+    }
+
+    @Test
+    fun slowScheduleBuildHidesGridAndShowsElapsedTime() = runBlocking<Unit> {
+        val release = java.util.concurrent.CountDownLatch(1)
+        doAnswer {
+            check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            Unit
+        }.`when`(schedule).ensure(anyLong())
+        try {
+            compose.setContent { GuideScreen(controller, schedule) }
+            compose.onNodeWithText("Updating guide...").assertExists()
+            compose.onNodeWithText("Elapsed: 0s").assertExists()
+            compose.onNodeWithTag("guide-grid").assertDoesNotExist()
+        } finally {
+            release.countDown()
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     private fun assertGuideRendering() {

@@ -8,6 +8,8 @@ import com.rerun.core.plex.ServerUri
 import com.rerun.core.codec.SetCodec
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.security.GeneralSecurityException
 import java.util.UUID
@@ -59,6 +61,8 @@ class Settings(context: Context, private val dao: SettingDao) {
         if (serverId() != v) {
             dao.remove(SELECTED_LIBRARIES)
             dao.remove(AD_LIBRARY)
+            dao.remove(AD_LAST_SYNC)
+            dao.clearAds()
             dao.remove(LAST_SYNC)
         }
         dao.put(SettingRow(SERVER_ID, v))
@@ -67,8 +71,13 @@ class Settings(context: Context, private val dao: SettingDao) {
     /** Null preserves the all-library behavior for installations predating the picker. */
     suspend fun selectedLibraries(): Set<String>? = dao.get(SELECTED_LIBRARIES)?.let(SetCodec::decode)
     suspend fun adLibrary(): String? = dao.get(AD_LIBRARY)
+    suspend fun adLastSyncMs(): Long = dao.get(AD_LAST_SYNC)?.toLongOrNull() ?: 0
     suspend fun setAdLibrary(key: String?) {
         require(key == null || key.isNotBlank()) { "Choose a valid ad library" }
+        if (key != adLibrary()) {
+            dao.clearAds()
+            dao.remove(AD_LAST_SYNC)
+        }
         if (key == null) dao.remove(AD_LIBRARY) else dao.put(SettingRow(AD_LIBRARY, key))
     }
     suspend fun setSelectedLibraries(keys: Set<String>) {
@@ -100,11 +109,13 @@ class Settings(context: Context, private val dao: SettingDao) {
     suspend fun isOn(key: String, default: Boolean = false): Boolean =
         dao.get(key)?.toBooleanStrictOrNull() ?: default
 
-    suspend fun signOut() {
-        putSecret(ACCOUNT_TOKEN, null)
-        putSecret(SERVER_TOKEN, null)
+    suspend fun signOut() = withContext(Dispatchers.IO) {
+        dao.clearConnection()
+        secure?.let { store ->
+            check(store.edit().remove(ACCOUNT_TOKEN).remove(SERVER_TOKEN).commit()) { "Couldn't remove saved Plex credentials" }
+        }
+        memory.clear()
         pinnedHost = null
-        listOf(SERVER_BASE, SERVER_NAME, SERVER_ID, LAST_SYNC, SELECTED_LIBRARIES, AD_LIBRARY).forEach { dao.remove(it) }
     }
 
     val isSignedIn: Boolean get() = accountToken != null
@@ -178,6 +189,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val SERVER_ID = "server_id"
         const val SELECTED_LIBRARIES = "selected_libraries"
         const val AD_LIBRARY = "ad_library"
+        const val AD_LAST_SYNC = "ad_last_sync"
         const val LAST_SYNC = "last_sync"
         const val LAST_CHANNEL = "last_channel"
         const val CRT_LEVEL = "crt_level"
