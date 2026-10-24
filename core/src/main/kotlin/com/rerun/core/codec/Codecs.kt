@@ -92,7 +92,8 @@ object ChannelCodec {
         excludeGenres = o["excludeGenres"].stringSet(),
         decades = o["decades"].stringList().mapTo(LinkedHashSet()) { it.toInt() },
         ratings = o["ratings"].stringSet(),
-        kinds = o["kinds"]?.let { k -> k.stringList().mapTo(LinkedHashSet()) { MediaKind.valueOf(it) } } ?: MediaKind.entries.toSet(),
+        kinds = o["kinds"]?.let { k -> k.stringList().mapTo(LinkedHashSet()) { MediaKind.valueOf(it) } }
+            ?: setOf(MediaKind.MOVIE, MediaKind.EPISODE),
     )
 }
 

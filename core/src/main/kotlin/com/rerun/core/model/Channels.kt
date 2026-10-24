@@ -4,7 +4,7 @@ import java.time.DayOfWeek
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
-enum class ChannelKind { NETWORK, CURATED, THEME, CUSTOM }
+enum class ChannelKind { NETWORK, CURATED, THEME, CUSTOM, MUSIC }
 
 enum class PlayOrder { SHUFFLE, IN_ORDER }
 
@@ -16,10 +16,21 @@ fun titleKey(s: String): String =
     s.trim().lowercase().removePrefix("the ").filter { it.isLetterOrDigit() }
 
 /**
+ * Deterministic content slice for split channels (MOVIES 1/2/…). Hashing the title keeps an
+ * item on the same slice across syncs; [count] is the total number of slices.
+ */
+fun bucketOf(item: MediaItem, count: Int): Int {
+    val title = if (item.kind == MediaKind.EPISODE) item.showTitle ?: item.title else item.title
+    return Math.floorMod(titleKey(title).hashCode(), count)
+}
+
+/**
  * What a channel plays.
  *
  * Include sources (networks, titles, tmdbIds, labels, collections, genres) are OR'd; when none
  * are set, everything passes. Filters (excludeGenres, decades, ratings, kinds) are AND'd.
+ * [bucketCount] > 1 splits the matching pool into that many deterministic slices; the channel
+ * then only plays the slice numbered [bucket] (0-based) — that's how MOVIES 1/2 share a library.
  */
 data class Rules(
     val networks: Set<String> = emptySet(),
@@ -31,7 +42,9 @@ data class Rules(
     val excludeGenres: Set<String> = emptySet(),
     val decades: Set<Int> = emptySet(),
     val ratings: Set<String> = emptySet(),
-    val kinds: Set<MediaKind> = MediaKind.entries.toSet(),
+    val kinds: Set<MediaKind> = setOf(MediaKind.MOVIE, MediaKind.EPISODE),
+    val bucket: Int = 0,
+    val bucketCount: Int = 1,
 ) {
     private val nNetworks by lazy { networks.normed() }
     private val nTitles by lazy { titles.mapTo(HashSet()) { titleKey(it) } }
@@ -48,6 +61,7 @@ data class Rules(
 
     fun matches(item: MediaItem, networkId: String? = item.network): Boolean {
         if (item.kind !in kinds) return false
+        if (bucketCount > 1 && bucketOf(item, bucketCount) != bucket) return false
         val itemGenres = item.genres.normed()
         if (nExclude.isNotEmpty() && itemGenres.any { it in nExclude }) return false
         if (decades.isNotEmpty()) {

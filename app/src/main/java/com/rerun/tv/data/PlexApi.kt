@@ -29,12 +29,12 @@ class PlexApi(private val clientId: () -> String, private val http: OkHttpClient
     private suspend fun call(request: Request, client: OkHttpClient = http): String = withContext(Dispatchers.IO) {
         client.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) throw IOException("HTTP ${resp.code} for ${request.url.encodedPath}")
-            resp.body?.string() ?: throw IOException("Empty body for ${request.url.encodedPath}")
+            resp.body.string()
         }
     }
 
     suspend fun createPin(): Pin = PlexParse.pin(
-        call(Request.Builder().url("https://plex.tv/api/v2/pins?strong=false").plexHeaders()
+        call(Request.Builder().url("https://plex.tv/api/v2/pins?strong=true").plexHeaders()
             .post(ByteArray(0).toRequestBody(null)).build()),
     )
 

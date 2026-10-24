@@ -218,7 +218,7 @@ abstract class RerunDb : RoomDatabase() {
     companion object {
         fun open(context: Context): RerunDb =
             Room.databaseBuilder(context, RerunDb::class.java, "rerun.db")
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }
 }

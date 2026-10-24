@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The platform flag stays on because a network security config cannot list
+  private IP ranges, and a Plex server on the LAN is often plain http.
+  The app's only HTTP stack (API, playback, and posters) refuses cleartext
+  unless the host is local. User-installed CAs are not trusted.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

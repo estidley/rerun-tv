@@ -16,36 +16,39 @@ data class NetworkDef(
     val kidsSafe: Boolean,
 )
 
-/** Built-in channel lineup: classic networks, curated block channels, and themes. */
+/**
+ * Built-in channel lineup. [NetworkDef.name] is the on-screen parody; [NetworkDef.aliases]
+ * stay the real Plex network strings so matching still works.
+ */
 object Catalog {
     val networks: List<NetworkDef> = listOf(
-        NetworkDef("disney", "Disney Channel", 101, listOf("Disney Channel", "Toon Disney"), true),
-        NetworkDef("nick", "Nickelodeon", 102, listOf("Nickelodeon", "Nicktoons", "Nick", "TeenNick"), true),
-        NetworkDef("cn", "Cartoon Network", 103, listOf("Cartoon Network", "CN"), true),
-        NetworkDef("boomerang", "Boomerang", 104, listOf("Boomerang"), true),
-        NetworkDef("toonami", "Toonami", 105, listOf("Toonami"), true),
-        NetworkDef("pbs", "PBS", 106, listOf("PBS"), false),
-        NetworkDef("pbskids", "PBS Kids", 107, listOf("PBS Kids"), true),
-        NetworkDef("disneyxd", "Disney XD", 108, listOf("Disney XD", "Jetix"), true),
-        NetworkDef("touchstone", "Touchstone", 109, emptyList(), false),
-        NetworkDef("syfy", "SYFY", 110, listOf("Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"), false),
-        NetworkDef("usa", "USA", 111, listOf("USA Network", "USA"), false),
-        NetworkDef("tnt", "TNT", 112, listOf("TNT"), false),
-        NetworkDef("tbs", "TBS", 113, listOf("TBS"), false),
-        NetworkDef("fx", "FX", 114, listOf("FX", "FXX", "FX Networks"), false),
-        NetworkDef("amc", "AMC", 115, listOf("AMC"), false),
-        NetworkDef("mtv", "MTV", 116, listOf("MTV"), false),
-        NetworkDef("comedycentral", "Comedy Central", 117, listOf("Comedy Central"), false),
-        NetworkDef("freeform", "ABC Family", 118, listOf("ABC Family", "Freeform", "Fox Family"), false),
-        NetworkDef("paramountnet", "Paramount Network", 119, listOf("Paramount Network", "Spike", "Spike TV"), false),
-        NetworkDef("discovery", "Discovery", 120, listOf("Discovery", "Discovery Channel"), false),
-        NetworkDef("history", "History", 121, listOf("History", "History Channel", "The History Channel"), false),
-        NetworkDef("food", "Food Network", 122, listOf("Food Network"), false),
-        NetworkDef("hgtv", "HGTV", 123, listOf("HGTV"), false),
-        NetworkDef("adultswim", "Adult Swim", 124, listOf("Adult Swim", "[adult swim]"), false),
-        NetworkDef("nickjr", "Nick Jr.", 125, listOf("Nick Jr.", "Nick Jr"), true),
-        NetworkDef("disneyjr", "Disney Junior", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true),
-        NetworkDef("hbo", "HBO", 130, listOf("HBO", "Cinemax"), false),
+        NetworkDef("disney", "Wonderland", 101, listOf("Disney Channel", "Toon Disney"), true),
+        NetworkDef("nick", "Kid Castle", 102, listOf("Nickelodeon", "Nicktoons", "Nick", "TeenNick"), true),
+        NetworkDef("cn", "Toon Tower", 103, listOf("Cartoon Network", "CN"), true),
+        NetworkDef("boomerang", "The Attic", 104, listOf("Boomerang"), true),
+        NetworkDef("toonami", "Midnight Block", 105, listOf("Toonami"), true),
+        NetworkDef("pbs", "Public Square", 106, listOf("PBS"), false),
+        NetworkDef("pbskids", "Story Yard", 107, listOf("PBS Kids"), true),
+        NetworkDef("disneyxd", "Action Club", 108, listOf("Disney XD", "Jetix"), true),
+        NetworkDef("touchstone", "The Backlot", 109, emptyList(), false),
+        NetworkDef("syfy", "Warp Nine", 110, listOf("Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"), false),
+        NetworkDef("usa", "Coast to Coast", 111, listOf("USA Network", "USA"), false),
+        NetworkDef("tnt", "Boomstick", 112, listOf("TNT"), false),
+        NetworkDef("tbs", "Laugh Track", 113, listOf("TBS"), false),
+        NetworkDef("fx", "The Edge", 114, listOf("FX", "FXX", "FX Networks"), false),
+        NetworkDef("amc", "The Marquee", 115, listOf("AMC"), false),
+        NetworkDef("mtv", "The Video Channel", 116, listOf("MTV"), false),
+        NetworkDef("comedycentral", "Punchline", 117, listOf("Comedy Central"), false),
+        NetworkDef("freeform", "Family Hour", 118, listOf("ABC Family", "Freeform", "Fox Family"), false),
+        NetworkDef("paramountnet", "The Mountain", 119, listOf("Paramount Network", "Spike", "Spike TV"), false),
+        NetworkDef("discovery", "The Expedition", 120, listOf("Discovery", "Discovery Channel"), false),
+        NetworkDef("history", "Yesteryear", 121, listOf("History", "History Channel", "The History Channel"), false),
+        NetworkDef("food", "The Kitchen", 122, listOf("Food Network"), false),
+        NetworkDef("hgtv", "Home Base", 123, listOf("HGTV"), false),
+        NetworkDef("adultswim", "After Hours", 124, listOf("Adult Swim", "[adult swim]"), false),
+        NetworkDef("nickjr", "Tiny Town", 125, listOf("Nick Jr.", "Nick Jr"), true),
+        NetworkDef("disneyjr", "Little Castle", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true),
+        NetworkDef("hbo", "The Premium", 130, listOf("HBO", "Cinemax"), false),
     )
 
     private val aliasIndex: Map<String, String> = buildMap {
@@ -84,18 +87,18 @@ object Catalog {
             }
         }
         val themes = listOf(
-            ChannelDef("horror", 301, "Horror", ChannelKind.THEME, Rules(genres = setOf("Horror", "Thriller"))),
-            ChannelDef("scifi", 302, "Sci-Fi", ChannelKind.THEME, Rules(genres = setOf("Science Fiction", "Sci-Fi & Fantasy"))),
-            ChannelDef("comedy", 303, "Comedy", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
-            ChannelDef("action", 304, "Action", ChannelKind.THEME, Rules(genres = setOf("Action", "Adventure"))),
+            ChannelDef("horror", 301, "Fright Night", ChannelKind.THEME, Rules(genres = setOf("Horror", "Thriller"))),
+            ChannelDef("scifi", 302, "The Void", ChannelKind.THEME, Rules(genres = setOf("Science Fiction", "Sci-Fi & Fantasy"))),
+            ChannelDef("comedy", 303, "The Chuckle", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
+            ChannelDef("action", 304, "Adrenaline", ChannelKind.THEME, Rules(genres = setOf("Action", "Adventure"))),
             ChannelDef(
-                "family", 305, "Family", ChannelKind.THEME,
+                "family", 305, "The Living Room", ChannelKind.THEME,
                 Rules(genres = setOf("Family", "Animation"), ratings = kidRatings), kidsSafe = true,
             ),
-            ChannelDef("80s", 306, "80s Movies", ChannelKind.THEME, Rules(decades = setOf(1980), kinds = setOf(MediaKind.MOVIE))),
-            ChannelDef("90s", 307, "90s Movies", ChannelKind.THEME, Rules(decades = setOf(1990), kinds = setOf(MediaKind.MOVIE))),
+            ChannelDef("80s", 306, "Neon Decade", ChannelKind.THEME, Rules(decades = setOf(1980), kinds = setOf(MediaKind.MOVIE))),
+            ChannelDef("90s", 307, "Dial-Up Cinema", ChannelKind.THEME, Rules(decades = setOf(1990), kinds = setOf(MediaKind.MOVIE))),
             ChannelDef(
-                "saturday", 308, "Saturday Morning", ChannelKind.THEME,
+                "saturday", 308, "Cereal Hour", ChannelKind.THEME,
                 Rules(genres = setOf("Animation"), ratings = setOf("TV-Y", "TV-Y7", "TV-Y7-FV", "TV-G"), kinds = setOf(MediaKind.EPISODE)),
                 kidsSafe = true,
             ),
@@ -103,9 +106,66 @@ object Catalog {
         return net + themes
     }
 
+    /** Previous on-screen names. A refresh may replace these; a name the user typed stays. */
+    fun retiredNames(id: String): Set<String> = retired[id].orEmpty()
+
+    /** Drops a managed East/West suffix. "Wonderland E" → "Wonderland". */
+    fun stripFeed(name: String): String = when {
+        name.endsWith(" E") || name.endsWith(" W") -> name.dropLast(2)
+        else -> name
+    }
+
+    /**
+     * Name to store for [id]. Stock names (the current parody, an old brand name, or either
+     * one with an E/W suffix) take [catalogName]. Anything else is a rename and is kept.
+     */
+    fun chooseName(id: String, stored: String?, catalogName: String): String {
+        if (stored.isNullOrBlank()) return catalogName
+        val stripped = stripFeed(stored)
+        return if (stripped == catalogName || stripped in retiredNames(id)) catalogName else stripped
+    }
+
     fun validateNumbers(defs: List<ChannelDef>): List<String> =
         defs.groupBy { it.number }
             .filterValues { it.size > 1 }
             .toSortedMap()
             .map { (number, clash) -> "Channel $number is used by ${clash.joinToString(" and ") { it.name }}" }
+
+    private val retired: Map<String, Set<String>> = mapOf(
+        "disney" to setOf("Disney Channel"),
+        "nick" to setOf("Nickelodeon"),
+        "cn" to setOf("Cartoon Network"),
+        "boomerang" to setOf("Boomerang"),
+        "toonami" to setOf("Toonami"),
+        "pbs" to setOf("PBS"),
+        "pbskids" to setOf("PBS Kids"),
+        "disneyxd" to setOf("Disney XD"),
+        "touchstone" to setOf("Touchstone"),
+        "syfy" to setOf("SYFY"),
+        "usa" to setOf("USA"),
+        "tnt" to setOf("TNT"),
+        "tbs" to setOf("TBS"),
+        "fx" to setOf("FX"),
+        "amc" to setOf("AMC"),
+        "mtv" to setOf("MTV"),
+        "comedycentral" to setOf("Comedy Central"),
+        "freeform" to setOf("ABC Family"),
+        "paramountnet" to setOf("Paramount Network"),
+        "discovery" to setOf("Discovery"),
+        "history" to setOf("History"),
+        "food" to setOf("Food Network"),
+        "hgtv" to setOf("HGTV"),
+        "adultswim" to setOf("Adult Swim"),
+        "nickjr" to setOf("Nick Jr."),
+        "disneyjr" to setOf("Disney Junior"),
+        "hbo" to setOf("HBO"),
+        "horror" to setOf("Horror"),
+        "scifi" to setOf("Sci-Fi"),
+        "comedy" to setOf("Comedy"),
+        "action" to setOf("Action"),
+        "family" to setOf("Family"),
+        "80s" to setOf("80s Movies"),
+        "90s" to setOf("90s Movies"),
+        "saturday" to setOf("Saturday Morning"),
+    )
 }

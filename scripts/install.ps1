@@ -5,6 +5,12 @@
   to unlock Developer Options, then Developer Options > ADB Debugging: ON.
   Find the TV's IP under Settings > My Fire TV > About > Network.
 
+  The first build creates a private release key. The script asks for a password,
+  or generates a random one when it cannot prompt. rerun-release.jks and
+  keystore.properties stay on this machine and out of the repo. Back them up:
+  a later install signed with a different key will not update the app, and
+  saved Plex tokens will not carry over.
+
   Usage:  .\scripts\install.ps1 -TvIp 192.168.1.50
 #>
 param(
@@ -14,6 +20,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+. "$PSScriptRoot\jdk.ps1"
+Set-RerunJdk
 
 if (-not $env:ANDROID_HOME -and -not (Test-Path "$root\local.properties")) {
     $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
@@ -22,11 +30,13 @@ if (-not $env:ANDROID_HOME -and -not (Test-Path "$root\local.properties")) {
 }
 
 if (-not $SkipBuild) {
-    & "$root\gradlew.bat" ':app:assembleDebug' --console=plain
+    & "$PSScriptRoot\keystore.ps1"
+    if (-not $?) { throw "Keystore setup failed" }
+    & "$root\gradlew.bat" ':app:assembleRelease' --console=plain
     if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 }
 
-$apk = Join-Path $root 'app\build\outputs\apk\debug\app-debug.apk'
+$apk = Join-Path $root 'app\build\outputs\apk\release\app-release.apk'
 if (-not (Test-Path $apk)) { throw "APK not found at $apk" }
 
 adb connect "${TvIp}:5555" | Write-Host

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rerun.core.plex.PlexServer
 import com.rerun.tv.RerunApp
 import com.rerun.tv.ui.TvController
@@ -87,7 +88,9 @@ fun OnboardingScreen(controller: TvController) {
                 BasicText("On your phone or computer, go to", style = Retro.Title)
                 BasicText("plex.tv/link", style = Retro.Osd.copy(color = Retro.Cyan))
                 BasicText("and enter this code:", style = Retro.Title)
-                BasicText(s.code, style = Retro.Huge.copy(color = Retro.Yellow))
+                // A strong Plex code is longer than four characters. Shrink it so it stays on one line.
+                val codeSize = (720f / s.code.length.coerceAtLeast(1)).coerceIn(56f, 120f).sp
+                BasicText(s.code, style = Retro.Huge.copy(color = Retro.Yellow, fontSize = codeSize), maxLines = 1)
             }
             is Step.Servers -> {
                 val first = remember { FocusRequester() }

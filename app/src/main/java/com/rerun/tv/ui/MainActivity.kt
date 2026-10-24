@@ -30,12 +30,14 @@ class MainActivity : ComponentActivity() {
     private lateinit var controller: TvController
     private var okDownAt = 0L
     private var okLongFired = false
+    private var leftDownAt = 0L
+    private var leftLongFired = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val app = application as RerunApp
-        controller = TvController(app, TunerEngine(this, app.schedule, app.settings))
+        controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
         setContent { RerunRoot(controller, onPoweredOff = { finish() }) }
     }
 
@@ -67,10 +69,18 @@ class MainActivity : ComponentActivity() {
                     else if (!okLongFired && event.eventTime - okDownAt >= 2_000) { okLongFired = true; controller.cycleCrt() }
                     return true
                 }
+                code == KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    if (event.repeatCount == 0) { leftDownAt = event.eventTime; leftLongFired = false }
+                    else if (!leftLongFired && event.eventTime - leftDownAt >= 2_000) {
+                        leftLongFired = true
+                        controller.startEpisodeOver()
+                    }
+                    return true
+                }
                 event.repeatCount > 0 -> return true
                 code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_CHANNEL_UP -> controller.channelUp()
                 code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_CHANNEL_DOWN -> controller.channelDown()
-                code == KeyEvent.KEYCODE_DPAD_LEFT || code == KeyEvent.KEYCODE_LAST_CHANNEL -> controller.lastChannel()
+                code == KeyEvent.KEYCODE_LAST_CHANNEL -> controller.lastChannel()
                 code == KeyEvent.KEYCODE_DPAD_RIGHT || code == KeyEvent.KEYCODE_INFO -> controller.showBanner()
                 code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_GUIDE -> controller.go(Screen.Guide)
                 code == KeyEvent.KEYCODE_BACK -> controller.backFromPlayer()
@@ -80,6 +90,10 @@ class MainActivity : ComponentActivity() {
         }
         if (event.action == KeyEvent.ACTION_UP) {
             if (isOk) { if (!okLongFired) controller.showBanner(); return true }
+            if (code == KeyEvent.KEYCODE_DPAD_LEFT) {
+                if (!leftLongFired) controller.lastChannel()
+                return true
+            }
             if (code in HANDLED) return true
         }
         return super.dispatchKeyEvent(event)

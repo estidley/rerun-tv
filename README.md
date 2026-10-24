@@ -4,25 +4,30 @@ Old-school cable TV, built from your own Plex library. For Fire TV and Android T
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
-- **Network channels:** Disney Channel, Disney XD, Nickelodeon, Cartoon Network, Boomerang, Toonami, PBS Kids, SYFY, USA, HBO and more. They're built from what you own.
-- **Streaming originals go to their network's cable channel,** by owner and audience:
-  - Disney+ kids shows go to Disney Channel.
-  - Marvel and live-action Star Wars go to **Touchstone**.
-  - Paramount+ kids shows go to Nickelodeon.
-  - Max originals go to HBO.
-  - Hulu originals go to FX.
+- **Network channels:** Wonderland, Action Club, Kid Castle, Toon Tower, The Attic, Midnight Block, Story Yard, Warp Nine, Coast to Coast, The Premium, and more. The names on screen are parodies. Shows still land by the network and studio stored in Plex.
+- **Streaming originals follow the studio and the audience:**
+  - Disney+ kids shows go to Wonderland.
+  - Marvel and live-action Star Wars go to **The Backlot**.
+  - Paramount+ kids shows go to Kid Castle.
+  - Max originals go to The Premium.
+  - Hulu originals go to The Edge.
   - Netflix, Prime Video and Apple TV+ originals are spread by genre.
-- **Theme channels:** Horror, Sci-Fi, Comedy, Action, Family, 80s/90s Movies, Saturday Morning.
+- **Theme channels:** Fright Night, The Void, The Chuckle, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes, such as The Matinee, Case File, and The Bulletin, show up only when that genre has at least 4 hours.
+- **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.
 - **Custom channels:** pick genres, shows, collections, decades and ratings right on the TV.
-- **Empty channels stay hidden** until you have at least 4 hours of content for them.
+- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. A new West feed stays empty until East has three hours of schedule.
+- **Music:** if the Plex server has music, Settings can add a station for each genre with at least 4 hours.
+- **Subtitles:** off until you turn them on in Settings.
+- **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel.
+- **Empty channels stay hidden** until you have at least 4 hours of content for them. Extra channels are not listed at all until they qualify.
 - **Locked 48-hour schedule.** The guide never lies, and library changes never yank you out of a movie.
 - **Read-only.** Nothing you watch is reported back to Plex. Your Continue Watching stays clean.
 
 ## Install on a Fire TV
 
 Requirements:
-- JDK 17
-- Android SDK (platform 35)
+- JDK 17 or newer (Gradle 9 will not run on JDK 11)
+- Android SDK (platform 37)
 - `adb` on PATH
 
 1. On the TV, unlock Developer Options: Settings → My Fire TV → About → click the device name 7 times.
@@ -34,7 +39,9 @@ Requirements:
 .\scripts\install.ps1 -TvIp 192.168.1.50
 ```
 
-5. On the TV, the app shows a 4-character code. Enter it at **plex.tv/link**, pick your server, and wait for the first sync.
+The first build creates a private release key (`rerun-release.jks` and `keystore.properties`). Both stay on this machine and out of git. The script asks for a password, or generates a random one when it cannot prompt. Back those two files up. An install signed with a different key will not update the app, and saved Plex tokens will not carry over.
+
+5. On the TV, the app shows a code. Enter it at **plex.tv/link**, pick your server, and wait for the first sync.
 
 To remove it: `.\scripts\restore.ps1 -TvIp 192.168.1.50`
 
@@ -60,11 +67,11 @@ Vintage commercials are generally still under copyright. Keep downloaded copies 
 ## Development
 
 - `core/` is pure Kotlin: catalog, routing, scheduler, tune math, and Plex parsing. It has unit tests: `./gradlew :core:test`.
-- `app/` is the Android shell: Compose UI, Media3 player, and Room.
+- `app/` is the Android shell: Compose UI, Media3 player, and Room. `./gradlew :app:assembleDebug` needs no signing key. A release build needs the key created by `scripts/keystore.ps1`.
 - `tools/ktest/` runs the core tests with only a Kotlin compiler jar, for machines without Maven access.
 
 Design spec and plans live in `docs/superpowers/`.
 
 ## Credits
 
-VT323 font © The VT323 Project Authors, SIL Open Font License 1.1 (`licenses/VT323-OFL.txt`). Not affiliated with Plex or any network named here; channel names describe where shows aired.
+VT323 font © The VT323 Project Authors, SIL Open Font License 1.1 (`licenses/VT323-OFL.txt`). Not affiliated with Plex or any studio named here. The names on the guide are parodies.

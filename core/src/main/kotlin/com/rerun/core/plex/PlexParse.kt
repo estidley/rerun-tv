@@ -97,4 +97,34 @@ object PlexParse {
             thumb = e.str("thumb") ?: e.str("grandparentThumb"),
         )
     }
+
+    /** Tracks from an artist library section (`type=10`). Untagged tracks are skipped. */
+    fun tracks(text: String): List<MediaItem> = container(text).arr("Metadata").mapNotNull { t ->
+        val genres = t.tags("Genre")
+        if (genres.isEmpty()) return@mapNotNull null
+        val media = t.arr("Media").firstOrNull()
+        MediaItem(
+            key = t.str("ratingKey").orEmpty(),
+            kind = MediaKind.TRACK,
+            title = t.str("title").orEmpty(),
+            year = t.int("year"),
+            durationMs = t.long("duration") ?: media?.long("duration") ?: 0,
+            genres = genres,
+            network = null,
+            studio = t.str("grandparentTitle"),
+            contentRating = null,
+            showKey = t.str("parentRatingKey"),
+            showTitle = t.str("parentTitle"),
+            season = t.int("parentIndex"),
+            episode = t.int("index"),
+            tmdbId = null,
+            labels = emptySet(),
+            collections = emptySet(),
+            partKey = media?.arr("Part")?.firstOrNull()?.str("key"),
+            container = media?.str("container"),
+            videoCodec = null,
+            audioCodec = media?.str("audioCodec"),
+            thumb = t.str("parentThumb") ?: t.str("thumb") ?: t.str("grandparentThumb"),
+        )
+    }
 }

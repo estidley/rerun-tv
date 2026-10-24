@@ -20,10 +20,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
+import coil3.compose.AsyncImage
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.rerun.core.model.MediaKind
 import com.rerun.core.schedule.EntryKind
 import com.rerun.tv.player.Phase
 import com.rerun.tv.ui.TvController
@@ -61,11 +64,34 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize(),
         )
 
+        if (state.phase == Phase.PLAYING && state.item?.kind == MediaKind.TRACK) {
+            val art = controller.posterUrl(state.item)
+            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+                if (art != null) {
+                    AsyncImage(
+                        model = art,
+                        contentDescription = state.item?.title,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize(0.72f),
+                    )
+                }
+            }
+        }
+
         when (state.phase) {
             Phase.UP_NEXT -> {
                 val entry = state.located?.entry
-                val nextItem = if (entry?.kind == EntryKind.FILLER) state.nextItem else state.item ?: state.nextItem
-                UpNextCard(state.channel, nextItem, entry?.endMs ?: now, controller.posterUrl(nextItem))
+                val nextItem = when {
+                    state.holdUntilMs != null -> state.nextItem
+                    entry?.kind == EntryKind.FILLER -> state.nextItem
+                    else -> state.item ?: state.nextItem
+                }
+                UpNextCard(
+                    state.channel,
+                    nextItem,
+                    state.holdUntilMs ?: entry?.endMs ?: now,
+                    controller.posterUrl(nextItem),
+                )
             }
             Phase.DIFFICULTIES -> DifficultiesCard()
             Phase.TUNING -> if (fx.static) StaticNoise(Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize().background(Color.Black))

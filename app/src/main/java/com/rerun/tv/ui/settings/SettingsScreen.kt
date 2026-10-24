@@ -20,6 +20,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
+import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.Effects
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
@@ -39,6 +40,10 @@ fun SettingsScreen(controller: TvController) {
     var server by remember { mutableStateOf("") }
     var lastSync by remember { mutableStateOf(0L) }
     var syncStatus by remember { mutableStateOf<String?>(null) }
+    var lineupBusy by remember { mutableStateOf(false) }
+    val eastWest by app.settings.flag(Settings.EAST_WEST, false).collectAsState(false)
+    val musicOn by app.settings.flag(Settings.MUSIC, false).collectAsState(false)
+    val subtitlesOn by app.settings.flag(Settings.SUBTITLES, false).collectAsState(false)
     val first = remember { FocusRequester() }
 
     BackHandler { controller.go(Screen.Guide) }
@@ -70,6 +75,77 @@ fun SettingsScreen(controller: TvController) {
                 }
             }
             BasicText("Tip: hold OK for 2 seconds while watching to flip between these.", style = Retro.Caption)
+
+            BasicText("LINEUP", style = Retro.GuideNumber)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton(
+                    "East and West",
+                    {
+                        if (!lineupBusy) scope.launch {
+                            lineupBusy = true
+                            val next = !eastWest
+                            try {
+                                app.settings.setFlag(Settings.EAST_WEST, next)
+                                app.sync.refreshChannels()
+                            } catch (e: Exception) {
+                                runCatching { app.settings.setFlag(Settings.EAST_WEST, !next) }
+                                syncStatus = "Lineup failed: ${e.message}"
+                            } finally {
+                                lineupBusy = false
+                            }
+                        }
+                    },
+                    selected = eastWest,
+                    sub = if (eastWest) "on" else "off",
+                )
+                TvButton(
+                    "Music",
+                    {
+                        if (!lineupBusy) scope.launch {
+                            lineupBusy = true
+                            val next = !musicOn
+                            app.settings.setFlag(Settings.MUSIC, next)
+                            try {
+                                if (next) {
+                                    app.sync.sync().collect { p ->
+                                        syncStatus = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}"
+                                    }
+                                    lastSync = app.settings.lastSyncMs()
+                                } else {
+                                    app.sync.refreshChannels()
+                                    syncStatus = "Music channels off"
+                                }
+                            } catch (e: Exception) {
+                                syncStatus = "Sync failed: ${e.message}"
+                            } finally {
+                                lineupBusy = false
+                            }
+                        }
+                    },
+                    selected = musicOn,
+                    sub = if (musicOn) "on" else "off",
+                )
+                TvButton(
+                    "Subtitles",
+                    {
+                        scope.launch {
+                            val next = !subtitlesOn
+                            app.settings.setFlag(Settings.SUBTITLES, next)
+                            controller.engine.setSubtitles(next)
+                        }
+                    },
+                    selected = subtitlesOn,
+                    sub = if (subtitlesOn) "on" else "off",
+                )
+            }
+            BasicText(
+                "West plays the same schedule 3 hours later. A new West feed stays empty until East has been on for 3 hours. Music adds a channel for each genre that has 4 hours. Subtitles stay off until you turn them on.",
+                style = Retro.Caption,
+            )
+            BasicText(
+                "Hold Left for 2 seconds during an episode to start it over. It plays on its own channel, then the TV returns. A short Left still jumps to the last channel.",
+                style = Retro.Caption,
+            )
 
             BasicText("LIBRARY", style = Retro.GuideNumber)
             BasicText("Plex server: $server" + if (lastSync > 0) "   ·   last synced ${clockTime(lastSync)}" else "", style = Retro.Body)

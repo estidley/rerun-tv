@@ -46,6 +46,13 @@ class CodecTest {
     }
 
     @Test
+    fun missingKindsStayMoviesAndEpisodes() {
+        val encoded = ChannelCodec.encode(ChannelDef("x", 1, "X", ChannelKind.CUSTOM, Rules()))
+        val stripped = encoded.replace(""","kinds":["MOVIE","EPISODE"]""", "")
+        assertEquals(setOf(MediaKind.MOVIE, MediaKind.EPISODE), ChannelCodec.decode(stripped).rules.kinds)
+    }
+
+    @Test
     fun setCodecRoundTrips() {
         val s = setOf("Action & Adventure", "Sci-Fi \"Quoted\"")
         assertEquals(s, SetCodec.decode(SetCodec.encode(s)))

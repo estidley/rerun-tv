@@ -1,6 +1,7 @@
 package com.rerun.core.schedule
 
 import com.rerun.core.model.ChannelDef
+import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.core.model.PlayOrder
@@ -17,7 +18,7 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
  *
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
  * shuffle (random show, weighted by episode count, episodes in order). Every program is
- * padded to the next :00/:30 with a FILLER entry.
+ * padded to the next :00/:30 with a FILLER entry. Music stations play back to back.
  */
 class Scheduler(private val zone: ZoneId) {
 
@@ -46,13 +47,17 @@ class Scheduler(private val zone: ZoneId) {
             val candidates = if (bi >= 0 && blockSets[bi].isNotEmpty()) blockSets[bi] else base
             val item = run.pick(def, candidates)
 
-            val progEnd = cursor + item.durationMs
-            val slotEnd = gridCeil(progEnd)
+            val length = item.durationMs.coerceAtLeast(1L)
+            val progEnd = cursor + length
+            val backToBack = def.kind == ChannelKind.MUSIC
+            val slotEnd = if (backToBack) progEnd else gridCeil(progEnd)
             out += ScheduleEntry(def.id, cursor, progEnd, EntryKind.PROGRAM, item.key)
-            if (slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
+            if (!backToBack && slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
 
             run.recent = (run.recent + item.key).takeLast(RECENT_CAP)
-            run.msSinceMovie = if (item.kind == MediaKind.MOVIE) slotEnd - cursor else run.msSinceMovie + (slotEnd - cursor)
+            if (!backToBack) {
+                run.msSinceMovie = if (item.kind == MediaKind.MOVIE) slotEnd - cursor else run.msSinceMovie + (slotEnd - cursor)
+            }
             cursor = slotEnd
         }
         return Extension(out, run.toState())
@@ -72,6 +77,7 @@ class Scheduler(private val zone: ZoneId) {
         private fun rng(): Random = Random(seed + rngCalls).also { rngCalls++ }
 
         fun pick(def: ChannelDef, candidates: List<MediaItem>): MediaItem {
+            if (def.kind == ChannelKind.MUSIC) return pickEpisode(def, candidates)
             val movies = candidates.filter { it.kind == MediaKind.MOVIE }
             val episodes = candidates.filter { it.kind == MediaKind.EPISODE }
             val wantMovie = when {

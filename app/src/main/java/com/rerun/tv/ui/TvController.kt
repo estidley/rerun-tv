@@ -1,6 +1,10 @@
 package com.rerun.tv.ui
 
+import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.MediaItem
+import com.rerun.core.model.MediaKind
+import com.rerun.core.plex.ServerUri
+import com.rerun.core.schedule.EntryKind
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.player.TunerEngine
@@ -87,6 +91,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     private var currentId: String? = null
     private var previousId: String? = null
+    private var channelBeforeRestart: String? = null
     private var guideClosedAt = 0L
 
     @Volatile var serverBase: String? = null
@@ -94,6 +99,12 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val token: String? get() = app.settings.serverToken ?: app.settings.accountToken
 
     init {
+        engine.onReturned = { id ->
+            currentId = id
+            previousId = channelBeforeRestart
+            channelBeforeRestart = null
+            showBanner()
+        }
         scope.launch { serverBase = app.settings.serverBase() }
     }
 
@@ -144,6 +155,26 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     fun lastChannel() { previousId?.let { tuneTo(it) } }
 
+    /**
+     * Hold Left while an episode is on. The episode starts over on a hidden channel
+     * so the one you were watching keeps its schedule. When it ends, the TV comes back.
+     */
+    fun startEpisodeOver() {
+        scope.launch {
+            val returnTo = currentId ?: return@launch
+            if (returnTo == Lineup.RESTART_ID) return@launch
+            val snap = engine.state.value
+            val item = snap.item ?: return@launch
+            if (item.kind != MediaKind.EPISODE) return@launch
+            if (snap.located?.entry?.kind != EntryKind.PROGRAM) return@launch
+            if (snap.channel?.id != returnTo) return@launch
+            channelBeforeRestart = previousId
+            app.schedule.airFromStart(item, System.currentTimeMillis())
+            engine.armReturn(returnTo)
+            tuneTo(Lineup.RESTART_ID)
+        }
+    }
+
     fun showBanner(ms: Long = 5_000) { _bannerUntil.value = System.currentTimeMillis() + ms }
     fun hideBanner() { _bannerUntil.value = 0 }
 
@@ -154,10 +185,11 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     fun posterUrl(item: MediaItem?): String? {
         val thumb = item?.thumb ?: return null
+        if (!ServerUri.isLibraryPath(thumb) && !ServerUri.isAcceptable(thumb)) return null
         val base = serverBase ?: return null
-        val t = token ?: return null
+        if (!ServerUri.isAcceptable(base) || token == null) return null
         val enc = { s: String -> URLEncoder.encode(s, "UTF-8") }
-        return "$base/photo/:/transcode?width=480&height=720&minSize=1&upscale=1&url=${enc(thumb)}&X-Plex-Token=${enc(t)}"
+        return "${base.trimEnd('/')}/photo/:/transcode?width=480&height=720&minSize=1&upscale=1&url=${enc(thumb)}"
     }
 
     fun currentChannelId(): String? = currentId

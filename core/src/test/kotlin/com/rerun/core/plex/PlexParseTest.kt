@@ -94,6 +94,36 @@ class PlexParseTest {
     }
 
     @Test
+    fun tracksKeepAlbumAndSkipUntagged() {
+        val parsed = PlexParse.tracks(
+            """
+            {"MediaContainer":{"Metadata":[
+              {"ratingKey":"9","title":"Night Drive","year":1994,"duration":180000,
+               "parentRatingKey":"8","parentTitle":"Midnight","grandparentTitle":"The Jets",
+               "parentIndex":1,"index":3,"parentThumb":"/library/metadata/8/thumb/1",
+               "Genre":[{"tag":"Jazz"},{"tag":"Soul"}],
+               "Media":[{"container":"mp3","audioCodec":"mp3","Part":[{"key":"/library/parts/9/file.mp3"}]}]},
+              {"ratingKey":"10","title":"No Genre","duration":180000,"Genre":[]}
+            ]}}
+            """.trimIndent(),
+        )
+        assertEquals(1, parsed.size)
+        val track = parsed.single()
+        assertEquals(MediaKind.TRACK, track.kind)
+        assertEquals("Night Drive", track.title)
+        assertEquals(180_000L, track.durationMs)
+        assertEquals(setOf("Jazz", "Soul"), track.genres)
+        assertEquals("8", track.showKey)
+        assertEquals("Midnight", track.showTitle)
+        assertEquals("The Jets", track.studio)
+        assertEquals(1, track.season)
+        assertEquals(3, track.episode)
+        assertEquals("/library/parts/9/file.mp3", track.partKey)
+        assertEquals("mp3", track.container)
+        assertEquals("/library/metadata/8/thumb/1", track.thumb)
+    }
+
+    @Test
     fun totalSizeReadsContainer() {
         assertEquals(412, PlexParse.totalSize(fixture("movies.json")))
         assertEquals(3, PlexParse.totalSize(fixture("sections.json")))

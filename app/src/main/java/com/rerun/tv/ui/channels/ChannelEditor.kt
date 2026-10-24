@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.rerun.core.catalog.Catalog
 import com.rerun.core.catalog.Facets
+import com.rerun.core.catalog.Lineup
 import com.rerun.core.catalog.validateDraft
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
@@ -40,6 +41,7 @@ import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ChannelRow
+import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -98,7 +100,7 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Field("Name", d.name, Modifier.width(520.dp).focusRequester(first)) { draft = d.copy(name = it) }
                     Field("Number", numberText, Modifier.width(160.dp), numeric = true) { t ->
-                        numberText = t.filter(Char::isDigit).take(3)
+                        numberText = t.filter(Char::isDigit).take(4)
                         numberText.toIntOrNull()?.let { draft = d.copy(number = it) }
                     }
                     BasicText(poolHours, style = Retro.Caption.copy(color = Retro.Cyan))
@@ -107,7 +109,11 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
             item {
                 Section("Plays") {
                     chipRow(listOf("Movies + shows", "Movies only", "Shows only")) { label ->
-                        val kinds = when (label) { "Movies only" -> setOf(MediaKind.MOVIE); "Shows only" -> setOf(MediaKind.EPISODE); else -> MediaKind.entries.toSet() }
+                        val kinds = when (label) {
+                            "Movies only" -> setOf(MediaKind.MOVIE)
+                            "Shows only" -> setOf(MediaKind.EPISODE)
+                            else -> setOf(MediaKind.MOVIE, MediaKind.EPISODE)
+                        }
                         TvButton(label, { update(d.rules.copy(kinds = kinds)) }, selected = d.rules.kinds == kinds)
                     }
                     chipRow(listOf(PlayOrder.SHUFFLE, PlayOrder.IN_ORDER)) { o ->
@@ -148,9 +154,16 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                                 val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
                                 if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
                                 val pool = Resolver.pool(toSave, app.schedule.libraryItems())
+                                val wasHidden = existing?.hidden == true
                                 app.schedule.saveChannel(
                                     ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = Resolver.isDormant(pool), poolMs = pool.sumOf { it.durationMs }),
                                 )
+                                // West rows are created by a lineup refresh. Bring the twin back when
+                                // this channel is new or was just unhidden.
+                                val restoreWest = !toSave.hidden && !Lineup.isWest(toSave.id) &&
+                                    (existing == null || wasHidden) &&
+                                    app.settings.isOn(Settings.EAST_WEST)
+                                if (restoreWest) app.sync.refreshChannels()
                                 app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
                                 controller.go(Screen.Channels)
                             }

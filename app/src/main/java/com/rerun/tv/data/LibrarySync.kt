@@ -1,17 +1,18 @@
 package com.rerun.tv.data
 
-import com.rerun.core.catalog.Catalog
+import com.rerun.core.catalog.Lineup
+import com.rerun.core.catalog.StoredChannel
 import com.rerun.core.model.MediaItem
 import com.rerun.core.plex.PlexParse
-import com.rerun.core.resolve.Resolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 
 data class SyncProgress(val stage: String, val done: Int, val total: Int, val finished: Boolean = false)
 
-/** Pulls movies and episodes from the chosen Plex server into Room, then recomputes dormancy. */
+/** Pulls movies, episodes, and (when music channels are on) tracks into Room, then rebuilds the dial. */
 class LibrarySync(
     private val api: PlexApi,
     private val db: RerunDb,
@@ -43,6 +44,14 @@ class LibrarySync(
                 emit(SyncProgress("Episodes: ${s.title}", done, total))
             }
         }
+        if (settings.isOn(Settings.MUSIC)) {
+            for (s in sections.filter { it.type == "artist" }) {
+                pages(base, "/library/sections/${s.key}/all?type=10", token) { json, done, total ->
+                    items += PlexParse.tracks(json)
+                    emit(SyncProgress("Music: ${s.title}", done, total))
+                }
+            }
+        }
 
         emit(SyncProgress("Saving", items.size, items.size))
         db.items().replaceAll(items.map(ItemRow::of))
@@ -66,22 +75,26 @@ class LibrarySync(
         }
     }
 
-    /** Seeds built-in channels on first run and recomputes which channels are dormant. */
+    /** Rebuilds the dial from the library and the lineup switches. */
     suspend fun refreshChannels(items: List<MediaItem>? = null) {
-        val library = items ?: db.items().all().map { it.toItem() }
-        val existing = db.channels().all().associateBy { it.id }
-        val rows = ArrayList<ChannelRow>()
-        for (def in Catalog.builtInChannels()) {
-            val row = existing[def.id]
-            val current = row?.def ?: def
-            val pool = Resolver.pool(current, library)
-            rows += ChannelRow.of(current, builtIn = true, dormant = Resolver.isDormant(pool), poolMs = pool.sumOf { it.durationMs })
+        withContext(Dispatchers.IO) {
+            val library = items ?: db.items().all().map { it.toItem() }
+            val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
+            val planned = Lineup.plan(
+                library,
+                existing,
+                eastWest = settings.isOn(Settings.EAST_WEST),
+                music = settings.isOn(Settings.MUSIC),
+            )
+            db.channels().upsertAll(
+                planned.channels.map { ChannelRow.of(it.def, builtIn = it.builtIn, dormant = it.dormant, poolMs = it.poolMs) },
+            )
+            for (id in planned.deleteIds) {
+                db.channels().delete(id)
+                db.entries().deleteChannel(id)
+                db.states().delete(id)
+            }
         }
-        for (row in existing.values.filter { !it.builtIn }) {
-            val pool = Resolver.pool(row.def, library)
-            rows += row.copy(dormant = Resolver.isDormant(pool), poolMs = pool.sumOf { it.durationMs })
-        }
-        db.channels().upsertAll(rows)
     }
 
     private companion object {
