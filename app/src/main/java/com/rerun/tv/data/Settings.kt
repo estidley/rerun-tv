@@ -101,6 +101,15 @@ class Settings(context: Context, private val dao: SettingDao) {
     fun subtitleLanguage(): Flow<String> = dao.observe(SUBTITLE_LANGUAGE).map { it ?: "auto" }
     suspend fun subtitleLanguageValue(): String = dao.get(SUBTITLE_LANGUAGE) ?: "auto"
     suspend fun setSubtitleLanguage(v: String) = dao.put(SettingRow(SUBTITLE_LANGUAGE, v))
+    fun audioLanguage(): Flow<String> = dao.observe(AUDIO_LANGUAGE).map { it ?: "auto" }
+    suspend fun audioLanguageValue(): String = dao.get(AUDIO_LANGUAGE) ?: "auto"
+    suspend fun setAudioLanguage(v: String) = dao.put(SettingRow(AUDIO_LANGUAGE, v))
+    fun hdrMode(): Flow<String> = dao.observe(HDR_MODE).map { it ?: "AUTO" }
+    suspend fun hdrModeValue(): String = dao.get(HDR_MODE) ?: "AUTO"
+    suspend fun setHdrMode(v: String) {
+        require(com.rerun.core.plex.HdrMode.entries.any { it.name == v }) { "Invalid HDR mode" }
+        dao.put(SettingRow(HDR_MODE, v))
+    }
 
     fun flag(key: String, default: Boolean = true): Flow<Boolean> = dao.observe(key).map { it?.toBooleanStrictOrNull() ?: default }
     suspend fun setFlag(key: String, on: Boolean) = dao.put(SettingRow(key, on.toString()))
@@ -196,5 +205,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val COLOR_THEME = "color_theme"
         const val GUIDE_DENSITY = "guide_density"
         const val SUBTITLE_LANGUAGE = "subtitle_language"
+        const val AUDIO_LANGUAGE = "audio_language"
+        const val HDR_MODE = "hdr_mode"
     }
 }

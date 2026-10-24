@@ -77,6 +77,37 @@ object PlexParse {
 
     fun totalSize(text: String): Int = container(text).let { it.int("totalSize") ?: it.int("size") ?: 0 }
 
+    fun videoDetails(text: String): VideoDetails {
+        val media = container(text).arr("Metadata").firstOrNull()?.arr("Media")?.firstOrNull()
+        val streams = media?.arr("Part")?.firstOrNull()?.arr("Stream").orEmpty()
+        val video = streams.firstOrNull { it.int("streamType") == 1 }
+        val profile = video?.int("DOVIProfile")
+        val transfer = video?.str("colorTrc")?.lowercase()
+        val range = media?.str("videoDynamicRange")?.lowercase().orEmpty()
+        val hdr10 = transfer in setOf("smpte2084", "smpte-st-2084") || "hdr10" in range
+        return VideoDetails(
+            range = when {
+                profile != null || video?.int("DOVIPresent") == 1 || video?.bool("DOVIPresent") == true ||
+                    "dolby" in range || "dovi" in range -> DynamicRange.DOLBY_VISION
+                transfer == "arib-std-b67" || "hlg" in range -> DynamicRange.HLG
+                hdr10 || range == "hdr" -> DynamicRange.HDR10
+                else -> DynamicRange.SDR
+            },
+            codec = video?.str("codec") ?: media?.str("videoCodec"),
+            dolbyVisionProfile = profile,
+            hdr10Compatible = if (profile != null) profile in setOf(7, 8) && video?.int("DOVIBLCompatID") in setOf(1, 6)
+                else hdr10,
+            audio = streams.filter { it.int("streamType") == 2 }.mapNotNull { audio ->
+                val id = audio.int("id") ?: return@mapNotNull null
+                AudioStream(
+                    id, audio.str("languageCode") ?: audio.str("language"),
+                    audio.str("displayTitle") ?: audio.str("title") ?: audio.str("language") ?: "Audio $id",
+                    audio.str("codec"), audio.int("channels"), audio.bool("selected") || audio.int("selected") == 1,
+                )
+            },
+        )
+    }
+
     /** Streams for the same first media/part that playback uses. */
     fun subtitles(text: String): List<SubtitleStream> =
         container(text).arr("Metadata").firstOrNull()?.arr("Media")?.firstOrNull()
