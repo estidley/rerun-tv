@@ -33,15 +33,18 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
@@ -50,6 +53,7 @@ import com.rerun.core.schedule.GuideBlock
 import com.rerun.core.schedule.gridFloor
 import com.rerun.core.schedule.guideBlocks
 import com.rerun.tv.RerunApp
+import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.RerunWordmark
@@ -60,15 +64,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private const val WINDOW_MS = 3 * 3_600_000L
-private const val VISIBLE_ROWS = 7
-private val ROW_H = 60.dp
 private val CHANNEL_W = 230.dp
+private val TIME_HEADER_H = 36.dp
 
 /** 90s cable-guide grid: channels down the side, half-hours across, a cyan now-line. */
 @Composable
-fun GuideScreen(controller: TvController) {
-    val app = RerunApp.instance
+fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.instance.schedule) {
     val rows by controller.channels.collectAsState()
+    val density by controller.guideDensity.collectAsState()
     val focus = remember { FocusRequester() }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -81,18 +84,18 @@ fun GuideScreen(controller: TvController) {
 
     LaunchedEffect(rows) {
         val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
-        if (idx >= 0) focusRow = idx
+        focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, maxOf(0, rows.lastIndex))
     }
     LaunchedEffect(windowStart, rows) {
         now = System.currentTimeMillis()
         val (b, i) = withContext(Dispatchers.IO) {
-            app.schedule.ensure(now)
-            val all = app.schedule.allEntries(windowStart, windowStart + WINDOW_MS)
+            schedule.ensure(now)
+            val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
             val mapped = rows.associate { row ->
                 row.id to guideBlocks(all[row.id].orEmpty(), windowStart, windowStart + WINDOW_MS)
             }
             val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
-            mapped to keys.mapNotNull { k -> app.schedule.item(k)?.let { k to it } }.toMap()
+            mapped to keys.mapNotNull { k -> schedule.item(k)?.let { k to it } }.toMap()
         }
         blocks = b
         items = i
@@ -159,25 +162,35 @@ fun GuideScreen(controller: TvController) {
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 val timelineW = maxWidth - CHANNEL_W
                 val pxPerMs = timelineW.value / WINDOW_MS
-                Column {
+                val layout = guideRows((maxHeight - TIME_HEADER_H).value, rows.size, focusRow, GuideDensity.from(density))
+                Column(Modifier.fillMaxSize().clipToBounds().testTag("guide-grid")) {
                     TimeHeader(windowStart, timelineW)
-                    val first = (focusRow - VISIBLE_ROWS / 2).coerceIn(0, maxOf(0, rows.size - VISIBLE_ROWS))
-                    rows.drop(first).take(VISIBLE_ROWS).forEachIndexed { i, ch ->
-                        val rowIndex = first + i
-                        Row(Modifier.height(ROW_H).fillMaxWidth()) {
+                    rows.drop(layout.firstIndex).take(layout.visibleCount).forEachIndexed { i, ch ->
+                        val rowIndex = layout.firstIndex + i
+                        val rowColor = if (rowIndex % 2 == 0) Retro.GuideBlue else Retro.AlternateRow
+                        val channelColor = if (rowIndex % 2 == 0) Retro.GuideBlueDeep else Retro.GuideBlueLight
+                        val rowSize = if (layout.fillViewport) Modifier.weight(1f) else Modifier.height(layout.rowHeight.dp)
+                        Row(rowSize.fillMaxWidth().background(rowColor).testTag("guide-row:${ch.id}")) {
                             Row(
-                                Modifier.width(CHANNEL_W).fillMaxHeight().background(Retro.GuideBlueDeep).border(1.dp, Color(0x334A6BC8)).padding(horizontal = 12.dp),
+                                Modifier.width(CHANNEL_W).fillMaxHeight()
+                                    .background(channelColor).border(2.dp, Retro.Cyan)
+                                    .testTag("guide-channel:${ch.id}")
+                                    .padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 BasicText(ch.number.toString(), style = Retro.GuideNumber, modifier = Modifier.width(70.dp))
-                                BasicText(ch.name, style = Retro.GuideCell, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                BasicText(
+                                    ch.name, style = Retro.GuideCell.copy(lineHeight = 28.sp),
+                                    maxLines = layout.channelNameLines, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
                             }
                             Box(Modifier.width(timelineW).fillMaxHeight()) {
                                 for (b in blocks[ch.id].orEmpty()) {
                                     val x = ((b.startMs - windowStart) * pxPerMs).dp
                                     val w = ((b.endMs - b.startMs) * pxPerMs).dp
                                     val sel = rowIndex == focusRow && focusTime >= b.startMs && focusTime < b.endMs
-                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel)
+                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel, rowColor)
                                 }
                                 val nowX = ((now - windowStart) * pxPerMs).dp
                                 if (now in windowStart until windowStart + WINDOW_MS) {
@@ -196,19 +209,25 @@ fun GuideScreen(controller: TvController) {
 @Composable
 private fun HeaderButton(text: String, focused: Boolean) {
     Box(
-        Modifier.background(if (focused) Retro.GuideBlueLight else Color(0x66071341))
-            .border(2.dp, if (focused) Retro.Yellow else Color(0x334A6BC8))
+        Modifier.background(if (focused) Retro.GuideBlueLight else Retro.GuideBlueDeep.copy(alpha = 0.4f))
+            .border(2.dp, if (focused) Retro.Yellow else Retro.Border.copy(alpha = 0.4f))
             .padding(horizontal = 18.dp, vertical = 6.dp),
     ) { BasicText(text, style = Retro.Body.copy(shadow = null)) }
 }
 
 @Composable
 private fun TimeHeader(windowStart: Long, timelineW: Dp) {
-    Row(Modifier.height(36.dp)) {
-        Spacer(Modifier.width(CHANNEL_W))
+    Row(Modifier.height(TIME_HEADER_H)) {
+        Box(
+            Modifier.width(CHANNEL_W).fillMaxHeight().background(Retro.GuideBlueDeep)
+                .border(2.dp, Retro.Cyan).padding(start = 12.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicText("CHANNEL", style = Retro.GuideCell.copy(color = Retro.Cyan))
+        }
         val cols = (WINDOW_MS / GRID_MS).toInt()
         for (i in 0 until cols) {
-            Box(Modifier.width(timelineW / cols).fillMaxHeight().background(Retro.GuideBlueDeep).border(1.dp, Color(0x334A6BC8)).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
+            Box(Modifier.width(timelineW / cols).fillMaxHeight().background(Retro.GuideBlueDeep).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
                 BasicText(clockTime(windowStart + i * GRID_MS), style = Retro.GuideCell.copy(color = Retro.Yellow))
             }
         }
@@ -216,7 +235,7 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp) {
 }
 
 @Composable
-private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean) {
+private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean, rowColor: Color) {
     val label = when {
         block.offAir -> "Off Air"
         item == null -> "Up Next"
@@ -225,8 +244,8 @@ private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Bo
     }
     Box(
         Modifier.offset(x = x).width(w).fillMaxHeight()
-            .background(if (selected) Retro.Yellow else if (block.offAir) Color(0xFF06102E) else Retro.GuideBlue)
-            .border(1.dp, if (selected) Retro.White else Color(0x554A6BC8))
+            .background(if (selected) Retro.Yellow else rowColor)
+            .border(1.dp, if (selected) Retro.White else Retro.Border.copy(alpha = 0.6f))
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -236,7 +255,7 @@ private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Bo
 
 @Composable
 private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?) {
-    Row(Modifier.fillMaxWidth().height(170.dp).background(Color(0x55000000)).border(1.dp, Color(0x334A6BC8)).padding(12.dp)) {
+    Row(Modifier.fillMaxWidth().height(170.dp).background(Retro.GuideBlueDeep.copy(alpha = 0.7f)).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(12.dp)) {
         if (poster != null) {
             AsyncImage(poster, null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 98.dp, height = 146.dp))
             Spacer(Modifier.width(20.dp))

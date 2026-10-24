@@ -1,12 +1,18 @@
 package com.rerun.tv.ui
 
 import android.app.Application
+import android.os.Looper
 import com.rerun.core.catalog.Lineup
+import com.rerun.core.model.ChannelDef
+import com.rerun.core.model.ChannelKind
+import com.rerun.core.model.Rules
+import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
 import com.rerun.tv.player.TunerEngine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -17,6 +23,7 @@ import org.mockito.ArgumentMatchers.anyBoolean
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -24,6 +31,7 @@ import org.robolectric.annotation.Config
 class TvControllerTest {
     private lateinit var controller: TvController
     private lateinit var engine: TunerEngine
+    private val rows = MutableStateFlow<List<ChannelRow>>(emptyList())
 
     @Before
     fun setUp() = runBlocking {
@@ -33,8 +41,11 @@ class TvControllerTest {
         engine = mock(TunerEngine::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(repo)
-        `when`(repo.activeChannels()).thenReturn(flowOf(emptyList()))
+        `when`(repo.activeChannels()).thenReturn(rows)
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
+        `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
+        `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
+        `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         controller = TvController(app, engine)
     }
@@ -65,5 +76,30 @@ class TvControllerTest {
         assertEquals("east", controller.currentChannelId())
         controller.lastChannel()
         assertEquals("other", controller.currentChannelId())
+    }
+
+    @Test
+    fun guideAndChannelSurfingKeepWestNextToEastDespiteRenumbering() {
+        fun channel(id: String, number: Int) =
+            ChannelRow.of(ChannelDef(id, number, id, ChannelKind.CUSTOM, Rules()), builtIn = false, dormant = false)
+        rows.value = listOf(
+            channel("one", 2), channel("two", 4), channel("three", 6),
+            channel("two:w", 504), channel("orphan:w", 800), channel("one:w", 1001),
+        )
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(
+            listOf("one", "one:w", "two", "two:w", "three", "orphan:w"),
+            controller.channels.value.map { it.id },
+        )
+        controller.tuneTo("one", sound = false)
+        controller.channelUp()
+        assertEquals("one:w", controller.currentChannelId())
+        controller.channelUp()
+        assertEquals("two", controller.currentChannelId())
+        controller.channelDown()
+        assertEquals("one:w", controller.currentChannelId())
+        rows.value = rows.value.filterNot { Lineup.isWest(it.id) }
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(listOf("one", "two", "three"), controller.channels.value.map { it.id })
     }
 }

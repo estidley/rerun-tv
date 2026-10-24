@@ -5,6 +5,9 @@ import android.os.Looper
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.common.C
+import androidx.media3.common.Format
+import androidx.media3.common.TrackGroup
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
 import com.rerun.core.catalog.Lineup
@@ -29,6 +32,7 @@ import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.*
+import org.mockito.ArgumentCaptor
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -57,6 +61,7 @@ class TunerEngineTest {
         `when`(player.currentTracks).thenReturn(Tracks.EMPTY)
         `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
         `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(false)
+        `when`(settings.subtitleLanguageValue()).thenReturn("auto")
         `when`(settings.serverToken).thenReturn("test-only-placeholder")
         `when`(settings.clientId).thenReturn("test-client")
         doAnswer { listener = it.getArgument(0); null }.`when`(player).addListener(any(Player.Listener::class.java))
@@ -151,6 +156,63 @@ class TunerEngineTest {
         val uri = sources.single().mediaItem.localConfiguration!!.uri
         assertEquals("burn", uri.getQueryParameter("subtitles"))
         assertEquals("7", uri.getQueryParameter("subtitleStreamID"))
+    }
+
+    @Test
+    fun preferredLanguageSelectsExternalTrackInsteadOfPlexDefault() = runBlocking {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"selected":true}""",
+            """"languageCode":"eng","selected":true},{"id":8,"streamType":3,"codec":"srt","key":"/library/streams/8","languageCode":"spa"}""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(settings.subtitleLanguageValue()).thenReturn("es")
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        val subtitle = sources.single().mediaItem.localConfiguration!!.subtitleConfigurations.single()
+        assertEquals("http://127.0.0.1:32400/library/streams/8", subtitle.uri.toString())
+        assertEquals("spa", subtitle.language)
+        val englishTracks = Tracks(listOf(Tracks.Group(
+            TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("en").build()),
+            false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(false),
+        )))
+        listener.onTracksChanged(englishTracks)
+        val parameters = ArgumentCaptor.forClass(TrackSelectionParameters::class.java)
+        verify(player, atLeastOnce()).trackSelectionParameters = parameters.capture()
+        assertTrue(C.TRACK_TYPE_TEXT in parameters.value.disabledTrackTypes)
+
+        val spanishTracks = Tracks(listOf(Tracks.Group(
+            TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("spa").build()),
+            false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(false),
+        )))
+        listener.onTracksChanged(spanishTracks)
+        verify(player, atLeastOnce()).trackSelectionParameters = parameters.capture()
+        assertFalse(C.TRACK_TYPE_TEXT in parameters.value.disabledTrackTypes)
+        assertTrue(parameters.value.overrides.isNotEmpty())
+    }
+
+    @Test
+    fun unavailablePreferredLanguageDoesNotBurnAnotherLanguage() = runBlocking {
+        val metadata = videoWithSubtitle("pgs")
+        prepare("east", PlexParse.movies(metadata).single().copy(audioCodec = "dca"))
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(settings.subtitleLanguageValue()).thenReturn("ja")
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals("none", sources.single().mediaItem.localConfiguration!!.uri.getQueryParameter("subtitles"))
+    }
+
+    @Test
+    fun clearingPlaybackRemovesAnExcludedChannelFromState() = runBlocking {
+        prepare("east", PlexParse.movies(videoWithSubtitle("srt")).single())
+        engine.tune("east")
+        await { sources.size == 1 }
+        engine.clear()
+        assertNull(engine.state.value.channel)
+        assertNull(engine.state.value.item)
+        assertEquals(Phase.OFF_AIR, engine.state.value.phase)
     }
 
     private fun videoWithSubtitle(codec: String): String =

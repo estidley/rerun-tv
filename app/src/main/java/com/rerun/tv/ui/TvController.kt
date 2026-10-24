@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
@@ -43,6 +44,8 @@ sealed interface Screen {
     data object Channels : Screen
     data class Editor(val channelId: String?) : Screen
     data object Settings : Screen
+    data object Libraries : Screen
+    data object SubtitleLanguage : Screen
 }
 
 /** App-level state and remote-control actions. One per activity. */
@@ -50,7 +53,14 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     val channels: StateFlow<List<ChannelRow>> =
-        app.schedule.activeChannels().stateIn(scope, SharingStarted.Eagerly, emptyList())
+        app.schedule.activeChannels().map { rows ->
+            val byId = rows.associateBy { it.id }
+            rows.sortedWith(
+                compareBy<ChannelRow> { byId[Lineup.eastOf(it.id)]?.number ?: it.number }
+                    .thenBy { Lineup.eastOf(it.id) }
+                    .thenBy { Lineup.isWest(it.id) },
+            )
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _screen = MutableStateFlow<Screen>(if (app.settings.isSignedIn) Screen.Player else Screen.Onboarding)
     val screen: StateFlow<Screen> = _screen.asStateFlow()
@@ -60,6 +70,22 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     val bannerUntil: StateFlow<Long> = _bannerUntil.asStateFlow()
 
     val crtLevel: StateFlow<String> = app.settings.crtLevel().stateIn(scope, SharingStarted.Eagerly, "SUBTLE")
+    val colorTheme: StateFlow<String> = app.settings.colorTheme().stateIn(scope, SharingStarted.Eagerly, "STANDARD_BLUE")
+    val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "COMFORTABLE")
+    val subtitleLanguage: StateFlow<String> = app.settings.subtitleLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
+
+    fun setGuideDensity(value: com.rerun.tv.ui.guide.GuideDensity) {
+        scope.launch { app.settings.setGuideDensity(value.name) }
+    }
+
+    suspend fun setSubtitleLanguage(value: String) {
+        app.settings.setSubtitleLanguage(value)
+        engine.setSubtitles(app.settings.isOn(com.rerun.tv.data.Settings.SUBTITLES))
+    }
+
+    fun setColorTheme(theme: com.rerun.tv.ui.theme.ColorTheme) {
+        scope.launch { app.settings.setColorTheme(theme.name) }
+    }
 
     fun cycleCrt() {
         scope.launch { app.settings.setCrtLevel(com.rerun.tv.ui.crt.CrtLevel.from(crtLevel.value).next().name) }
@@ -124,13 +150,23 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     fun startWatching() {
         scope.launch {
             serverBase = app.settings.serverBase()
-            if (serverBase == null) { _screen.value = Screen.Onboarding; return@launch }
+            if (serverBase == null || app.settings.lastSyncMs() == 0L) {
+                _screen.value = Screen.Onboarding
+                return@launch
+            }
             app.schedule.invalidateLibrary()
             val list = app.schedule.active()
             val last = app.settings.lastChannel()
             val pick = list.firstOrNull { it.id == last } ?: list.firstOrNull()
             _screen.value = Screen.Player
-            if (pick != null) tuneTo(pick.id, sound = false)
+            currentId = currentId?.takeIf { id -> list.any { it.id == id } }
+            previousId = previousId?.takeIf { id -> list.any { it.id == id } }
+            if (pick != null) {
+                tuneTo(pick.id, sound = false)
+            } else {
+                currentId = null
+                engine.clear()
+            }
         }
     }
 

@@ -71,8 +71,8 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
         modifier
             .fillMaxWidth()
             .padding(horizontal = 56.dp, vertical = 40.dp)
-            .background(Brush.verticalGradient(listOf(Color(0xFF26304F), Retro.BannerBg), startY = 0f, endY = 18f))
-            .border(1.dp, Color(0x5539FF14))
+            .background(Brush.verticalGradient(listOf(Retro.GuideBlueLight, Retro.BannerBg), startY = 0f, endY = 18f))
+            .border(1.dp, Retro.Vcr.copy(alpha = 0.35f))
             .padding(horizontal = 28.dp, vertical = 18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

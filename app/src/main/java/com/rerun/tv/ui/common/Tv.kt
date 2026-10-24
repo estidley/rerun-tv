@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,9 +30,19 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.core.content.res.ResourcesCompat
+import com.rerun.tv.R
 import com.rerun.tv.ui.theme.Retro
+import kotlin.math.ceil
 
 /** A D-pad friendly button: yellow border and lighter fill when focused. */
 @Composable
@@ -44,19 +53,20 @@ fun TvButton(
     selected: Boolean = false,
     enabled: Boolean = true,
     sub: String? = null,
+    selectedIndicator: String? = if (selected) "■" else null,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val bg = when {
         focused -> Retro.GuideBlueLight
-        selected -> Color(0xFF14306E)
-        else -> Color(0x66071341)
+        selected -> Retro.AlternateRow
+        else -> Retro.GuideBlueDeep.copy(alpha = 0.4f)
     }
     Box(
         modifier
             .scale(if (focused) 1.04f else 1f)
             .background(bg)
-            .border(2.dp, if (focused) Retro.Yellow else if (selected) Retro.Cyan else Color(0x334A6BC8))
+            .border(2.dp, if (focused) Retro.Yellow else if (selected) Retro.Cyan else Retro.Border.copy(alpha = 0.4f))
             .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 10.dp),
     ) {
@@ -66,7 +76,7 @@ fun TvButton(
                 selected -> Retro.Cyan
                 else -> Retro.White
             }
-            BasicText((if (selected) "■ " else "") + text, style = Retro.Body.copy(color = color, shadow = null))
+            BasicText((selectedIndicator?.let { "$it " } ?: "") + text, style = Retro.Body.copy(color = color, shadow = null))
             if (sub != null) BasicText(sub, style = Retro.Caption)
         }
     }
@@ -75,27 +85,58 @@ fun TvButton(
 /** Wordmark with the red beret, a nod to Rerun on What's Happening! */
 @Composable
 fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
-    val beret = (style.fontSize.value * 0.62f).dp
-    Box(Modifier.padding(top = beret * 0.28f)) {
-        BasicText("RERUN", style = style)
-        Canvas(
-            Modifier
-                .align(Alignment.TopStart)
-                .offset(x = beret * 0.04f, y = -beret * 0.38f)
-                .size(beret, beret * 0.62f),
-        ) {
-            val w = size.width
-            val h = size.height
-            val hat = Path().apply {
-                moveTo(w * 0.02f, h * 0.78f)
-                cubicTo(w * 0.02f, h * 0.4f, w * 0.28f, h * 0.08f, w * 0.55f, h * 0.16f)
-                cubicTo(w * 0.9f, h * 0.26f, w * 1.02f, h * 0.62f, w * 0.84f, h * 0.8f)
-                cubicTo(w * 0.58f, h * 1.02f, w * 0.14f, h * 0.98f, w * 0.02f, h * 0.78f)
-                close()
-            }
-            drawPath(hat, Color(0xFFD0122D))
-            drawCircle(Color(0xFF7A0C1C), radius = w * 0.055f, center = Offset(w * 0.58f, h * 0.22f))
+    val density = LocalDensity.current
+    val context = LocalContext.current
+    val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.vt323) }
+    val measurer = rememberTextMeasurer()
+    val text = measurer.measure(AnnotatedString("RERUN"), style = style, maxLines = 1, softWrap = false)
+    val fontPx = with(density) { style.fontSize.toPx() }
+    val capBounds = remember(typeface, fontPx) {
+        android.graphics.Rect().also { bounds ->
+            android.graphics.Paint().apply {
+                this.typeface = typeface
+                textSize = fontPx
+            }.getTextBounds("RE", 0, 2, bounds)
         }
+    }
+    val hatWidth = text.getHorizontalPosition(2, true) * 1.08f
+    val hatHeight = hatWidth * 0.34f
+    val overlap = fontPx * 0.085f
+    // Anchor to the ink's cap height, not the font's invisible top padding.
+    val capTop = text.firstBaseline + capBounds.top
+    val textY = ceil(maxOf(0f, hatHeight - capTop - overlap))
+    val hatY = textY + capTop + overlap - hatHeight
+    Canvas(
+        Modifier.size(
+            with(density) { text.size.width.toDp() },
+            with(density) { (text.size.height + textY).toDp() },
+        ).semantics { contentDescription = "RERUN" },
+    ) {
+        val w = hatWidth
+        val h = hatHeight
+        val crown = Path().apply {
+            moveTo(w * 0.02f, hatY + h * 0.79f)
+            cubicTo(-w * 0.03f, hatY + h * 0.42f, w * 0.21f, hatY + h * 0.08f, w * 0.51f, hatY + h * 0.2f)
+            cubicTo(w * 0.7f, hatY + h * 0.25f, w * 0.86f, hatY + h * 0.37f, w * 0.98f, hatY + h * 0.55f)
+            cubicTo(w * 1.04f, hatY + h * 0.76f, w * 0.69f, hatY + h * 0.9f, w * 0.28f, hatY + h * 0.97f)
+            cubicTo(w * 0.13f, hatY + h * 1.02f, w * 0.04f, hatY + h * 0.95f, w * 0.02f, hatY + h * 0.79f)
+            close()
+        }
+        drawPath(crown, Color(0xFFD0122D))
+        val brim = Path().apply {
+            moveTo(w * 0.12f, hatY + h * 0.84f)
+            quadraticTo(w * 0.53f, hatY + h * 0.87f, w * 0.9f, hatY + h * 0.63f)
+            lineTo(w * 0.88f, hatY + h * 0.8f)
+            quadraticTo(w * 0.51f, hatY + h * 1.02f, w * 0.14f, hatY + h)
+            close()
+        }
+        drawPath(brim, Color(0xFF7A0C1C))
+        drawLine(
+            Color(0xFF7A0C1C),
+            Offset(w * 0.53f, hatY + h * 0.23f), Offset(w * 0.5f, hatY + h * 0.07f),
+            strokeWidth = w * 0.045f, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+        )
+        drawText(text, topLeft = Offset(0f, textY))
     }
 }
 

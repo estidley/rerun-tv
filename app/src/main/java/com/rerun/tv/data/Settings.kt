@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.rerun.core.plex.ServerUri
+import com.rerun.core.codec.SetCodec
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.IOException
@@ -54,7 +55,20 @@ class Settings(context: Context, private val dao: SettingDao) {
     suspend fun serverName(): String? = dao.get(SERVER_NAME)
     suspend fun setServerName(v: String) = dao.put(SettingRow(SERVER_NAME, v))
     suspend fun serverId(): String? = dao.get(SERVER_ID)
-    suspend fun setServerId(v: String) = dao.put(SettingRow(SERVER_ID, v))
+    suspend fun setServerId(v: String) {
+        if (serverId() != v) {
+            dao.remove(SELECTED_LIBRARIES)
+            dao.remove(LAST_SYNC)
+        }
+        dao.put(SettingRow(SERVER_ID, v))
+    }
+
+    /** Null preserves the all-library behavior for installations predating the picker. */
+    suspend fun selectedLibraries(): Set<String>? = dao.get(SELECTED_LIBRARIES)?.let(SetCodec::decode)
+    suspend fun setSelectedLibraries(keys: Set<String>) {
+        require(keys.isNotEmpty()) { "Choose at least one library" }
+        dao.put(SettingRow(SELECTED_LIBRARIES, SetCodec.encode(keys)))
+    }
 
     suspend fun lastSyncMs(): Long = dao.get(LAST_SYNC)?.toLongOrNull() ?: 0
     suspend fun setLastSyncMs(v: Long) = dao.put(SettingRow(LAST_SYNC, v.toString()))
@@ -64,6 +78,14 @@ class Settings(context: Context, private val dao: SettingDao) {
 
     fun crtLevel(): Flow<String> = dao.observe(CRT_LEVEL).map { it ?: "SUBTLE" }
     suspend fun setCrtLevel(v: String) = dao.put(SettingRow(CRT_LEVEL, v))
+
+    fun colorTheme(): Flow<String> = dao.observe(COLOR_THEME).map { it ?: "STANDARD_BLUE" }
+    suspend fun setColorTheme(v: String) = dao.put(SettingRow(COLOR_THEME, v))
+    fun guideDensity(): Flow<String> = dao.observe(GUIDE_DENSITY).map { it ?: "COMFORTABLE" }
+    suspend fun setGuideDensity(v: String) = dao.put(SettingRow(GUIDE_DENSITY, v))
+    fun subtitleLanguage(): Flow<String> = dao.observe(SUBTITLE_LANGUAGE).map { it ?: "auto" }
+    suspend fun subtitleLanguageValue(): String = dao.get(SUBTITLE_LANGUAGE) ?: "auto"
+    suspend fun setSubtitleLanguage(v: String) = dao.put(SettingRow(SUBTITLE_LANGUAGE, v))
 
     fun flag(key: String, default: Boolean = true): Flow<Boolean> = dao.observe(key).map { it?.toBooleanStrictOrNull() ?: default }
     suspend fun setFlag(key: String, on: Boolean) = dao.put(SettingRow(key, on.toString()))
@@ -76,7 +98,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         putSecret(ACCOUNT_TOKEN, null)
         putSecret(SERVER_TOKEN, null)
         pinnedHost = null
-        listOf(SERVER_BASE, SERVER_NAME, SERVER_ID, LAST_SYNC).forEach { dao.remove(it) }
+        listOf(SERVER_BASE, SERVER_NAME, SERVER_ID, LAST_SYNC, SELECTED_LIBRARIES).forEach { dao.remove(it) }
     }
 
     val isSignedIn: Boolean get() = accountToken != null
@@ -148,8 +170,12 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val SERVER_BASE = "server_base"
         const val SERVER_NAME = "server_name"
         const val SERVER_ID = "server_id"
+        const val SELECTED_LIBRARIES = "selected_libraries"
         const val LAST_SYNC = "last_sync"
         const val LAST_CHANNEL = "last_channel"
         const val CRT_LEVEL = "crt_level"
+        const val COLOR_THEME = "color_theme"
+        const val GUIDE_DENSITY = "guide_density"
+        const val SUBTITLE_LANGUAGE = "subtitle_language"
     }
 }

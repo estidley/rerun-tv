@@ -1,0 +1,129 @@
+package com.rerun.tv.ui.settings
+
+import android.app.Application
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.pressKey
+import com.rerun.tv.RerunApp
+import com.rerun.tv.data.LibrarySync
+import com.rerun.tv.data.Settings
+import com.rerun.tv.ui.TvController
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.mockito.ArgumentMatchers.anyBoolean
+import org.mockito.ArgumentMatchers.anyString
+import org.mockito.Mockito.*
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class, sdk = [35], qualifiers = "w1920dp-h1080dp-mdpi")
+class SettingsScreenTest {
+    @get:Rule val compose = createComposeRule()
+    private lateinit var settings: Settings
+    private lateinit var refresh: Continuation<Unit>
+    private val eastWest = MutableStateFlow(false)
+
+    @Before
+    fun setUp() = runBlocking {
+        val app = mock(RerunApp::class.java)
+        settings = mock(Settings::class.java)
+        val sync = mock(LibrarySync::class.java)
+        val controller = mock(TvController::class.java)
+        `when`(app.settings).thenReturn(settings)
+        `when`(app.sync).thenReturn(sync)
+        `when`(settings.lastSyncMs()).thenReturn(0L)
+        `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
+        `when`(settings.flag(Settings.EAST_WEST, false)).thenReturn(eastWest)
+        `when`(controller.crtLevel).thenReturn(MutableStateFlow("OFF"))
+        `when`(controller.effects).thenReturn(MutableStateFlow(com.rerun.tv.ui.Effects(false, false, false, false)))
+        `when`(controller.colorTheme).thenReturn(MutableStateFlow("STANDARD_BLUE"))
+        `when`(controller.guideDensity).thenReturn(MutableStateFlow("COMFORTABLE"))
+        `when`(controller.subtitleLanguage).thenReturn(MutableStateFlow("auto"))
+        doAnswer {
+            @Suppress("UNCHECKED_CAST")
+            val continuation = it.rawArguments.last() as Continuation<Unit>
+            refresh = continuation
+            COROUTINE_SUSPENDED
+        }.`when`(sync).refreshChannels()
+        compose.setContent { SettingsScreen(controller, app) }
+    }
+
+    @Test
+    fun eastWestChangesBeforeRefreshCompletesAndIgnoresRepeatedClicks() = runBlocking<Unit> {
+        compose.onNodeWithText("East and West")
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            .performScrollTo().performClick()
+        compose.onNodeWithText("■ East and West").performScrollTo().assertIsDisplayed().performClick()
+        verify(settings, times(1)).setFlag(Settings.EAST_WEST, true)
+        compose.runOnIdle {
+            eastWest.value = true
+            refresh.resume(Unit)
+        }
+        compose.onNodeWithText("■ East and West").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun failedRefreshRestoresTheToggleAndShowsTheError() = runBlocking<Unit> {
+        compose.onNodeWithText("East and West")
+            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
+            .performScrollTo().performClick()
+        compose.onNodeWithText("■ East and West").performScrollTo().assertIsDisplayed()
+        compose.runOnIdle { refresh.resumeWithException(IllegalStateException("test failure")) }
+        compose.onNodeWithText("East and West").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Lineup failed: test failure").performScrollTo().assertIsDisplayed()
+        verify(settings).setFlag(Settings.EAST_WEST, false)
+    }
+
+    @Test
+    fun tabVisitsEveryButtonInVisualOrderAndShiftTabReversesIt() {
+        val labels = listOf(
+            "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
+            "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
+            "Compact", "■ Comfortable", "Large", "Subtitle language: Automatic",
+            "East and West", "Music", "Subtitles", "Manage libraries", "Re-sync now", "Channels", "Sign out",
+        )
+        for ((index, label) in labels.withIndex()) {
+            compose.onNodeWithText(label).assertIsFocused()
+            if (index < labels.lastIndex) compose.onRoot().performKeyInput { pressKey(Key.Tab) }
+        }
+        for (label in labels.dropLast(1).asReversed()) {
+            compose.onRoot().performKeyInput {
+                keyDown(Key.ShiftLeft)
+                pressKey(Key.Tab)
+                keyUp(Key.ShiftLeft)
+            }
+            compose.onNodeWithText(label).assertIsFocused()
+        }
+    }
+
+    @Test
+    fun dpadFollowsRowsAndKeepsTheColumnWherePossible() {
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("All effects off").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Static sound").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("CRT Subtle").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Static sound").assertIsFocused()
+    }
+}

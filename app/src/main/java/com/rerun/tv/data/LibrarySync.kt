@@ -2,6 +2,7 @@ package com.rerun.tv.data
 
 import com.rerun.core.model.MediaItem
 import com.rerun.core.plex.PlexParse
+import com.rerun.core.plex.Section
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -19,13 +20,23 @@ class LibrarySync(
 ) {
     private val mutex = Mutex()
 
-    fun sync(): Flow<SyncProgress> = flow {
+    suspend fun libraries(): List<Section> {
+        val base = requireNotNull(settings.serverBase()) { "No Plex server chosen" }
+        val token = requireNotNull(settings.serverToken ?: settings.accountToken) { "Not signed in" }
+        return PlexParse.sections(api.get(base, "/library/sections", token))
+            .filter { it.type in setOf("movie", "show", "artist") }
+    }
+
+    fun sync(selectedLibraries: Set<String>? = null): Flow<SyncProgress> = flow {
         mutex.withLock {
+            require(selectedLibraries == null || selectedLibraries.isNotEmpty()) { "Choose at least one library" }
             val base = requireNotNull(settings.serverBase()) { "No Plex server chosen" }
             val token = requireNotNull(settings.serverToken ?: settings.accountToken) { "Not signed in" }
 
             emit(SyncProgress("Reading libraries", 0, 0))
-            val sections = PlexParse.sections(api.get(base, "/library/sections", token))
+            val selected = selectedLibraries ?: settings.selectedLibraries()
+            val sections = libraries().filter { selected == null || it.key in selected }
+            require(sections.isNotEmpty()) { "None of your selected libraries are available. Choose libraries in Settings." }
             val items = ArrayList<MediaItem>()
 
             for (s in sections.filter { it.type == "movie" }) {
@@ -59,6 +70,7 @@ class LibrarySync(
                 eastWest = settings.isOn(Settings.EAST_WEST),
                 music = settings.isOn(Settings.MUSIC),
                 items = items,
+                selectedLibraries = selectedLibraries,
             )
             settings.setLastSyncMs(System.currentTimeMillis())
             emit(SyncProgress("Done", items.size, items.size, finished = true))

@@ -19,6 +19,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.rerun.core.plex.PlexServer
+import com.rerun.core.plex.Section
 import com.rerun.tv.RerunApp
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -26,16 +27,18 @@ import com.rerun.tv.ui.common.TvStage
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 private sealed interface Step {
     data object Starting : Step
     data class Code(val code: String) : Step
     data class Servers(val list: List<PlexServer>) : Step
+    data class Libraries(val list: List<Section>, val selected: Set<String>) : Step
     data class Syncing(val stage: String, val done: Int, val total: Int) : Step
     data class Failed(val message: String) : Step
 }
 
-/** Link code → pick server → first library sync → start watching. */
+/** Link code → pick server → choose libraries → first sync → start watching. */
 @Composable
 fun OnboardingScreen(controller: TvController) {
     val app = RerunApp.instance
@@ -51,8 +54,10 @@ fun OnboardingScreen(controller: TvController) {
         app.settings.setServerName(server.name)
         app.settings.setServerId(server.clientId)
         app.settings.serverToken = server.accessToken ?: app.settings.accountToken
-        app.sync.sync().collect { p -> step = Step.Syncing(p.stage, p.done, p.total) }
-        controller.startWatching()
+        val libraries = app.sync.libraries()
+        require(libraries.isNotEmpty()) { "No movie, TV, or music libraries found on ${server.name}." }
+        val saved = app.settings.selectedLibraries()
+        step = Step.Libraries(libraries, libraries.map { it.key }.filter { saved == null || it in saved }.toSet())
     }
 
     LaunchedEffect(attempt) {
@@ -74,6 +79,7 @@ fun OnboardingScreen(controller: TvController) {
                 else -> step = Step.Servers(servers)
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             step = Step.Failed(e.message ?: "Something went wrong")
         }
     }
@@ -97,13 +103,68 @@ fun OnboardingScreen(controller: TvController) {
                     Spacer(Modifier.height(16.dp))
                     s.list.forEach { server ->
                         TvButton(
-                            server.name, onClick = { scope.launch { chooseServer(server) } },
+                            server.name, onClick = {
+                                scope.launch {
+                                    try {
+                                        chooseServer(server)
+                                    } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
+                                        step = Step.Failed(e.message ?: "Couldn't load libraries")
+                                    }
+                                }
+                            },
                             modifier = Modifier.width(640.dp).let { if (server == s.list.first()) it.focusRequester(first) else it },
                         )
                         Spacer(Modifier.height(12.dp))
                     }
                 }
                 LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+            }
+            is Step.Libraries -> {
+                val first = remember { FocusRequester() }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BasicText("Which libraries should Rerun include?", style = Retro.Title)
+                    BasicText("OK selects or deselects. Only checked libraries will be synced.", style = Retro.Caption)
+                    s.list.forEachIndexed { index, library ->
+                        val type = when (library.type) {
+                            "movie" -> "Movies"
+                            "show" -> "TV shows"
+                            else -> "Music (requires Music in Settings)"
+                        }
+                        TvButton(
+                            library.title,
+                            onClick = {
+                                val keys = if (library.key in s.selected) s.selected - library.key else s.selected + library.key
+                                step = s.copy(selected = keys)
+                            },
+                            selected = library.key in s.selected,
+                            selectedIndicator = if (library.key in s.selected) "+" else "x",
+                            sub = "${if (library.key in s.selected) "Included" else "Not included"} - $type",
+                            modifier = Modifier.width(640.dp).let { if (index == 0) it.focusRequester(first) else it },
+                        )
+                    }
+                    TvButton(
+                        "Continue",
+                        enabled = s.selected.isNotEmpty(),
+                        onClick = {
+                            step = Step.Syncing("Saving library choices", 0, 0)
+                            scope.launch {
+                                try {
+                                    app.settings.setSelectedLibraries(s.selected)
+                                    app.sync.sync().collect { p -> step = Step.Syncing(p.stage, p.done, p.total) }
+                                    controller.startWatching()
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    step = Step.Failed(e.message ?: "Library sync failed")
+                                }
+                            }
+                        },
+                    )
+                }
+                LaunchedEffect(Unit) { first.requestFocus() }
             }
             is Step.Syncing -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,

@@ -41,8 +41,21 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     suspend fun active(): List<ChannelRow> = db.channels().active()
 
     /** Commit library/lineup changes atomically with respect to schedule generation. */
-    suspend fun refreshChannels(eastWest: Boolean, music: Boolean, items: List<MediaItem>? = null) = mutex.withLock {
+    suspend fun refreshChannels(
+        eastWest: Boolean, music: Boolean, items: List<MediaItem>? = null,
+        selectedLibraries: Set<String>? = null,
+    ) = mutex.withLock {
         db.withTransaction {
+            if (selectedLibraries != null) {
+                val previous = db.settings().get(Settings.SELECTED_LIBRARIES)
+                val encoded = com.rerun.core.codec.SetCodec.encode(selectedLibraries)
+                if (previous != encoded) {
+                    db.entries().clear()
+                    db.states().clear()
+                    db.channels().delete(Lineup.RESTART_ID)
+                }
+                db.settings().put(SettingRow(Settings.SELECTED_LIBRARIES, encoded))
+            }
             if (items != null) db.items().replaceAll(items.map(ItemRow::of))
             val contents = items ?: db.items().all().map { it.toItem() }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }

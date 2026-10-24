@@ -154,6 +154,9 @@ interface ChannelDao {
 
 @Dao
 interface EntryDao {
+    @Query("DELETE FROM entries")
+    suspend fun clear()
+
     @Query("SELECT MAX(endMs) FROM entries WHERE channelId = :channelId")
     suspend fun lastEnd(channelId: String): Long?
 
@@ -178,6 +181,9 @@ interface EntryDao {
 
 @Dao
 interface StateDao {
+    @Query("DELETE FROM states")
+    suspend fun clear()
+
     @Query("SELECT * FROM states WHERE channelId = :channelId")
     suspend fun get(channelId: String): StateRow?
 

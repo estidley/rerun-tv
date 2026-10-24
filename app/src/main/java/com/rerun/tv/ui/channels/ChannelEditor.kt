@@ -206,7 +206,7 @@ private fun Field(label: String, value: String, modifier: Modifier, numeric: Boo
             modifier = Modifier
                 .onFocusChanged { focused = it.isFocused }
                 .background(if (focused) Retro.GuideBlueLight else Color(0x66071341))
-                .border(2.dp, if (focused) Retro.Yellow else Color(0x334A6BC8))
+                .border(2.dp, if (focused) Retro.Yellow else Retro.Border.copy(alpha = 0.4f))
                 .padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }

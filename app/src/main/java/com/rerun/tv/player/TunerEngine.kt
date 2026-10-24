@@ -23,6 +23,8 @@ import com.rerun.core.model.MediaKind
 import com.rerun.core.plex.PlaybackPlan
 import com.rerun.core.plex.PlexParse
 import com.rerun.core.plex.ServerUri
+import com.rerun.core.plex.selectSubtitle
+import com.rerun.core.plex.subtitleLanguageCode
 import com.rerun.core.plex.TokenRedaction
 import com.rerun.core.plex.planPlayback
 import com.rerun.core.schedule.EntryKind
@@ -88,6 +90,8 @@ class TunerEngine(
     private var retry: Runnable? = null
     private var tuneSeq = 0L
     private var subtitlesOn = false
+    private var subtitleLanguage = "auto"
+    private var subtitleAvailable = true
     private var transcoded = false
     private var restartReturn: String? = null
     private var restartFresh = false
@@ -160,6 +164,7 @@ class TunerEngine(
                     settings.isOn(Settings.SUBTITLES)
                 }
                 subtitlesOn = subs
+                subtitleLanguage = settings.subtitleLanguageValue()
                 val now = System.currentTimeMillis()
                 val entries = withContext(Dispatchers.IO) { repo.entries(channelId, now - 1, now + 6 * 3_600_000L) }
                 val loc = locate(entries, now)
@@ -199,8 +204,9 @@ class TunerEngine(
                     val path = "/library/metadata/${item.key}"
                     require(ServerUri.isLibraryPath(path)) { "Invalid Plex metadata path" }
                     val streams = PlexParse.subtitles(api.get(base, path, token))
-                    streams.firstOrNull { it.selected } ?: streams.firstOrNull()
+                    selectSubtitle(streams, subtitleLanguage)
                 } else null
+                subtitleAvailable = subtitle != null
                 // Whatever time loading took, add it back so we land exactly on schedule.
                 // Only the first tune starts at zero; retries and subtitle changes keep position.
                 val fromStart = channelId == Lineup.RESTART_ID && restartFresh
@@ -208,7 +214,7 @@ class TunerEngine(
                 val lag = System.currentTimeMillis() - now
                 val offset = if (fromStart) 0L else loc.offsetMs + lag
                 when (val plan = planPlayback(
-                    item, base, settings.clientId, session, offset, subtitlesOn,
+                    item, base, settings.clientId, session, offset, subtitlesOn && subtitleAvailable,
                     subtitleStreamId = subtitle?.id,
                     forceTranscode = subtitle != null && subtitle.mimeType == null,
                 )) {
@@ -269,11 +275,21 @@ class TunerEngine(
     private fun applySubtitles(tracks: Tracks) {
         val builder = player.trackSelectionParameters.buildUpon()
         builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
-        if (subtitlesOn && !transcoded) {
+        builder.setPreferredTextLanguage(if (subtitleLanguage == "auto") null else subtitleLanguage)
+        if (subtitlesOn && subtitleAvailable && !transcoded) {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
-            val index = group?.let { g -> (0 until g.length).firstOrNull { g.isTrackSupported(it) } }
-            if (group != null && index != null) builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+            val selection = tracks.groups.firstNotNullOfOrNull { group ->
+                if (group.type != C.TRACK_TYPE_TEXT) return@firstNotNullOfOrNull null
+                (0 until group.length).firstOrNull { index ->
+                    group.isTrackSupported(index) && (subtitleLanguage == "auto" ||
+                        group.getTrackFormat(index).language?.let { subtitleLanguageCode(it) } == subtitleLanguageCode(subtitleLanguage))
+                }?.let { group.mediaTrackGroup to it }
+            }
+            if (selection != null) {
+                builder.setOverrideForType(TrackSelectionOverride(selection.first, selection.second))
+            } else if (subtitleLanguage != "auto") {
+                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            }
         } else {
             // Off, or already burned into a transcode.
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
@@ -303,6 +319,12 @@ class TunerEngine(
         tuneJob?.cancel()
         clearTimers()
         player.stop()
+    }
+
+    fun clear() {
+        stop()
+        restartReturn = null
+        _state.value = TunerState(phase = Phase.OFF_AIR)
     }
 
     fun release() {

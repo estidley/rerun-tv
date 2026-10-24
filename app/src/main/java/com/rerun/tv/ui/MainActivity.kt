@@ -32,6 +32,10 @@ import com.rerun.tv.ui.guide.GuideScreen
 import com.rerun.tv.ui.onboarding.OnboardingScreen
 import com.rerun.tv.ui.player.PlayerScreen
 import com.rerun.tv.ui.settings.SettingsScreen
+import com.rerun.tv.ui.settings.LibrarySettingsScreen
+import com.rerun.tv.ui.settings.SubtitleLanguageScreen
+import com.rerun.tv.ui.theme.ColorTheme
+import com.rerun.tv.ui.theme.ProvideColorTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var controller: TvController
@@ -120,17 +124,22 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
     val crt by controller.crtLevel.collectAsState()
     val exiting by controller.exiting.collectAsState()
     val fx by controller.effects.collectAsState()
+    val colorTheme by controller.colorTheme.collectAsState()
     val playerFocus = remember { FocusRequester() }
     BackHandler(enabled = screen == Screen.Player) { controller.backFromPlayer() }
     LaunchedEffect(screen) {
         if (screen == Screen.Player) playerFocus.requestFocus()
     }
     val level = CrtLevel.from(crt)
-    // Lay everything out on a fixed 1920×1080 canvas, whatever the TV's density.
-    val view = androidx.compose.ui.platform.LocalView.current
-    val canvas = androidx.compose.ui.unit.Density(density = view.resources.displayMetrics.widthPixels / 1920f, fontScale = 1f)
+    val metrics = androidx.compose.ui.platform.LocalView.current.resources.displayMetrics
+    // Menus keep their TV-scale canvas; the guide can use extra pixels on larger displays.
+    val scale = minOf(metrics.widthPixels / 1920f, metrics.heightPixels / 1080f)
+    val canvas = androidx.compose.ui.unit.Density(
+        density = if (screen == Screen.Guide) scale.coerceAtMost(1f) else scale,
+        fontScale = 1f,
+    )
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides canvas) {
-    ProvideCrtLevel(level) { Box(
+    ProvideColorTheme(ColorTheme.from(colorTheme)) { ProvideCrtLevel(level) { Box(
         Modifier.fillMaxSize().background(Color.Black)
             .onPreviewKeyEvent { onPlayerKeyEvent(it.nativeKeyEvent) }
             .focusRequester(playerFocus).focusable(enabled = screen == Screen.Player),
@@ -142,9 +151,11 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
             Screen.Channels -> ChannelManager(controller)
             is Screen.Editor -> ChannelEditor(controller, s.channelId)
             Screen.Settings -> SettingsScreen(controller)
+            Screen.Libraries -> LibrarySettingsScreen(controller)
+            Screen.SubtitleLanguage -> SubtitleLanguageScreen(controller)
         }
         CrtOverlay(level)
         if (fx.power) PowerTransition(on = !exiting, onOffDone = onPoweredOff)
         else if (exiting) androidx.compose.runtime.LaunchedEffect(Unit) { onPoweredOff() }
-    } } }
+    } } } }
 }
