@@ -12,10 +12,10 @@ Turn it on and something's already playing. Flip channels and you land in the mi
   - Max originals go to The Premium.
   - Hulu originals go to The Edge.
   - Netflix, Prime Video and Apple TV+ originals are spread by genre.
-- **Theme channels:** Fright Night, The Void, The Chuckle, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes, such as The Matinee, Case File, and The Bulletin, show up only when that genre has at least 4 hours.
+- **Theme channels:** Fright Night, The Void, Laughing Stock, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes show up only when that genre has at least 4 hours: True-ish (documentaries), Canned Laughter (sitcoms), Sob Story (dramedies), Cold Read (psychic and paranormal), This Just In (news), and others such as The Matinee and Case File.
 - **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.
 - **Custom channels:** pick genres, shows, collections, decades and ratings right on the TV.
-- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. A new West feed stays empty until East has three hours of schedule.
+- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. East keeps its name. West adds `-W`. A new West feed stays empty until East has three hours of schedule.
 - **Music:** if the Plex server has music, Settings can add a station for each genre with at least 4 hours.
 - **Subtitles:** off until you turn them on in Settings.
 - **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel.

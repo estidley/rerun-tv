@@ -89,7 +89,7 @@ object Catalog {
         val themes = listOf(
             ChannelDef("horror", 301, "Fright Night", ChannelKind.THEME, Rules(genres = setOf("Horror", "Thriller"))),
             ChannelDef("scifi", 302, "The Void", ChannelKind.THEME, Rules(genres = setOf("Science Fiction", "Sci-Fi & Fantasy"))),
-            ChannelDef("comedy", 303, "The Chuckle", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
+            ChannelDef("comedy", 303, "Laughing Stock", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
             ChannelDef("action", 304, "Adrenaline", ChannelKind.THEME, Rules(genres = setOf("Action", "Adventure"))),
             ChannelDef(
                 "family", 305, "The Living Room", ChannelKind.THEME,
@@ -109,8 +109,9 @@ object Catalog {
     /** Previous on-screen names. A refresh may replace these; a name the user typed stays. */
     fun retiredNames(id: String): Set<String> = retired[id].orEmpty()
 
-    /** Drops a managed East/West suffix. "Wonderland E" → "Wonderland". */
+    /** Drops a managed West suffix, including the older " E" and " W" forms. */
     fun stripFeed(name: String): String = when {
+        name.endsWith("-W") -> name.dropLast(2)
         name.endsWith(" E") || name.endsWith(" W") -> name.dropLast(2)
         else -> name
     }
@@ -161,7 +162,9 @@ object Catalog {
         "hbo" to setOf("HBO"),
         "horror" to setOf("Horror"),
         "scifi" to setOf("Sci-Fi"),
-        "comedy" to setOf("Comedy"),
+        "comedy" to setOf("Comedy", "The Chuckle"),
+        "opt:docs" to setOf("The Reel"),
+        "opt:news" to setOf("The Bulletin"),
         "action" to setOf("Action"),
         "family" to setOf("Family"),
         "80s" to setOf("80s Movies"),

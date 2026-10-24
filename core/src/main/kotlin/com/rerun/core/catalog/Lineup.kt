@@ -89,7 +89,7 @@ object Lineup {
             val pool = poolMs(base, library)
             val dormant = Resolver.isDormant(Resolver.pool(base, library))
             val showFeed = feedsOn(eastWest, base, dormant)
-            val east = base.copy(name = if (showFeed) "$baseName E" else baseName)
+            val east = base.copy(name = baseName)
             upserts += PlannedChannel(east, prev?.builtIn ?: true, dormant, pool)
             seen += template.id
             if (showFeed) upserts += westOf(east, baseName, pool)
@@ -102,7 +102,7 @@ object Lineup {
             val dormant = Resolver.isDormant(Resolver.pool(prev.def, library))
             val baseName = Catalog.stripFeed(prev.def.name)
             val showFeed = feedsOn(eastWest, prev.def, dormant)
-            val east = prev.def.copy(name = if (showFeed) "$baseName E" else baseName)
+            val east = prev.def.copy(name = baseName)
             upserts += PlannedChannel(east, prev.builtIn, dormant, pool)
             if (showFeed) upserts += westOf(east, baseName, pool)
         }
@@ -118,7 +118,7 @@ object Lineup {
         val west = east.copy(
             id = westId(east.id),
             number = east.number + WEST_NUMBER_OFFSET,
-            name = "$baseName W",
+            name = "$baseName-W",
             hidden = false,
         )
         return PlannedChannel(west, builtIn = true, dormant = false, poolMs = poolMs)
@@ -231,15 +231,18 @@ object Lineup {
         opt("opt:crime", 321, "Case File", Rules(genres = setOf("Crime"))),
         opt("opt:mystery", 322, "Whodunit", Rules(genres = setOf("Mystery"))),
         opt("opt:romance", 323, "Heartline", Rules(genres = setOf("Romance"))),
-        opt("opt:docs", 324, "The Reel", Rules(genres = setOf("Documentary"))),
+        opt("opt:docs", 324, "True-ish", Rules(genres = setOf("Documentary", "Docuseries"))),
         opt("opt:western", 325, "High Noon", Rules(genres = setOf("Western"))),
         opt("opt:war", 326, "The Front", Rules(genres = setOf("War", "War & Politics"))),
         opt("opt:musical", 327, "The Overture", Rules(genres = setOf("Musical", "Music"), kinds = video)),
         opt("opt:anime", 328, "Import Toons", Rules(genres = setOf("Anime"))),
         opt("opt:reality", 329, "Unscripted", Rules(genres = setOf("Reality"))),
         opt("opt:sports", 330, "The Arena", Rules(genres = setOf("Sport", "Sports"))),
-        opt("opt:news", 331, "The Bulletin", Rules(genres = setOf("News"))),
+        opt("opt:news", 331, "This Just In", Rules(genres = setOf("News"))),
         opt("opt:kids", 332, "Playroom", Rules(genres = setOf("Children", "Kids"), ratings = kidRatings, kinds = video), kidsSafe = true),
+        opt("opt:sitcom", 333, "Canned Laughter", Rules(genres = setOf("Sitcom", "Situation Comedy"), kinds = setOf(MediaKind.EPISODE))),
+        opt("opt:dramedy", 334, "Sob Story", Rules(genres = setOf("Dramedy", "Comedy-drama", "Comedy Drama"))),
+        opt("opt:psychic", 335, "Cold Read", Rules(genres = setOf("Psychic", "Paranormal"))),
     )
 
     private val movies: List<ChannelDef> = listOf(

@@ -4,9 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -25,7 +24,7 @@ import com.rerun.tv.ui.Effects
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
-import com.rerun.tv.ui.common.TvFrame
+import com.rerun.tv.ui.common.TvStage
 import com.rerun.tv.ui.crt.CrtLevel
 import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.theme.Retro
@@ -53,8 +52,8 @@ fun SettingsScreen(controller: TvController) {
         runCatching { first.requestFocus() }
     }
 
-    TvFrame("Settings", "BACK guide") {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+    TvStage("BACK guide") {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
             BasicText("EFFECTS", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("All effects on", { controller.setAllEffects(true) })
@@ -139,7 +138,7 @@ fun SettingsScreen(controller: TvController) {
                 )
             }
             BasicText(
-                "West plays the same schedule 3 hours later. A new West feed stays empty until East has been on for 3 hours. Music adds a channel for each genre that has 4 hours. Subtitles stay off until you turn them on.",
+                "West plays the same schedule 3 hours later and adds -W to the name. A new West feed stays empty until East has been on for 3 hours. Music adds a channel for each genre that has 4 hours. Subtitles stay off until you turn them on.",
                 style = Retro.Caption,
             )
             BasicText(

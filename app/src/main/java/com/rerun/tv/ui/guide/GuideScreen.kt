@@ -52,6 +52,7 @@ import com.rerun.core.schedule.guideBlocks
 import com.rerun.tv.RerunApp
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
+import com.rerun.tv.ui.common.RerunWordmark
 import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.player.describe
 import com.rerun.tv.ui.theme.Retro
@@ -142,7 +143,7 @@ fun GuideScreen(controller: TvController) {
         Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
             // Header: brand, clock, and the two menu buttons.
             Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicText("RERUN", style = Retro.Osd.copy(color = Retro.Vcr))
+                RerunWordmark()
                 Spacer(Modifier.width(24.dp))
                 BasicText(clockTime(now), style = Retro.Title.copy(color = Retro.Yellow))
                 Spacer(Modifier.weight(1f))

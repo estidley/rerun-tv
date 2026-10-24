@@ -3,11 +3,8 @@ package com.rerun.tv.ui.onboarding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,16 +13,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.rerun.core.plex.PlexServer
 import com.rerun.tv.RerunApp
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
-import com.rerun.tv.ui.common.TvFrame
+import com.rerun.tv.ui.common.TvStage
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -81,34 +78,37 @@ fun OnboardingScreen(controller: TvController) {
         }
     }
 
-    TvFrame("Setup", "Rerun only reads your library. Nothing you watch here is reported to Plex.") {
+    TvStage("Rerun only reads your library. Nothing you watch here is reported to Plex.") {
         when (val s = step) {
             Step.Starting -> BasicText("Contacting Plex…", style = Retro.Title)
-            is Step.Code -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            is Step.Code -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 BasicText("On your phone or computer, go to", style = Retro.Title)
                 BasicText("plex.tv/link", style = Retro.Osd.copy(color = Retro.Cyan))
                 BasicText("and enter this code:", style = Retro.Title)
-                // A strong Plex code is longer than four characters. Shrink it so it stays on one line.
-                val codeSize = (720f / s.code.length.coerceAtLeast(1)).coerceIn(56f, 120f).sp
-                BasicText(s.code, style = Retro.Huge.copy(color = Retro.Yellow, fontSize = codeSize), maxLines = 1)
+                BasicText(s.code, style = Retro.Huge.copy(color = Retro.Yellow), maxLines = 1)
             }
             is Step.Servers -> {
                 val first = remember { FocusRequester() }
-                Column {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     BasicText("Which Plex server?", style = Retro.Title)
                     Spacer(Modifier.height(16.dp))
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        items(s.list) { server ->
-                            TvButton(
-                                server.name, onClick = { scope.launch { chooseServer(server) } },
-                                modifier = Modifier.width(640.dp).let { if (server == s.list.first()) it.focusRequester(first) else it },
-                            )
-                        }
+                    s.list.forEach { server ->
+                        TvButton(
+                            server.name, onClick = { scope.launch { chooseServer(server) } },
+                            modifier = Modifier.width(640.dp).let { if (server == s.list.first()) it.focusRequester(first) else it },
+                        )
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
                 LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
             }
-            is Step.Syncing -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            is Step.Syncing -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 BasicText("Tuning in your library…", style = Retro.Title)
                 BasicText(s.stage, style = Retro.Body)
                 if (s.total > 0) {
@@ -119,7 +119,7 @@ fun OnboardingScreen(controller: TvController) {
             }
             is Step.Failed -> {
                 val retry = remember { FocusRequester() }
-                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     BasicText(s.message, style = Retro.Title)
                     TvButton("Try again", onClick = { attempt++ }, modifier = Modifier.focusRequester(retry))
                 }

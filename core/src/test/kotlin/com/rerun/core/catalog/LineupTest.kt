@@ -37,7 +37,12 @@ class LineupTest {
             for (brand in banned) assertFalse(brand in name, "${def.id} uses $brand")
         }
         assertEquals("Wonderland", defs.first { it.id == "disney" }.name)
-        assertEquals("The Bulletin", defs.first { it.id == "opt:news" }.name)
+        assertEquals("Laughing Stock", defs.first { it.id == "comedy" }.name)
+        assertEquals("True-ish", defs.first { it.id == "opt:docs" }.name)
+        assertEquals("Canned Laughter", defs.first { it.id == "opt:sitcom" }.name)
+        assertEquals("Sob Story", defs.first { it.id == "opt:dramedy" }.name)
+        assertEquals("Cold Read", defs.first { it.id == "opt:psychic" }.name)
+        assertEquals("This Just In", defs.first { it.id == "opt:news" }.name)
         assertEquals(listOf("The Big Picture", "Second Feature", "Late Seating"), Lineup.movieChannels().map { it.name })
     }
 
@@ -45,8 +50,11 @@ class LineupTest {
     fun chooseNameKeepsARenameAndReplacesStock() {
         assertEquals("Wonderland", Catalog.chooseName("disney", "Disney Channel", "Wonderland"))
         assertEquals("Wonderland", Catalog.chooseName("disney", "Wonderland E", "Wonderland"))
+        assertEquals("Wonderland", Catalog.chooseName("disney", "Wonderland-W", "Wonderland"))
         assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club", "Wonderland"))
         assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club W", "Wonderland"))
+        assertEquals("Laughing Stock", Catalog.chooseName("comedy", "The Chuckle", "Laughing Stock"))
+        assertEquals("True-ish", Catalog.chooseName("opt:docs", "The Reel", "True-ish"))
         assertEquals("Fright Night", Catalog.chooseName("horror", "Horror", "Fright Night"))
     }
 
@@ -135,8 +143,8 @@ class LineupTest {
         val on = Lineup.plan(shows, listOf(stored), eastWest = true, music = false)
         val east = on.channels.first { it.def.id == "disney" }
         val west = on.channels.first { it.def.id == "disney:w" }
-        assertEquals("Wonderland E", east.def.name)
-        assertEquals("Wonderland W", west.def.name)
+        assertEquals("Wonderland", east.def.name)
+        assertEquals("Wonderland-W", west.def.name)
         assertEquals(101 + Lineup.WEST_NUMBER_OFFSET, west.def.number)
         assertEquals(east.def.rules, west.def.rules)
         assertFalse(east.dormant)
@@ -158,8 +166,8 @@ class LineupTest {
         val shows = List(8) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
         val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Castle Club"), true)
         val plan = Lineup.plan(shows, listOf(stored), eastWest = true, music = false)
-        assertEquals("Castle Club E", plan.channels.first { it.def.id == "disney" }.def.name)
-        assertEquals("Castle Club W", plan.channels.first { it.def.id == "disney:w" }.def.name)
+        assertEquals("Castle Club", plan.channels.first { it.def.id == "disney" }.def.name)
+        assertEquals("Castle Club-W", plan.channels.first { it.def.id == "disney:w" }.def.name)
     }
 
     @Test
@@ -210,9 +218,9 @@ class LineupTest {
         )
         val plan = Lineup.plan(library, listOf(custom, hidden), eastWest = true, music = false)
         val west = plan.channels.first { it.def.id == "custom:abcd:w" }
-        assertEquals("Mine W", west.def.name)
+        assertEquals("Mine-W", west.def.name)
         assertEquals(920, west.def.number)
-        assertEquals("Mine E", plan.channels.first { it.def.id == "custom:abcd" }.def.name)
+        assertEquals("Mine", plan.channels.first { it.def.id == "custom:abcd" }.def.name)
         assertTrue(plan.channels.none { it.def.id == "custom:hide:w" })
         assertEquals("Secret", plan.channels.first { it.def.id == "custom:hide" }.def.name)
     }

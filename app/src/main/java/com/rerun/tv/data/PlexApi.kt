@@ -34,7 +34,8 @@ class PlexApi(private val clientId: () -> String, private val http: OkHttpClient
     }
 
     suspend fun createPin(): Pin = PlexParse.pin(
-        call(Request.Builder().url("https://plex.tv/api/v2/pins?strong=true").plexHeaders()
+        // plex.tv/link only accepts a 4-character code. strong=true is longer than that page allows.
+        call(Request.Builder().url("https://plex.tv/api/v2/pins?strong=false").plexHeaders()
             .post(ByteArray(0).toRequestBody(null)).build()),
     )
 
