@@ -20,9 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.viewinterop.AndroidView
-import coil3.compose.AsyncImage
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -65,16 +63,8 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
         )
 
         if (state.phase == Phase.PLAYING && state.item?.kind == MediaKind.TRACK) {
-            val art = controller.posterUrl(state.item)
-            Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-                if (art != null) {
-                    AsyncImage(
-                        model = art,
-                        contentDescription = state.item?.title,
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(0.72f),
-                    )
-                }
+            state.item?.let { item ->
+                MusicScreen(item, state.channel?.name, controller.posterUrl(item), controller.engine.player().currentPosition)
             }
         }
 

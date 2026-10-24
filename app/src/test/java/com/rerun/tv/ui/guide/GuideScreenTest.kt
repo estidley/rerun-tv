@@ -9,22 +9,31 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.Rules
+import com.rerun.core.schedule.ScheduleEntry
+import com.rerun.core.schedule.EntryKind
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
 import com.rerun.tv.player.TunerEngine
 import com.rerun.tv.ui.TvController
+import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.theme.ColorTheme
 import com.rerun.tv.ui.theme.ProvideColorTheme
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -48,6 +57,7 @@ class GuideScreenTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var controller: TvController
     private lateinit var schedule: ScheduleRepo
+    private val channels = MutableStateFlow<List<ChannelRow>>(emptyList())
 
     @Before
     fun setUp() = runBlocking {
@@ -61,13 +71,13 @@ class GuideScreenTest {
         schedule = mock(ScheduleRepo::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(schedule)
-        val channels = (0 until 50).map {
+        channels.value = (0 until 50).map {
             ChannelRow.of(
                 ChannelDef("test:$it", it + 1, "A long channel name $it", ChannelKind.CUSTOM, Rules()),
                 builtIn = false, dormant = false,
             )
         }
-        `when`(schedule.activeChannels()).thenReturn(flowOf(channels))
+        `when`(schedule.activeChannels()).thenReturn(channels)
         `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(emptyMap())
         controller = TvController(app, mock(TunerEngine::class.java))
     }
@@ -87,6 +97,57 @@ class GuideScreenTest {
     @Test
     @Config(qualifiers = "w3840dp-h2160dp-mdpi")
     fun guideUsesAdditionalRowsAt4k() = assertGuideRendering()
+
+    @Test
+    fun emptyGuideCanOpenSettingsAndChannelsWithTheRemote() {
+        compose.runOnIdle { channels.value = emptyList() }
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.onRoot().performKeyInput {
+            pressKey(Key.DirectionUp)
+            pressKey(Key.DirectionRight)
+            pressKey(Key.Enter)
+        }
+        compose.runOnIdle { assertEquals(Screen.Settings, controller.screen.value) }
+        compose.onRoot().performKeyInput {
+            pressKey(Key.DirectionDown)
+            pressKey(Key.DirectionLeft)
+            pressKey(Key.Enter)
+        }
+        compose.runOnIdle { assertEquals(Screen.Channels, controller.screen.value) }
+    }
+
+    @Test
+    fun removingAllChannelsLeavesSettingsReachable() {
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.runOnIdle { channels.value = emptyList() }
+        compose.onRoot().performKeyInput {
+            pressKey(Key.DirectionUp)
+            pressKey(Key.DirectionRight)
+            pressKey(Key.Enter)
+        }
+        compose.runOnIdle { assertEquals(Screen.Settings, controller.screen.value) }
+    }
+
+    @Test
+    fun musicGuideDisplaysStationHoursInsteadOfIndividualSongs() = runBlocking<Unit> {
+        val start = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L
+        val entries = (0 until 80).map {
+            ScheduleEntry("music:blues", start + it * 180_000L, start + (it + 1) * 180_000L, EntryKind.PROGRAM, "song:$it")
+        }
+        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(mapOf("music:blues" to entries))
+        compose.runOnIdle {
+            channels.value = listOf(ChannelRow.of(
+                ChannelDef("music:blues", 2000, "Blues", ChannelKind.MUSIC, Rules()),
+                builtIn = true, dormant = false,
+            ))
+        }
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Blues Music").fetchSemanticsNodes().size >= 3
+        }
+        verify(schedule, never()).item(anyString())
+    }
 
     private fun assertGuideRendering() {
         val theme = mutableStateOf(ColorTheme.STANDARD_BLUE)

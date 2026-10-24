@@ -21,10 +21,16 @@ class LibrarySync(
     private val mutex = Mutex()
 
     suspend fun libraries(): List<Section> {
+        val adLibrary = settings.adLibrary()
+        return serverLibraries().filter { it.type in setOf("movie", "show", "artist") && it.key != adLibrary }
+    }
+
+    suspend fun adLibraries(): List<Section> = serverLibraries().filter { it.type == "movie" }
+
+    private suspend fun serverLibraries(): List<Section> {
         val base = requireNotNull(settings.serverBase()) { "No Plex server chosen" }
         val token = requireNotNull(settings.serverToken ?: settings.accountToken) { "Not signed in" }
         return PlexParse.sections(api.get(base, "/library/sections", token))
-            .filter { it.type in setOf("movie", "show", "artist") }
     }
 
     fun sync(selectedLibraries: Set<String>? = null): Flow<SyncProgress> = flow {
@@ -58,8 +64,18 @@ class LibrarySync(
             }
             if (settings.isOn(Settings.MUSIC)) {
                 for (s in sections.filter { it.type == "artist" }) {
+                    val artists = HashMap<String, com.rerun.core.plex.MusicMetadata>()
+                    val albums = HashMap<String, com.rerun.core.plex.MusicMetadata>()
+                    pages(base, "/library/sections/${s.key}/all?type=8", token) { json, done, total ->
+                        PlexParse.musicMetadata(json).forEach { artists[it.key] = it }
+                        emit(SyncProgress("Artists: ${s.title}", done, total))
+                    }
+                    pages(base, "/library/sections/${s.key}/all?type=9", token) { json, done, total ->
+                        PlexParse.musicMetadata(json).forEach { albums[it.key] = it }
+                        emit(SyncProgress("Albums: ${s.title}", done, total))
+                    }
                     pages(base, "/library/sections/${s.key}/all?type=10", token) { json, done, total ->
-                        items += PlexParse.tracks(json)
+                        items += PlexParse.tracks(json, artists, albums)
                         emit(SyncProgress("Music: ${s.title}", done, total))
                     }
                 }

@@ -45,6 +45,7 @@ sealed interface Screen {
     data class Editor(val channelId: String?) : Screen
     data object Settings : Screen
     data object Libraries : Screen
+    data object AdLibrary : Screen
     data object SubtitleLanguage : Screen
 }
 
@@ -231,7 +232,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         val base = serverBase ?: return null
         if (!ServerUri.isAcceptable(base) || token == null) return null
         val enc = { s: String -> URLEncoder.encode(s, "UTF-8") }
-        return "${base.trimEnd('/')}/photo/:/transcode?width=480&height=720&minSize=1&upscale=1&url=${enc(thumb)}"
+        val height = if (item.kind == MediaKind.TRACK) 480 else 720
+        return "${base.trimEnd('/')}/photo/:/transcode?width=480&height=$height&minSize=1&upscale=1&url=${enc(thumb)}"
     }
 
     fun currentChannelId(): String? = currentId

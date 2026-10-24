@@ -18,6 +18,7 @@ data class Pin(val id: Long, val code: String, val authToken: String?)
 data class PlexConnection(val uri: String, val local: Boolean, val relay: Boolean)
 data class PlexServer(val name: String, val clientId: String, val accessToken: String?, val connections: List<PlexConnection>)
 data class Section(val key: String, val type: String, val title: String)
+data class MusicMetadata(val key: String, val title: String?, val year: Int?, val genres: Set<String>, val thumb: String?)
 
 data class SubtitleStream(
     val id: Int,
@@ -125,23 +126,32 @@ object PlexParse {
         )
     }
 
-    /** Tracks from an artist library section (`type=10`). Untagged tracks are skipped. */
-    fun tracks(text: String): List<MediaItem> = container(text).arr("Metadata").mapNotNull { t ->
-        val genres = t.tags("Genre")
-        if (genres.isEmpty()) return@mapNotNull null
+    fun musicMetadata(text: String): List<MusicMetadata> = container(text).arr("Metadata").map { t ->
+        MusicMetadata(t.str("ratingKey").orEmpty(), t.str("title"), t.int("year"), t.tags("Genre"), t.str("thumb"))
+    }
+
+    /** Audio tracks (`type=10`), inheriting the genre and album details Plex stores on their parents. */
+    fun tracks(
+        text: String,
+        artists: Map<String, MusicMetadata> = emptyMap(),
+        albums: Map<String, MusicMetadata> = emptyMap(),
+    ): List<MediaItem> = container(text).arr("Metadata").map { t ->
+        val artist = artists[t.str("grandparentRatingKey")]
+        val album = albums[t.str("parentRatingKey")]
+        val genres = t.tags("Genre").ifEmpty { album?.genres.orEmpty() }.ifEmpty { artist?.genres.orEmpty() }
         val media = t.arr("Media").firstOrNull()
         MediaItem(
             key = t.str("ratingKey").orEmpty(),
             kind = MediaKind.TRACK,
             title = t.str("title").orEmpty(),
-            year = t.int("year"),
+            year = t.int("year") ?: album?.year,
             durationMs = t.long("duration") ?: media?.long("duration") ?: 0,
-            genres = genres,
+            genres = genres.ifEmpty { setOf("Unclassified") },
             network = null,
-            studio = t.str("grandparentTitle"),
+            studio = t.str("originalTitle") ?: t.str("grandparentTitle") ?: artist?.title,
             contentRating = null,
             showKey = t.str("parentRatingKey"),
-            showTitle = t.str("parentTitle"),
+            showTitle = t.str("parentTitle") ?: album?.title,
             season = t.int("parentIndex"),
             episode = t.int("index"),
             tmdbId = null,
@@ -151,7 +161,7 @@ object PlexParse {
             container = media?.str("container"),
             videoCodec = null,
             audioCodec = media?.str("audioCodec"),
-            thumb = t.str("parentThumb") ?: t.str("thumb") ?: t.str("grandparentThumb"),
+            thumb = t.str("parentThumb") ?: album?.thumb ?: t.str("thumb") ?: t.str("grandparentThumb") ?: artist?.thumb,
         )
     }
 }

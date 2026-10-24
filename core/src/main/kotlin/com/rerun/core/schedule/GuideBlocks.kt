@@ -6,6 +6,7 @@ data class GuideBlock(
     val endMs: Long,
     val itemKey: String?,
     val offAir: Boolean = false,
+    val title: String? = null,
 )
 
 /** Turns a channel's entries into guide cells, clipped to [fromMs, toMs). */
@@ -32,4 +33,32 @@ fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<Gu
     }
     if (cursor < toMs) out += GuideBlock(cursor, toMs, null, offAir = true)
     return out
+}
+
+/** Music displays hour-long station blocks, not a cell for each shuffled song. Gaps stay Off Air. */
+fun musicGuideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long, title: String): List<GuideBlock> {
+    val spans = ArrayList<GuideBlock>()
+    for (block in guideBlocks(entries, fromMs, toMs)) {
+        val previous = spans.lastOrNull()
+        if (!block.offAir && previous != null && !previous.offAir && previous.endMs == block.startMs) {
+            spans[spans.lastIndex] = previous.copy(endMs = block.endMs)
+        } else {
+            spans += block.copy(itemKey = null, title = if (block.offAir) null else title)
+        }
+    }
+    val hourMs = 2 * GRID_MS
+    return buildList {
+        for (span in spans) {
+            if (span.offAir) {
+                add(span)
+            } else {
+                var start = span.startMs
+                while (start < span.endMs) {
+                    val end = minOf(span.endMs, (Math.floorDiv(start, hourMs) + 1) * hourMs)
+                    add(span.copy(startMs = start, endMs = end))
+                    start = end
+                }
+            }
+        }
+    }
 }

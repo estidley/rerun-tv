@@ -152,6 +152,7 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
             is Screen.Editor -> ChannelEditor(controller, s.channelId)
             Screen.Settings -> SettingsScreen(controller)
             Screen.Libraries -> LibrarySettingsScreen(controller)
+            Screen.AdLibrary -> com.rerun.tv.ui.settings.AdLibraryScreen(controller)
             Screen.SubtitleLanguage -> SubtitleLanguageScreen(controller)
         }
         CrtOverlay(level)

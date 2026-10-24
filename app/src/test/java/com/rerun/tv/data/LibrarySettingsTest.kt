@@ -87,4 +87,23 @@ class LibrarySettingsTest {
         assertEquals("es", reopened.subtitleLanguage().first())
         assertEquals("es", reopened.subtitleLanguageValue())
     }
+
+    @Test
+    fun adLibraryPersistsCanBeDisabledAndClearsOnServerChangeAndSignOut() = runBlocking {
+        settings.setServerId("a")
+        assertNull(settings.adLibrary())
+        settings.setAdLibrary("ads")
+        val reopened = Settings(RuntimeEnvironment.getApplication(), db.settings())
+        assertEquals("ads", reopened.adLibrary())
+        settings.setServerId("a")
+        assertEquals("ads", settings.adLibrary())
+        settings.setAdLibrary(null)
+        assertNull(reopened.adLibrary())
+        settings.setAdLibrary("ads")
+        settings.setServerId("b")
+        assertNull(settings.adLibrary())
+        settings.setAdLibrary("other")
+        settings.signOut()
+        assertNull(settings.adLibrary())
+    }
 }

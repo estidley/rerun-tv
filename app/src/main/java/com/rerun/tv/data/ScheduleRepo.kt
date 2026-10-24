@@ -56,7 +56,14 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
                 }
                 db.settings().put(SettingRow(Settings.SELECTED_LIBRARIES, encoded))
             }
-            if (items != null) db.items().replaceAll(items.map(ItemRow::of))
+            if (items != null) {
+                db.items().replaceAll(items.map(ItemRow::of))
+                for (id in db.entries().channelsWithMissingItems()) {
+                    db.entries().deleteChannel(id)
+                    db.states().delete(id)
+                    if (id == Lineup.RESTART_ID) db.channels().delete(id)
+                }
+            }
             val contents = items ?: db.items().all().map { it.toItem() }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
             val planned = Lineup.plan(contents, existing, eastWest, music)

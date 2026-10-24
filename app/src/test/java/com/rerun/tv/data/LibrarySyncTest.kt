@@ -50,6 +50,8 @@ class LibrarySyncTest {
         page("/library/sections/2/all?type=2&includeGuids=1", "show")
         page("/library/sections/2/all?type=4", "episode")
         page("/library/sections/3/all?type=10", "track")
+        page("/library/sections/3/all?type=8", "artist")
+        page("/library/sections/3/all?type=9", "album")
         sync = LibrarySync(api, settings, ScheduleRepo(db, Scheduler(ZoneId.of("UTC"))))
     }
 
@@ -59,6 +61,45 @@ class LibrarySyncTest {
     @Test
     fun pickerListsOnlySupportedLibraries() = runBlocking {
         assertEquals(listOf("1", "2", "3", "5"), sync.libraries().map { it.key })
+    }
+
+    @Test
+    fun adPickerListsVideoLibrariesAndChosenAdsStayOutOfRegularImports() = runBlocking<Unit> {
+        `when`(settings.adLibrary()).thenReturn("5")
+        assertEquals(listOf("1", "5"), sync.adLibraries().map { it.key })
+        assertEquals(listOf("1", "2", "3"), sync.libraries().map { it.key })
+        sync.sync().collect()
+        assertEquals(setOf("movie", "episode"), db.items().all().map { it.key }.toSet())
+        verify(api, never()).get(base, "/library/sections/5/all?type=1&includeGuids=1", token, 0, 200)
+    }
+
+    @Test
+    fun excludingAnAdLibraryRemovesStaleSchedulesButPreservesUnaffectedChannels() = runBlocking {
+        sync.sync().collect()
+        val start = System.currentTimeMillis()
+        val channels = listOf("ads-east", "ads-east:w", "regular")
+        for ((index, id) in channels.withIndex()) {
+            db.channels().upsert(ChannelRow.of(
+                com.rerun.core.model.ChannelDef(
+                    id, 3000 + index, id, com.rerun.core.model.ChannelKind.CUSTOM, com.rerun.core.model.Rules(),
+                ), builtIn = false, dormant = false,
+            ))
+            db.states().put(StateRow(id, "{}"))
+            db.entries().insertAll(listOf(EntryRow.of(
+                com.rerun.core.schedule.ScheduleEntry(
+                    id, start, start + 60_000, com.rerun.core.schedule.EntryKind.PROGRAM,
+                    if (id == "regular") "movie" else "private",
+                ),
+            )))
+        }
+        `when`(settings.adLibrary()).thenReturn("5")
+        sync.sync().collect()
+        for (id in channels.take(2)) {
+            assertTrue(db.entries().range(id, start, start + 60_000).isEmpty())
+            assertNull(db.states().get(id))
+        }
+        assertEquals("movie", db.entries().range("regular", start, start + 60_000).single().itemKey)
+        assertNotNull(db.states().get("regular"))
     }
 
     @Test
@@ -88,6 +129,32 @@ class LibrarySyncTest {
         `when`(settings.selectedLibraries()).thenReturn(setOf("3"))
         sync.sync().collect()
         assertEquals(listOf("track"), db.items().all().map { it.key })
+    }
+
+    @Test
+    fun musicUsesAudioLibrariesAndInheritsGenresFromArtists() = runBlocking<Unit> {
+        `when`(settings.isOn(Settings.MUSIC)).thenReturn(true)
+        `when`(settings.selectedLibraries()).thenReturn(setOf("3"))
+        `when`(api.get(base, "/library/sections/3/all?type=8", token, 0, 200)).thenReturn(
+            """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"a","title":"Artist","Genre":[{"tag":"Soul"}]}]}}""",
+        )
+        `when`(api.get(base, "/library/sections/3/all?type=9", token, 0, 200)).thenReturn(
+            """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"b","title":"Album","year":1975,"thumb":"/library/metadata/b/thumb"}]}}""",
+        )
+        `when`(api.get(base, "/library/sections/3/all?type=10", token, 0, 200)).thenReturn(
+            """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"t","title":"Song","duration":14400000,
+              "grandparentRatingKey":"a","parentRatingKey":"b","Media":[{"container":"mp3","Part":[{"key":"/library/parts/t/file.mp3"}]}]}]}}""",
+        )
+        sync.sync().collect()
+        val track = db.items().all().single().toItem()
+        assertEquals(com.rerun.core.model.MediaKind.TRACK, track.kind)
+        assertEquals(setOf("Soul"), track.genres)
+        assertEquals("Artist", track.studio)
+        assertEquals("Album", track.showTitle)
+        assertEquals(1975, track.year)
+        assertTrue(db.channels().active().any { it.def.kind == com.rerun.core.model.ChannelKind.MUSIC })
+        verify(api, never()).get(base, "/library/sections/3/all?type=1", token, 0, 200)
+        verify(api, never()).get(base, "/library/sections/1/all?type=1&includeGuids=1", token, 0, 200)
     }
 
     @Test

@@ -55,7 +55,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     var pendingMusic by remember { mutableStateOf<Boolean?>(null) }
     val shownEastWest = pendingEastWest ?: eastWest
     val shownMusic = pendingMusic ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 1, 3, 4).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -121,7 +121,23 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     TvButton(choice.label, { controller.setGuideDensity(choice) }, modifier = buttonFocus(4, i), selected = GuideDensity.from(density) == choice)
                 }
             }
-            TvButton("Subtitle language: ${languageName(subtitleLanguage)}", { controller.go(Screen.SubtitleLanguage) }, modifier = buttonFocus(5, 0))
+            BasicText("SUBTITLES", style = Retro.GuideNumber)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton(
+                    "Subtitles",
+                    {
+                        scope.launch {
+                            val next = !subtitlesOn
+                            app.settings.setFlag(Settings.SUBTITLES, next)
+                            controller.engine.setSubtitles(next)
+                        }
+                    },
+                    modifier = buttonFocus(5, 0),
+                    selected = subtitlesOn,
+                    sub = if (subtitlesOn) "on" else "off",
+                )
+                TvButton("Subtitle language: ${languageName(subtitleLanguage)}", { controller.go(Screen.SubtitleLanguage) }, modifier = buttonFocus(5, 1))
+            }
             BasicText("LINEUP", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton(
@@ -162,6 +178,12 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             syncStatus = "Updating music..."
                             scope.launch {
                                 try {
+                                    if (next) {
+                                        val included = app.settings.selectedLibraries()
+                                        require(app.sync.libraries().any { it.type == "artist" && (included == null || it.key in included) }) {
+                                            "Include a Plex music library in Manage libraries first."
+                                        }
+                                    }
                                     app.settings.setFlag(Settings.MUSIC, next)
                                     if (next) {
                                         app.sync.sync().collect { p ->
@@ -185,24 +207,11 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     },
                     modifier = buttonFocus(6, 1),
                     selected = shownMusic,
-                    sub = if (shownMusic) "on" else "off",
-                )
-                TvButton(
-                    "Subtitles",
-                    {
-                        scope.launch {
-                            val next = !subtitlesOn
-                            app.settings.setFlag(Settings.SUBTITLES, next)
-                            controller.engine.setSubtitles(next)
-                        }
-                    },
-                    modifier = buttonFocus(6, 2),
-                    selected = subtitlesOn,
-                    sub = if (subtitlesOn) "on" else "off",
+                    sub = if (shownMusic) "on - Plex audio libraries" else "off - Plex audio libraries",
                 )
             }
             BasicText(
-                "West plays the same schedule 3 hours later and adds -W to the name. A new West feed is off air until East has been on for 3 hours. Music adds a channel for each genre that has 4 hours. Subtitles stay off until you turn them on.",
+                "West plays the same schedule 3 hours later and adds -W to the name. A new West feed is off air until East has been on for 3 hours. Music uses audio tracks from your included Plex music libraries, with a channel for each genre that has 4 hours. Include music libraries in Manage libraries. Subtitles stay off until you turn them on.",
                 style = Retro.Caption,
             )
             BasicText(
@@ -238,6 +247,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                 }, modifier = buttonFocus(7, 3))
             }
             syncStatus?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
+            TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(8, 0))
 
             BasicText("ABOUT", style = Retro.GuideNumber)
             BasicText("Rerun 0.1 · plays your own Plex library like 90s cable. Nothing you watch is reported to Plex.", style = Retro.Caption)

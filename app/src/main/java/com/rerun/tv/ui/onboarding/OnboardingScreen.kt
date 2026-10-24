@@ -33,15 +33,15 @@ private sealed interface Step {
     data object Starting : Step
     data class Code(val code: String) : Step
     data class Servers(val list: List<PlexServer>) : Step
+    data class Ads(val list: List<Section>, val selected: String?) : Step
     data class Libraries(val list: List<Section>, val selected: Set<String>) : Step
     data class Syncing(val stage: String, val done: Int, val total: Int) : Step
     data class Failed(val message: String) : Step
 }
 
-/** Link code → pick server → choose libraries → first sync → start watching. */
+/** Link code → pick server → choose ad source → choose libraries → first sync → start watching. */
 @Composable
-fun OnboardingScreen(controller: TvController) {
-    val app = RerunApp.instance
+fun OnboardingScreen(controller: TvController, app: RerunApp = RerunApp.instance) {
     val scope = rememberCoroutineScope()
     var step by remember { mutableStateOf<Step>(Step.Starting) }
     var attempt by remember { mutableStateOf(0) }
@@ -54,10 +54,9 @@ fun OnboardingScreen(controller: TvController) {
         app.settings.setServerName(server.name)
         app.settings.setServerId(server.clientId)
         app.settings.serverToken = server.accessToken ?: app.settings.accountToken
-        val libraries = app.sync.libraries()
-        require(libraries.isNotEmpty()) { "No movie, TV, or music libraries found on ${server.name}." }
-        val saved = app.settings.selectedLibraries()
-        step = Step.Libraries(libraries, libraries.map { it.key }.filter { saved == null || it in saved }.toSet())
+        val adLibraries = app.sync.adLibraries()
+        val saved = app.settings.adLibrary()
+        step = Step.Ads(adLibraries, saved?.takeIf { key -> adLibraries.any { it.key == key } })
     }
 
     LaunchedEffect(attempt) {
@@ -119,6 +118,46 @@ fun OnboardingScreen(controller: TvController) {
                     }
                 }
                 LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+            }
+            is Step.Ads -> {
+                val first = remember { FocusRequester() }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BasicText("Choose an ad library, or disable ads", style = Retro.Title)
+                    BasicText("Use a Plex Other Videos or Movies library of commercial clips.", style = Retro.Caption)
+                    BasicText("This saves the source only. Playback of ads during gaps is not available yet.", style = Retro.Caption)
+                    TvButton(
+                        "Disable ads", { step = s.copy(selected = null) },
+                        Modifier.width(640.dp).focusRequester(first), selected = s.selected == null,
+                    )
+                    if (s.list.isEmpty()) BasicText("No video libraries found. Continue with ads disabled.", style = Retro.Caption)
+                    s.list.forEach { library ->
+                        TvButton(
+                            library.title, { step = s.copy(selected = library.key) },
+                            Modifier.width(640.dp), selected = s.selected == library.key,
+                        )
+                    }
+                    TvButton("Continue", {
+                        step = Step.Syncing("Saving ad library choice", 0, 0)
+                        scope.launch {
+                            try {
+                                app.settings.setAdLibrary(s.selected)
+                                val libraries = app.sync.libraries()
+                                require(libraries.isNotEmpty()) {
+                                    "No regular libraries available. Disable ads or choose a different ad library."
+                                }
+                                val saved = app.settings.selectedLibraries()
+                                step = Step.Libraries(libraries, libraries.map { it.key }.filter { saved == null || it in saved }.toSet())
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                step = Step.Failed(e.message ?: "Couldn't save ad library choice")
+                            }
+                        }
+                    })
+                }
+                LaunchedEffect(Unit) { first.requestFocus() }
             }
             is Step.Libraries -> {
                 val first = remember { FocusRequester() }

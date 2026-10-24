@@ -47,11 +47,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
+import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
 import com.rerun.core.schedule.GRID_MS
 import com.rerun.core.schedule.GuideBlock
 import com.rerun.core.schedule.gridFloor
 import com.rerun.core.schedule.guideBlocks
+import com.rerun.core.schedule.musicGuideBlocks
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.ui.Screen
@@ -84,7 +86,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
 
     LaunchedEffect(rows) {
         val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
-        focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, maxOf(0, rows.lastIndex))
+        focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, rows.lastIndex.coerceAtLeast(-1))
     }
     LaunchedEffect(windowStart, rows) {
         now = System.currentTimeMillis()
@@ -92,7 +94,13 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             schedule.ensure(now)
             val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
             val mapped = rows.associate { row ->
-                row.id to guideBlocks(all[row.id].orEmpty(), windowStart, windowStart + WINDOW_MS)
+                val entries = all[row.id].orEmpty()
+                row.id to if (row.def.kind == ChannelKind.MUSIC) {
+                    val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
+                    musicGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, title)
+                } else {
+                    guideBlocks(entries, windowStart, windowStart + WINDOW_MS)
+                }
             }
             val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
             mapped to keys.mapNotNull { k -> schedule.item(k)?.let { k to it } }.toMap()
@@ -107,10 +115,9 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val focusedChannel = rows.getOrNull(focusRow)
     val focusedBlock = focusedChannel?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
     val focusedItem = focusedBlock?.itemKey?.let { items[it] }
-    val header = focusRow < 0
+    val header = rows.isEmpty() || focusRow < 0
 
     fun move(dRow: Int) {
-        if (rows.isEmpty()) return
         focusRow = (focusRow + dRow).coerceIn(-1, rows.size - 1)
     }
 
@@ -236,8 +243,10 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp) {
 
 @Composable
 private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean, rowColor: Color) {
+    val title = block.title
     val label = when {
         block.offAir -> "Off Air"
+        title != null -> title
         item == null -> "Up Next"
         item.kind == MediaKind.EPISODE -> "${item.showTitle} — S${item.season}E${item.episode}"
         else -> item.title
@@ -261,7 +270,7 @@ private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBloc
             Spacer(Modifier.width(20.dp))
         }
         Column {
-            BasicText(if (block?.offAir == true) "Off Air" else describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(if (block?.offAir == true) "Off Air" else block?.title ?: describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val bits = listOfNotNull(
                 channelName,
                 block?.let { "${clockTime(it.startMs)} – ${clockTime(it.endMs)}" },

@@ -154,6 +154,9 @@ interface ChannelDao {
 
 @Dao
 interface EntryDao {
+    @Query("SELECT DISTINCT channelId FROM entries WHERE itemKey IS NOT NULL AND itemKey NOT IN (SELECT `key` FROM items)")
+    suspend fun channelsWithMissingItems(): List<String>
+
     @Query("DELETE FROM entries")
     suspend fun clear()
 

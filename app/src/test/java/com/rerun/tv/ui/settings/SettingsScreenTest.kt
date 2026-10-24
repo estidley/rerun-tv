@@ -39,6 +39,7 @@ import kotlin.coroutines.resumeWithException
 class SettingsScreenTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var settings: Settings
+    private lateinit var sync: LibrarySync
     private lateinit var refresh: Continuation<Unit>
     private val eastWest = MutableStateFlow(false)
 
@@ -46,7 +47,7 @@ class SettingsScreenTest {
     fun setUp() = runBlocking {
         val app = mock(RerunApp::class.java)
         settings = mock(Settings::class.java)
-        val sync = mock(LibrarySync::class.java)
+        sync = mock(LibrarySync::class.java)
         val controller = mock(TvController::class.java)
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
@@ -98,8 +99,8 @@ class SettingsScreenTest {
         val labels = listOf(
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
-            "Compact", "■ Comfortable", "Large", "Subtitle language: Automatic",
-            "East and West", "Music", "Subtitles", "Manage libraries", "Re-sync now", "Channels", "Sign out",
+            "Compact", "■ Comfortable", "Large", "Subtitles", "Subtitle language: Automatic",
+            "East and West", "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
         )
         for ((index, label) in labels.withIndex()) {
             compose.onNodeWithText(label).assertIsFocused()
@@ -125,5 +126,36 @@ class SettingsScreenTest {
         compose.onNodeWithText("CRT Subtle").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithText("Static sound").assertIsFocused()
+    }
+
+    @Test
+    fun subtitlesAndLanguageAreAdjacentInTheSameRow() {
+        val toggle = compose.onNodeWithText("Subtitles").fetchSemanticsNode().boundsInRoot
+        val language = compose.onNodeWithText("Subtitle language: Automatic").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertEquals(toggle.top, language.top, 1f)
+        org.junit.Assert.assertTrue(language.left > toggle.right)
+    }
+
+    @Test
+    fun enablingMusicWithoutAnIncludedAudioLibraryExplainsHowToIncludeOne() = runBlocking<Unit> {
+        `when`(settings.selectedLibraries()).thenReturn(setOf("movies"))
+        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
+        compose.onNodeWithText("Music").performScrollTo().performClick()
+        compose.onNodeWithText("Sync failed: Include a Plex music library in Manage libraries first.")
+            .performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Music").assertExists()
+        verify(settings, never()).setFlag(Settings.MUSIC, true)
+        verify(sync, never()).sync()
+    }
+
+    @Test
+    fun enablingMusicSyncsIncludedAudioLibraries() = runBlocking<Unit> {
+        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
+        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
+        `when`(sync.sync()).thenReturn(flowOf(com.rerun.tv.data.SyncProgress("Done", 1, 1, true)))
+        compose.onNodeWithText("Music").performScrollTo().performClick()
+        compose.onNodeWithText("■ Music").assertExists()
+        verify(settings).setFlag(Settings.MUSIC, true)
+        verify(sync).sync()
     }
 }

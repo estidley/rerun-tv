@@ -94,7 +94,7 @@ class PlexParseTest {
     }
 
     @Test
-    fun tracksKeepAlbumAndSkipUntagged() {
+    fun tracksKeepAlbumAndIncludeUntagged() {
         val parsed = PlexParse.tracks(
             """
             {"MediaContainer":{"Metadata":[
@@ -107,8 +107,9 @@ class PlexParseTest {
             ]}}
             """.trimIndent(),
         )
-        assertEquals(1, parsed.size)
-        val track = parsed.single()
+        assertEquals(2, parsed.size)
+        assertEquals(setOf("Unclassified"), parsed.last().genres)
+        val track = parsed.first()
         assertEquals(MediaKind.TRACK, track.kind)
         assertEquals("Night Drive", track.title)
         assertEquals(180_000L, track.durationMs)
@@ -121,6 +122,32 @@ class PlexParseTest {
         assertEquals("/library/parts/9/file.mp3", track.partKey)
         assertEquals("mp3", track.container)
         assertEquals("/library/metadata/8/thumb/1", track.thumb)
+    }
+
+    @Test
+    fun audioTracksInheritArtistGenresAndAlbumDetailsWithoutVideoMetadata() {
+        val artists = PlexParse.musicMetadata(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"a","title":"The Artist","Genre":[{"tag":"Soul"}]}]}}""",
+        ).associateBy { it.key }
+        val albums = PlexParse.musicMetadata(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"b","title":"The Album","year":1974,"thumb":"/library/metadata/b/thumb"}]}}""",
+        ).associateBy { it.key }
+        val json = """{"MediaContainer":{"Metadata":[{"ratingKey":"t","title":"Song","grandparentRatingKey":"a","parentRatingKey":"b",
+          "Media":[{"container":"flac","audioCodec":"flac","duration":240000,"Part":[{"key":"/library/parts/t/file.flac"}]}]}]}}"""
+        val track = PlexParse.tracks(json, artists, albums).single()
+        assertEquals(MediaKind.TRACK, track.kind)
+        assertEquals(setOf("Soul"), track.genres)
+        assertEquals("The Artist", track.studio)
+        assertEquals("The Album", track.showTitle)
+        assertEquals(1974, track.year)
+        assertEquals(240_000L, track.durationMs)
+        assertEquals("/library/metadata/b/thumb", track.thumb)
+        assertEquals("/library/parts/t/file.flac", track.partKey)
+        assertNull(track.videoCodec)
+        val albumWithGenre = albums.mapValues { (_, album) -> album.copy(genres = setOf("Jazz")) }
+        assertEquals(setOf("Jazz"), PlexParse.tracks(json, artists, albumWithGenre).single().genres)
+        val compilation = json.replace("\"title\":\"Song\"", "\"title\":\"Song\",\"originalTitle\":\"Guest vocalist\"")
+        assertEquals("Guest vocalist", PlexParse.tracks(compilation, artists, albums).single().studio)
     }
 
     @Test

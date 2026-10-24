@@ -44,4 +44,38 @@ class GuideBlocksTest {
             blocks,
         )
     }
+
+    @Test
+    fun musicCombinesSongsIntoHourlyBlocksWithoutChangingTheSchedule() {
+        val start = Math.floorDiv(t0, 60 * MIN) * 60 * MIN
+        val entries = (0 until 60).map {
+            ScheduleEntry("music:blues", start + it * 3 * MIN, start + (it + 1) * 3 * MIN, EntryKind.PROGRAM, "song:$it")
+        }
+        val blocks = musicGuideBlocks(entries, start, start + 180 * MIN, "Blues Music")
+        assertEquals((0 until 3).map {
+            GuideBlock(start + it * 60 * MIN, start + (it + 1) * 60 * MIN, null, title = "Blues Music")
+        }, blocks)
+        assertEquals(60, entries.size)
+        assertEquals("song:0", entries.first().itemKey)
+    }
+
+    @Test
+    fun hourlyMusicClipsAtWindowEdgesAndPreservesOffAirGaps() {
+        val start = Math.floorDiv(t0, 60 * MIN) * 60 * MIN
+        val entries = listOf(
+            ScheduleEntry("music", start, start + 65 * MIN, EntryKind.PROGRAM, "a"),
+            ScheduleEntry("music", start + 75 * MIN, start + 120 * MIN, EntryKind.PROGRAM, "b"),
+        )
+        assertEquals(listOf(
+            GuideBlock(start + 30 * MIN, start + 60 * MIN, null, title = "Classic Country Music"),
+            GuideBlock(start + 60 * MIN, start + 65 * MIN, null, title = "Classic Country Music"),
+            GuideBlock(start + 65 * MIN, start + 75 * MIN, null, offAir = true),
+            GuideBlock(start + 75 * MIN, start + 90 * MIN, null, title = "Classic Country Music"),
+        ), musicGuideBlocks(entries, start + 30 * MIN, start + 90 * MIN, "Classic Country Music"))
+        assertEquals(
+            listOf(GuideBlock(start, start + 60 * MIN, null, offAir = true)),
+            musicGuideBlocks(emptyList(), start, start + 60 * MIN, "Blues Music"),
+        )
+        assertEquals(emptyList(), musicGuideBlocks(entries, start, start, "Blues Music"))
+    }
 }

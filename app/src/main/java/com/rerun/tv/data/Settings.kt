@@ -58,6 +58,7 @@ class Settings(context: Context, private val dao: SettingDao) {
     suspend fun setServerId(v: String) {
         if (serverId() != v) {
             dao.remove(SELECTED_LIBRARIES)
+            dao.remove(AD_LIBRARY)
             dao.remove(LAST_SYNC)
         }
         dao.put(SettingRow(SERVER_ID, v))
@@ -65,6 +66,11 @@ class Settings(context: Context, private val dao: SettingDao) {
 
     /** Null preserves the all-library behavior for installations predating the picker. */
     suspend fun selectedLibraries(): Set<String>? = dao.get(SELECTED_LIBRARIES)?.let(SetCodec::decode)
+    suspend fun adLibrary(): String? = dao.get(AD_LIBRARY)
+    suspend fun setAdLibrary(key: String?) {
+        require(key == null || key.isNotBlank()) { "Choose a valid ad library" }
+        if (key == null) dao.remove(AD_LIBRARY) else dao.put(SettingRow(AD_LIBRARY, key))
+    }
     suspend fun setSelectedLibraries(keys: Set<String>) {
         require(keys.isNotEmpty()) { "Choose at least one library" }
         dao.put(SettingRow(SELECTED_LIBRARIES, SetCodec.encode(keys)))
@@ -98,7 +104,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         putSecret(ACCOUNT_TOKEN, null)
         putSecret(SERVER_TOKEN, null)
         pinnedHost = null
-        listOf(SERVER_BASE, SERVER_NAME, SERVER_ID, LAST_SYNC, SELECTED_LIBRARIES).forEach { dao.remove(it) }
+        listOf(SERVER_BASE, SERVER_NAME, SERVER_ID, LAST_SYNC, SELECTED_LIBRARIES, AD_LIBRARY).forEach { dao.remove(it) }
     }
 
     val isSignedIn: Boolean get() = accountToken != null
@@ -171,6 +177,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val SERVER_NAME = "server_name"
         const val SERVER_ID = "server_id"
         const val SELECTED_LIBRARIES = "selected_libraries"
+        const val AD_LIBRARY = "ad_library"
         const val LAST_SYNC = "last_sync"
         const val LAST_CHANNEL = "last_channel"
         const val CRT_LEVEL = "crt_level"
