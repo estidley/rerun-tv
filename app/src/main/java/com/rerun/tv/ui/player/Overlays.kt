@@ -124,6 +124,23 @@ fun UpNextCard(channel: ChannelRow?, next: MediaItem?, untilMs: Long, posterUrl:
     }
 }
 
+/** Empty schedule. The next stored program starts at [untilMs]. */
+@Composable
+fun OffAirCard(channel: ChannelRow?, next: MediaItem?, untilMs: Long, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Retro.GuideBlueDeep, Retro.Black))), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BasicText(channel?.name?.uppercase() ?: "", style = Retro.GuideNumber)
+            Spacer(Modifier.height(16.dp))
+            BasicText("OFF AIR", style = Retro.Osd.copy(color = Retro.Yellow))
+            if (next != null) {
+                Spacer(Modifier.height(20.dp))
+                BasicText("Next  ${describe(next)}", style = Retro.Title, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(900.dp))
+                BasicText("at ${clockTime(untilMs)}", style = Retro.Body.copy(color = Retro.Cyan))
+            }
+        }
+    }
+}
+
 /** Classic color bars with the "technical difficulties" message. */
 @Composable
 fun DifficultiesCard(modifier: Modifier = Modifier) {

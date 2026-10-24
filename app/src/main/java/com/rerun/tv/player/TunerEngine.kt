@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-enum class Phase { TUNING, PLAYING, UP_NEXT, DIFFICULTIES }
+enum class Phase { TUNING, PLAYING, UP_NEXT, OFF_AIR, DIFFICULTIES }
 
 data class TunerState(
     val channel: ChannelRow? = null,
@@ -153,13 +153,12 @@ class TunerEngine(
                 if (loc == null) {
                     val upcoming = entries.firstOrNull { it.startMs > now }
                     if (upcoming == null) return@launch difficulties()
-                    // Nothing stored for right now (a new West feed is empty for three hours).
-                    // Wait for the next entry instead of treating the gap as a failure.
+                    // Nothing stored for right now. Off Air waits for the next entry.
                     val program = if (upcoming.kind == EntryKind.PROGRAM) upcoming
                         else entries.firstOrNull { it.startMs >= upcoming.endMs && it.kind == EntryKind.PROGRAM }
                     player.stop()
                     _state.value = _state.value.copy(
-                        phase = Phase.UP_NEXT,
+                        phase = Phase.OFF_AIR,
                         nextItem = program?.let { repo.item(it.itemKey) },
                         holdUntilMs = upcoming.startMs,
                     )

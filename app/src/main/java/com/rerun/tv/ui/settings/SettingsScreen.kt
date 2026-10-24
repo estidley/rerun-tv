@@ -138,7 +138,7 @@ fun SettingsScreen(controller: TvController) {
                 )
             }
             BasicText(
-                "West plays the same schedule 3 hours later and adds -W to the name. A new West feed stays empty until East has been on for 3 hours. Music adds a channel for each genre that has 4 hours. Subtitles stay off until you turn them on.",
+                "West plays the same schedule 3 hours later and adds -W to the name. A new West feed is off air until East has been on for 3 hours. Music adds a channel for each genre that has 4 hours. Subtitles stay off until you turn them on.",
                 style = Retro.Caption,
             )
             BasicText(

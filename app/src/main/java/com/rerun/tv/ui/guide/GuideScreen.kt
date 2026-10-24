@@ -88,7 +88,9 @@ fun GuideScreen(controller: TvController) {
         val (b, i) = withContext(Dispatchers.IO) {
             app.schedule.ensure(now)
             val all = app.schedule.allEntries(windowStart, windowStart + WINDOW_MS)
-            val mapped = all.mapValues { (_, es) -> guideBlocks(es, windowStart, windowStart + WINDOW_MS) }
+            val mapped = rows.associate { row ->
+                row.id to guideBlocks(all[row.id].orEmpty(), windowStart, windowStart + WINDOW_MS)
+            }
             val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
             mapped to keys.mapNotNull { k -> app.schedule.item(k)?.let { k to it } }.toMap()
         }
@@ -175,7 +177,7 @@ fun GuideScreen(controller: TvController) {
                                     val x = ((b.startMs - windowStart) * pxPerMs).dp
                                     val w = ((b.endMs - b.startMs) * pxPerMs).dp
                                     val sel = rowIndex == focusRow && focusTime >= b.startMs && focusTime < b.endMs
-                                    Cell(b.itemKey?.let { items[it] }, x, w, sel)
+                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel)
                                 }
                                 val nowX = ((now - windowStart) * pxPerMs).dp
                                 if (now in windowStart until windowStart + WINDOW_MS) {
@@ -214,15 +216,16 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp) {
 }
 
 @Composable
-private fun Cell(item: MediaItem?, x: Dp, w: Dp, selected: Boolean) {
+private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean) {
     val label = when {
+        block.offAir -> "Off Air"
         item == null -> "Up Next"
         item.kind == MediaKind.EPISODE -> "${item.showTitle} — S${item.season}E${item.episode}"
         else -> item.title
     }
     Box(
         Modifier.offset(x = x).width(w).fillMaxHeight()
-            .background(if (selected) Retro.Yellow else Retro.GuideBlue)
+            .background(if (selected) Retro.Yellow else if (block.offAir) Color(0xFF06102E) else Retro.GuideBlue)
             .border(1.dp, if (selected) Retro.White else Color(0x554A6BC8))
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.CenterStart,
@@ -239,7 +242,7 @@ private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBloc
             Spacer(Modifier.width(20.dp))
         }
         Column {
-            BasicText(describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(if (block?.offAir == true) "Off Air" else describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val bits = listOfNotNull(
                 channelName,
                 block?.let { "${clockTime(it.startMs)} – ${clockTime(it.endMs)}" },

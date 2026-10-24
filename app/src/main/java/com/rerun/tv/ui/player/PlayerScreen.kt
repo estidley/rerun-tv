@@ -79,6 +79,7 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
         }
 
         when (state.phase) {
+            Phase.OFF_AIR -> OffAirCard(state.channel, state.nextItem, state.holdUntilMs ?: now)
             Phase.UP_NEXT -> {
                 val entry = state.located?.entry
                 val nextItem = when {
@@ -112,7 +113,7 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
         ) { ChannelOsd(state.channel) }
 
         AnimatedVisibility(
-            visible = now < bannerUntil && state.phase != Phase.DIFFICULTIES,
+            visible = now < bannerUntil && state.phase != Phase.DIFFICULTIES && state.phase != Phase.OFF_AIR,
             enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {

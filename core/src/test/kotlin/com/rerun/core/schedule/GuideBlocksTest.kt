@@ -28,5 +28,20 @@ class GuideBlocksTest {
     }
 
     @Test
-    fun emptyIsEmpty() = assertEquals(emptyList(), guideBlocks(emptyList(), t0, t0 + 30 * MIN))
+    fun emptyWindowIsOffAir() {
+        assertEquals(listOf(GuideBlock(t0, t0 + 30 * MIN, null, offAir = true)), guideBlocks(emptyList(), t0, t0 + 30 * MIN))
+    }
+
+    @Test
+    fun holeBetweenProgramsIsOffAir() {
+        val blocks = guideBlocks(listOf(p(0, 20, "a"), p(40, 60, "b")), t0, t0 + 60 * MIN)
+        assertEquals(
+            listOf(
+                GuideBlock(t0, t0 + 20 * MIN, "a"),
+                GuideBlock(t0 + 20 * MIN, t0 + 40 * MIN, null, offAir = true),
+                GuideBlock(t0 + 40 * MIN, t0 + 60 * MIN, "b"),
+            ),
+            blocks,
+        )
+    }
 }

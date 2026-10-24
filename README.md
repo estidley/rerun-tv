@@ -15,7 +15,8 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 - **Theme channels:** Fright Night, The Void, Laughing Stock, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes show up only when that genre has at least 4 hours: True-ish (documentaries), Canned Laughter (sitcoms), Sob Story (dramedies), Cold Read (psychic and paranormal), This Just In (news), and others such as The Matinee and Case File.
 - **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.
 - **Custom channels:** pick genres, shows, collections, decades and ratings right on the TV.
-- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. East keeps its name. West adds `-W`. A new West feed stays empty until East has three hours of schedule.
+- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. East keeps its name. West adds `-W`. A new West feed is off air until East has three hours of schedule.
+- **Off air:** a time with nothing scheduled says Off Air in the guide and on the screen, then the next program starts. A short break already on the schedule still says Up Next.
 - **Music:** if the Plex server has music, Settings can add a station for each genre with at least 4 hours.
 - **Subtitles:** off until you turn them on in Settings.
 - **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel.
@@ -60,7 +61,7 @@ Channels and Settings sit at the top of the guide: press ▲ from the first row.
 
 ## Commercials (optional)
 
-`tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Rerun will play them between shows starting in Phase 3. Until then, gaps show an "Up Next" card.
+`tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Rerun will play them between shows starting in Phase 3. Until then, those scheduled breaks show an "Up Next" card. Times with no schedule say Off Air.
 
 Vintage commercials are generally still under copyright. Keep downloaded copies for personal viewing, and never commit media to this repository.
 
