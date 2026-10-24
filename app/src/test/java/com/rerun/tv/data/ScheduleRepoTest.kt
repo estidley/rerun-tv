@@ -6,6 +6,7 @@ import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.MediaItem
 import com.rerun.core.plex.PlexParse
 import com.rerun.core.schedule.Scheduler
+import com.rerun.core.schedule.hourFloor
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
@@ -91,6 +92,26 @@ class ScheduleRepoTest {
         repo.deleteChannel("movies:1")
         assertNull(repo.channel("movies:1:w"))
         assertTrue(repo.entries("movies:1:w", 0, Long.MAX_VALUE).isEmpty())
+    }
+
+    @Test
+    fun resetForStartupClearsScheduleAndStartsOnHourWithFreshSeed() = runBlocking {
+        val items = (1..12).map { movie(it.toString()) }
+        repo.refreshChannels(false, false, items)
+        val midHour = now + 42 * 60_000L
+        repo.ensure("movies:1", midHour)
+        val initialEntries = repo.entries("movies:1", 0, Long.MAX_VALUE)
+        assertTrue(initialEntries.isNotEmpty())
+        assertEquals(hourFloor(midHour), initialEntries.first().startMs)
+
+        repo.resetForStartup()
+        assertTrue(repo.entries("movies:1", 0, Long.MAX_VALUE).isEmpty())
+        assertNull(db.states().get("movies:1"))
+
+        repo.ensureChannels(listOf("movies:1"), midHour)
+        val afterReset = repo.entries("movies:1", 0, Long.MAX_VALUE)
+        assertTrue(afterReset.isNotEmpty())
+        assertEquals(hourFloor(midHour), afterReset.first().startMs)
     }
 
     private fun movie(key: String): MediaItem = PlexParse.movies(

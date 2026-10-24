@@ -1,6 +1,10 @@
 package com.rerun.tv.ui
 
+import android.content.Context
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -35,6 +39,9 @@ import com.rerun.tv.ui.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
     private lateinit var controller: TvController
+    private var mediaSession: MediaSession? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var stoppedAtMs = 0L
     private var okDownAt = 0L
     private var okLongFired = false
     private var leftDownAt = 0L
@@ -45,21 +52,58 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val app = application as RerunApp
         controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
+        mediaSession = runCatching {
+            MediaSession(this, "RerunTV").apply {
+                setPlaybackState(
+                    PlaybackState.Builder()
+                        .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE)
+                        .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                        .build(),
+                )
+            }
+        }.getOrNull()
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        @Suppress("DEPRECATION")
+        wakeLock = pm?.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ON_AFTER_RELEASE,
+            "rerun:tv-playback",
+        )?.apply { setReferenceCounted(false) }
         setContent { RerunRoot(controller, onPoweredOff = { finish() }, onPlayerKeyEvent = ::handlePlayerKeyEvent) }
     }
 
     override fun onStart() {
         super.onStart()
-        if (controller.screen.value != Screen.Onboarding) controller.resume()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        runCatching {
+            mediaSession?.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE)
+                    .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                    .build(),
+            )
+            mediaSession?.isActive = true
+        }
+        runCatching { wakeLock?.acquire() }
+        val sleptLongEnough = stoppedAtMs > 0L && System.currentTimeMillis() - stoppedAtMs >= SLEEP_RANDOMIZE_MS
+        stoppedAtMs = 0L
+        if (controller.screen.value != Screen.Onboarding) {
+            if (sleptLongEnough) controller.startWatching(randomize = true) else controller.resume()
+        }
     }
 
     override fun onStop() {
         super.onStop()
+        stoppedAtMs = System.currentTimeMillis()
+        runCatching { mediaSession?.isActive = false }
+        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
         controller.engine.stop()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        runCatching { mediaSession?.release() }
+        mediaSession = null
         controller.engine.release()
         controller.dispose()
     }
@@ -106,6 +150,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        const val SLEEP_RANDOMIZE_MS = 15 * 60_000L
         val HANDLED = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_LAST_CHANNEL, KeyEvent.KEYCODE_INFO,

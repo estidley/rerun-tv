@@ -10,8 +10,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -57,6 +57,7 @@ import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.player.describe
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private const val WINDOW_MS = 3 * 3_600_000L
@@ -76,26 +77,65 @@ fun GuideScreen(controller: TvController) {
     var focusRow by remember { mutableIntStateOf(0) }
     var focusTime by remember { mutableLongStateOf(now) }
     var headerIndex by remember { mutableIntStateOf(0) }
+    var refreshTick by remember { mutableIntStateOf(0) }
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(15_000L)
+            val current = System.currentTimeMillis()
+            val floor = gridFloor(current)
+            val wasAtLiveEdge = windowStart < floor
+            now = current
+            if (wasAtLiveEdge) {
+                windowStart = floor
+                if (focusTime < floor) focusTime = current
+            }
+            refreshTick++
+        }
+    }
 
     LaunchedEffect(rows) {
         val idx = rows.indexOfFirst { it.id == controller.effectiveChannelId() }
         if (idx >= 0) focusRow = idx
     }
-    LaunchedEffect(windowStart, rows) {
-        now = System.currentTimeMillis()
-        val (b, i) = withContext(Dispatchers.IO) {
-            app.schedule.ensure(now)
+
+    LaunchedEffect(windowStart, rows, refreshTick) {
+        val current = System.currentTimeMillis()
+        now = current
+        if (windowStart < gridFloor(current) - GRID_MS) {
+            windowStart = gridFloor(current)
+            focusTime = maxOf(focusTime, current)
+        }
+        if (rows.isEmpty()) return@LaunchedEffect
+
+        suspend fun loadWindow(): Pair<Map<String, List<GuideBlock>>, Map<String, MediaItem>> {
             val all = app.schedule.allEntries(windowStart, windowStart + WINDOW_MS)
             val mapped = rows.associate { row ->
                 row.id to guideBlocks(all[row.id].orEmpty(), windowStart, windowStart + WINDOW_MS)
             }
             val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
-            mapped to keys.mapNotNull { k -> app.schedule.item(k)?.let { k to it } }.toMap()
+            return mapped to keys.mapNotNull { k -> app.schedule.item(k)?.let { k to it } }.toMap()
         }
-        blocks = b
-        items = i
+
+        // First: top up the visible rows immediately so the guide renders in < 100ms.
+        val firstVisible = (focusRow.coerceAtLeast(0) - VISIBLE_ROWS / 2).coerceIn(0, maxOf(0, rows.size - VISIBLE_ROWS))
+        val visibleIds = rows.drop(firstVisible).take(VISIBLE_ROWS).map { it.id }
+        val (initialBlocks, initialItems) = withContext(Dispatchers.IO) {
+            app.schedule.ensureChannels(visibleIds, current)
+            loadWindow()
+        }
+        blocks = initialBlocks
+        items = initialItems
+
+        // Second: top up all remaining active channels in the background and refresh the grid.
+        val (fullBlocks, fullItems) = withContext(Dispatchers.IO) {
+            app.schedule.ensure(current)
+            loadWindow()
+        }
+        blocks = fullBlocks
+        items = fullItems
     }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 

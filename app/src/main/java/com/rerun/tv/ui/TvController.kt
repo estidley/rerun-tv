@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 
 data class Effects(
@@ -121,20 +122,29 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     /** Start watching: last channel if still active, else the lowest-numbered one. */
-    fun startWatching() {
+    fun startWatching(randomize: Boolean = true) {
         scope.launch {
             serverBase = app.settings.serverBase()
             if (serverBase == null) { _screen.value = Screen.Onboarding; return@launch }
-            app.schedule.invalidateLibrary()
-            val list = app.schedule.active()
-            val last = app.settings.lastChannel()
+            withContext(Dispatchers.IO) {
+                app.schedule.invalidateLibrary()
+                if (randomize) app.schedule.resetForStartup()
+            }
+            val list = withContext(Dispatchers.IO) { app.schedule.active() }
+            val last = effectiveChannelId() ?: app.settings.lastChannel()
             val pick = list.firstOrNull { it.id == last } ?: list.firstOrNull()
             _screen.value = Screen.Player
-            if (pick != null) tuneTo(pick.id, sound = false)
+            if (pick != null) {
+                tuneTo(pick.id, sound = false)
+                // Warm up the remaining channels in the background so the Guide is ready immediately.
+                launch(Dispatchers.IO) {
+                    app.schedule.ensure(System.currentTimeMillis())
+                }
+            }
         }
     }
 
-    fun resume() { currentId?.let { engine.tune(it) } ?: startWatching() }
+    fun resume() { currentId?.let { engine.tune(it) } ?: startWatching(randomize = true) }
 
     fun tuneTo(id: String, sound: Boolean = true) {
         if (currentId == Lineup.RESTART_ID && id != Lineup.RESTART_ID) {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem as ExoItem
 import androidx.media3.common.PlaybackException
@@ -70,7 +71,19 @@ class TunerEngine(
     private val settings: Settings,
     httpClient: OkHttpClient,
     private val api: PlexApi = PlexApi({ settings.clientId }, httpClient),
-    playerFactory: (Context) -> ExoPlayer = { ExoPlayer.Builder(it).build() },
+    playerFactory: (Context) -> ExoPlayer = {
+        ExoPlayer.Builder(it)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
+            .build()
+    },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())

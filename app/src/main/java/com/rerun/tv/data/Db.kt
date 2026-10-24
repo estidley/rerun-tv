@@ -54,8 +54,10 @@ data class ItemRow(
     companion object {
         fun of(i: MediaItem) = ItemRow(
             i.key, i.kind.name, i.title, i.year, i.durationMs, SetCodec.encode(i.genres), i.network, i.studio,
-            i.contentRating, i.showKey, i.showTitle, i.season, i.episode, i.tmdbId, SetCodec.encode(i.labels),
-            SetCodec.encode(i.collections), i.partKey, i.container, i.videoCodec, i.audioCodec, i.thumb,
+            contentRating = i.contentRating, showKey = i.showKey, showTitle = i.showTitle, season = i.season,
+            episode = i.episode, tmdbId = i.tmdbId, labels = SetCodec.encode(i.labels),
+            collections = SetCodec.encode(i.collections), partKey = i.partKey, container = i.container,
+            videoCodec = i.videoCodec, audioCodec = i.audioCodec, thumb = i.thumb,
         )
     }
 }
@@ -174,6 +176,9 @@ interface EntryDao {
 
     @Query("DELETE FROM entries WHERE channelId = :channelId")
     suspend fun deleteChannel(channelId: String)
+
+    @Query("DELETE FROM entries WHERE channelId != :exceptChannelId")
+    suspend fun clearAllExcept(exceptChannelId: String = com.rerun.core.catalog.Lineup.RESTART_ID)
 }
 
 @Dao
@@ -186,6 +191,9 @@ interface StateDao {
 
     @Query("DELETE FROM states WHERE channelId = :channelId")
     suspend fun delete(channelId: String)
+
+    @Query("DELETE FROM states")
+    suspend fun clearAll()
 }
 
 @Dao

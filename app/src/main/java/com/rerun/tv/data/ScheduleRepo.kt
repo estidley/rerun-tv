@@ -18,20 +18,31 @@ import com.rerun.core.schedule.needsTopUp
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ThreadLocalRandom
 
 /** Keeps every active channel's locked schedule at least a day ahead. */
 class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     private val mutex = Mutex()
     @Volatile private var library: Map<String, MediaItem>? = null
+    @Volatile private var libraryList: List<MediaItem>? = null
 
-    fun invalidateLibrary() { library = null }
+    fun invalidateLibrary() {
+        library = null
+        libraryList = null
+    }
 
     private suspend fun lib(): Map<String, MediaItem> =
-        library ?: db.items().all().map { it.toItem() }.associateBy { it.key }.also { library = it }
+        library ?: db.items().all().map { it.toItem() }.also { list ->
+            libraryList = list
+            library = list.associateBy { it.key }
+        }.let { library!! }
+
+    private suspend fun libList(): List<MediaItem> =
+        libraryList ?: run { lib(); libraryList.orEmpty() }
 
     suspend fun item(key: String?): MediaItem? = key?.let { lib()[it] }
 
-    suspend fun libraryItems(): List<MediaItem> = lib().values.toList()
+    suspend fun libraryItems(): List<MediaItem> = libList()
 
     suspend fun allChannelRows(): List<ChannelRow> = db.channels().all()
 
@@ -39,6 +50,17 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     fun allChannels(): Flow<List<ChannelRow>> = db.channels().observeAll()
     suspend fun channel(id: String): ChannelRow? = db.channels().byId(id)
     suspend fun active(): List<ChannelRow> = db.channels().active()
+
+    /**
+     * Clears stored schedule entries and channel RNG states so that a fresh startup (or wake after
+     * sleep) seeds every channel with a new random seed and schedules from the current hour (:00).
+     */
+    suspend fun resetForStartup() = mutex.withLock {
+        db.withTransaction {
+            db.entries().clearAllExcept(Lineup.RESTART_ID)
+            db.states().clearAll()
+        }
+    }
 
     /** Commit library/lineup changes atomically with respect to schedule generation. */
     suspend fun refreshChannels(eastWest: Boolean, music: Boolean, items: List<MediaItem>? = null) = mutex.withLock {
@@ -59,6 +81,13 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     suspend fun ensure(nowMs: Long) = mutex.withLock {
         db.entries().pruneBefore(nowMs - KEEP_PAST_MS)
         for (row in db.channels().active()) topUp(row, nowMs)
+    }
+
+    /** Tops up a subset of channels (e.g. currently visible rows in the Guide) so UI renders immediately. */
+    suspend fun ensureChannels(channelIds: Collection<String>, nowMs: Long) = mutex.withLock {
+        for (id in channelIds) {
+            db.channels().byId(id)?.let { topUp(it, nowMs) }
+        }
     }
 
     /** Tops up a single channel (used right before tuning to it). */
@@ -94,11 +123,14 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         val last = db.entries().lastEnd(row.id)
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
-        val pool = Resolver.pool(def, lib().values.toList())
-        val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = row.id.hashCode().toLong())
+        val pool = Resolver.pool(def, libList())
+        val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) }
+            ?: ChannelState(seed = ThreadLocalRandom.current().nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs)
-        if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
-        db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
+        db.withTransaction {
+            if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
+            db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
+        }
     }
 
     /**

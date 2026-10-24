@@ -54,6 +54,7 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
+                    keepScreenOn = true
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                     setKeepContentOnPlayerReset(false)

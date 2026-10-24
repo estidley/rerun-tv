@@ -2,8 +2,11 @@ package com.rerun.core.schedule
 
 /** Programs start on :00 and :30. Works in every whole- or half-hour UTC offset. */
 const val GRID_MS = 30 * 60_000L
+const val HOUR_MS = 60 * 60_000L
 
 fun gridFloor(ms: Long): Long = Math.floorDiv(ms, GRID_MS) * GRID_MS
+
+fun hourFloor(ms: Long): Long = Math.floorDiv(ms, HOUR_MS) * HOUR_MS
 
 fun gridCeil(ms: Long): Long = -Math.floorDiv(-ms, GRID_MS) * GRID_MS
 

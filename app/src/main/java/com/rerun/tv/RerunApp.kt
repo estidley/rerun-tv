@@ -40,10 +40,12 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
         plex = PlexApi({ settings.clientId }, http)
         schedule = ScheduleRepo(db, Scheduler(ZoneId.systemDefault()))
         sync = LibrarySync(plex, settings, schedule)
-        // An update can rename stock channels and add extras from the library already saved.
-        // Music tracks are fetched only after that switch is turned on.
+        // Only run a full channel lineup rebuild on startup if items exist but channels haven't been built yet.
+        // Avoids blocking the schedule mutex for 20+ seconds on large libraries during cold launch.
         appScope.launch {
-            if (db.items().count() > 0) sync.refreshChannels()
+            if (db.items().count() > 0 && db.channels().active().isEmpty()) {
+                sync.refreshChannels()
+            }
         }
     }
 

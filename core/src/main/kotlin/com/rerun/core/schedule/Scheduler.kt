@@ -14,11 +14,12 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
 
 /**
  * Writes a channel's schedule forward. Never touches entries that already exist: it only
- * appends from [lastEndMs] (or restarts at the current half-hour if that's in the past).
+ * appends from [lastEndMs] (or restarts at the current hour if that's in the past).
  *
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
- * shuffle (random show, weighted by episode count, episodes in order). Every program is
- * padded to the next :00/:30 with a FILLER entry. Music stations play back to back.
+ * shuffle (random show, weighted by episode count, random starting episode on shuffle channels
+ * followed by episodes in order). Every program is padded to the next :00/:30 with a FILLER entry.
+ * Music stations play back to back.
  */
 class Scheduler(private val zone: ZoneId) {
 
@@ -35,8 +36,8 @@ class Scheduler(private val zone: ZoneId) {
         val base = items.filter { Resolver.inBase(def, it) }.ifEmpty { items }
         val blockSets = def.blocks.map { b -> items.filter { b.rules.matches(it, Resolver.networkOf(it)) } }
 
-        val floor = gridFloor(nowMs)
-        var cursor = if (lastEndMs == null || lastEndMs < floor) floor else lastEndMs
+        val floor = hourFloor(nowMs)
+        var cursor = if (lastEndMs == null || lastEndMs < gridFloor(nowMs)) floor else lastEndMs
         val end = nowMs + horizonMs
         val run = Run(state)
         val out = ArrayList<ScheduleEntry>()
@@ -125,7 +126,7 @@ class Scheduler(private val zone: ZoneId) {
             }
             val eps = shows.getValue(showKey)
                 .sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.key }))
-            val ptr = pointers[showKey] ?: 0
+            val ptr = pointers[showKey] ?: if (def.order == PlayOrder.IN_ORDER) 0 else rng().nextInt(eps.size)
             pointers[showKey] = ptr + 1
             return eps[ptr % eps.size]
         }

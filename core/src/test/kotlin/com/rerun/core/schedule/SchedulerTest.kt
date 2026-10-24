@@ -8,6 +8,7 @@ import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
+import com.rerun.core.model.PlayOrder
 import com.rerun.core.model.Rules
 import com.rerun.core.model.TimeBlock
 import com.rerun.core.movie
@@ -34,9 +35,10 @@ class SchedulerTest {
     private fun programs(entries: List<ScheduleEntry>) = entries.filter { it.kind == EntryKind.PROGRAM }
 
     @Test
-    fun fillsFortyEightHoursFromGridFloor() {
+    fun fillsFortyEightHoursFromHourFloor() {
         val ext = scheduler.extend(horrorDef, movies(10), ChannelState(seed = 42), null, now)
-        assertEquals(gridFloor(now), ext.entries.first().startMs)
+        assertEquals(hourFloor(now), ext.entries.first().startMs)
+        assertEquals(0L, ext.entries.first().startMs % HOUR_MS)
         assertTrue(ext.entries.last().endMs >= now + 48 * HOUR)
     }
 
@@ -66,15 +68,30 @@ class SchedulerTest {
     }
 
     @Test
-    fun episodesPlayInOrderPerShow() {
+    fun episodesPlayInOrderPerShowFromRandomInitialEpisode() {
         val a = listOf(episode("a1", "Alpha", 1, 1), episode("a2", "Alpha", 1, 2), episode("a3", "Alpha", 2, 1))
         val b = listOf(episode("b1", "Beta", 1, 1), episode("b2", "Beta", 1, 2))
         val pool = (a + b).shuffled(java.util.Random(3))
-        val keys = programs(scheduler.extend(anyDef, pool, ChannelState(seed = 11), null, now).entries).map { it.itemKey }
-        val alphaOrder = keys.filter { it!!.startsWith("a") }.take(6)
-        assertEquals(listOf("a1", "a2", "a3", "a1", "a2", "a3"), alphaOrder)
-        val betaOrder = keys.filter { it!!.startsWith("b") }.take(4)
-        assertEquals(listOf("b1", "b2", "b1", "b2"), betaOrder)
+        val keys = programs(scheduler.extend(anyDef, pool, ChannelState(seed = 11), null, now).entries).map { it.itemKey!! }
+        val alphaRing = listOf("a1", "a2", "a3")
+        val alphaOrder = keys.filter { it.startsWith("a") }.take(6)
+        val alphaStart = alphaRing.indexOf(alphaOrder.first())
+        assertEquals((0 until 6).map { alphaRing[(alphaStart + it) % alphaRing.size] }, alphaOrder)
+
+        val betaRing = listOf("b1", "b2")
+        val betaOrder = keys.filter { it.startsWith("b") }.take(4)
+        val betaStart = betaRing.indexOf(betaOrder.first())
+        assertEquals((0 until 4).map { betaRing[(betaStart + it) % betaRing.size] }, betaOrder)
+
+        // Different seeds pick different starting episodes on shuffle channels
+        val firstEpisodesAcrossSeeds = (1L..20L).map { s ->
+            programs(scheduler.extend(anyDef, a, ChannelState(seed = s), null, now).entries).first().itemKey
+        }.toSet()
+        assertTrue(firstEpisodesAcrossSeeds.size > 1, "Expected random starting episodes across seeds, got $firstEpisodesAcrossSeeds")
+
+        // IN_ORDER always starts at S1E1
+        val inOrderFirst = programs(scheduler.extend(anyDef.copy(order = PlayOrder.IN_ORDER), a, ChannelState(seed = 99), null, now).entries).first().itemKey
+        assertEquals("a1", inOrderFirst)
     }
 
     @Test
@@ -135,11 +152,11 @@ class SchedulerTest {
     }
 
     @Test
-    fun wakingAfterDaysRestartsAtNow() {
+    fun wakingAfterDaysRestartsAtNowHour() {
         val first = scheduler.extend(horrorDef, movies(6), ChannelState(seed = 3), null, now)
         val later = now + 5 * 24 * HOUR
         val second = scheduler.extend(horrorDef, movies(6), first.state, first.entries.last().endMs, later)
-        assertEquals(gridFloor(later), second.entries.first().startMs)
+        assertEquals(hourFloor(later), second.entries.first().startMs)
     }
 
     @Test
