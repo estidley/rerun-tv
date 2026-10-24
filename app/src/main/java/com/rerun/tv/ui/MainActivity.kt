@@ -43,6 +43,8 @@ class MainActivity : ComponentActivity() {
     private var okLongFired = false
     private var leftDownAt = 0L
     private var leftLongFired = false
+    private var rightDownAt = 0L
+    private var rightLongFired = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,11 +90,23 @@ class MainActivity : ComponentActivity() {
                     }
                     return true
                 }
+                code == KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (event.repeatCount == 0) {
+                        rightDownAt = event.eventTime
+                        rightLongFired = false
+                        controller.showBanner()
+                    } else if (!rightLongFired && event.eventTime - rightDownAt >= 2_000) {
+                        rightLongFired = true
+                        controller.go(Screen.AudioTracks)
+                    }
+                    return true
+                }
                 event.repeatCount > 0 -> return true
                 code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_CHANNEL_UP -> controller.channelUp()
                 code == KeyEvent.KEYCODE_DPAD_DOWN || code == KeyEvent.KEYCODE_CHANNEL_DOWN -> controller.channelDown()
                 code == KeyEvent.KEYCODE_LAST_CHANNEL -> controller.lastChannel()
-                code == KeyEvent.KEYCODE_DPAD_RIGHT || code == KeyEvent.KEYCODE_INFO -> controller.showBanner()
+                code == KeyEvent.KEYCODE_INFO -> controller.showBanner()
+                code == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK -> controller.go(Screen.AudioTracks)
                 code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_GUIDE -> controller.go(Screen.Guide)
                 else -> return false
             }
@@ -114,6 +128,7 @@ class MainActivity : ComponentActivity() {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_LAST_CHANNEL, KeyEvent.KEYCODE_INFO,
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_GUIDE,
+            KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK,
         )
     }
 }
@@ -154,6 +169,8 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
             Screen.Libraries -> LibrarySettingsScreen(controller)
             Screen.AdLibrary -> com.rerun.tv.ui.settings.AdLibraryScreen(controller)
             Screen.SubtitleLanguage -> SubtitleLanguageScreen(controller)
+            Screen.AudioLanguage -> SubtitleLanguageScreen(controller, audio = true)
+            Screen.AudioTracks -> com.rerun.tv.ui.player.AudioTrackScreen(controller)
         }
         CrtOverlay(level)
         if (fx.power) PowerTransition(on = !exiting, onOffDone = onPoweredOff)

@@ -37,6 +37,7 @@ import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.theme.Retro
 import com.rerun.tv.ui.theme.ColorTheme
 import com.rerun.tv.ui.guide.GuideDensity
+import com.rerun.core.plex.HdrMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -50,6 +51,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val theme by controller.colorTheme.collectAsState()
     val density by controller.guideDensity.collectAsState()
     val subtitleLanguage by controller.subtitleLanguage.collectAsState()
+    val audioLanguage by controller.audioLanguage.collectAsState()
+    val hdrMode by controller.hdrMode.collectAsState()
     var server by remember { mutableStateOf("") }
     var lastSync by remember { mutableStateOf(0L) }
     var syncStatus by remember { mutableStateOf<String?>(null) }
@@ -62,7 +65,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     var pendingMusic by remember { mutableStateOf<Boolean?>(null) }
     val shownEastWest = pendingEastWest ?: eastWest
     val shownMusic = pendingMusic ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1, 2, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -169,6 +172,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                                 try {
                                     app.settings.setFlag(Settings.EAST_WEST, next)
                                     app.sync.refreshChannels()
+                                    controller.reconcileChannels()
                                     syncStatus = "East and West ${if (next) "on" else "off"}"
                                 } catch (e: Exception) {
                                     withContext(NonCancellable) { app.settings.setFlag(Settings.EAST_WEST, !next) }
@@ -211,6 +215,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                                         app.sync.refreshChannels()
                                         syncStatus = "Music channels off"
                                     }
+                                    controller.reconcileChannels()
                                 } catch (e: Exception) {
                                     withContext(NonCancellable) { app.settings.setFlag(Settings.MUSIC, !next) }
                                     pendingMusic = null
@@ -245,6 +250,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                         lineupBusy = true
                         try {
                             app.sync.sync().collect { p -> syncStatus = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}" }
+                            controller.reconcileChannels()
                             lastSync = app.settings.lastSyncMs()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
@@ -274,6 +280,33 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             }
             syncStatus?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
             TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(8, 0))
+
+            BasicText("AUDIO", style = Retro.GuideNumber)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton("Audio language: ${languageName(audioLanguage)}", { controller.go(Screen.AudioLanguage) }, modifier = buttonFocus(9, 0))
+                TvButton("Current program audio tracks", { controller.go(Screen.AudioTracks) }, modifier = buttonFocus(9, 1))
+            }
+            BasicText("HDR PLAYBACK", style = Retro.GuideNumber)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HdrMode.entries.forEachIndexed { index, mode ->
+                    TvButton(mode.label, {
+                        scope.launch {
+                            try {
+                                controller.setHdrMode(mode)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                syncStatus = "Couldn't change HDR playback: ${e.message}"
+                            }
+                        }
+                    }, modifier = buttonFocus(10, index), selected = HdrMode.from(hdrMode) == mode)
+                }
+            }
+            BasicText(
+                "Auto checks the display and HDR decoder. Choose Convert HDR to SDR for flashing or incorrect colors. " +
+                    "Enable HDR tone mapping in Plex Server > Transcoder (Plex Pass required). Conversion uses server resources; " +
+                    "some Dolby Vision profiles need an SDR version.",
+                style = Retro.Caption,
+            )
 
             BasicText("ABOUT", style = Retro.GuideNumber)
             BasicText("Rerun 0.1 · plays your own Plex library like 90s cable. Nothing you watch is reported to Plex.", style = Retro.Caption)

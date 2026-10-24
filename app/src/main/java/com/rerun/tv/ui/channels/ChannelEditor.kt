@@ -162,13 +162,18 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                                     app.sync.refreshChannels()
                                 }
                                 app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
+                                controller.reconcileChannels()
                                 controller.go(Screen.Channels)
                             }
                         })
                         TvButton("Cancel", { controller.go(Screen.Channels) })
                         if (existing != null && existing?.builtIn == false) {
                             TvButton("Delete channel", {
-                                scope.launch { app.schedule.deleteChannel(d.id); controller.go(Screen.Channels) }
+                                scope.launch {
+                                    app.schedule.deleteChannel(d.id)
+                                    controller.reconcileChannels()
+                                    controller.go(Screen.Channels)
+                                }
                             })
                         }
                     }

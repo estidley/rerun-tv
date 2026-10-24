@@ -83,7 +83,7 @@ object PlexParse {
         val video = streams.firstOrNull { it.int("streamType") == 1 }
         val profile = video?.int("DOVIProfile")
         val transfer = video?.str("colorTrc")?.lowercase()
-        val range = media?.str("videoDynamicRange")?.lowercase().orEmpty()
+        val range = (media?.str("videoDynamicRange") ?: video?.str("displayTitle"))?.lowercase().orEmpty()
         val hdr10 = transfer in setOf("smpte2084", "smpte-st-2084") || "hdr10" in range
         return VideoDetails(
             range = when {
@@ -95,7 +95,7 @@ object PlexParse {
             },
             codec = video?.str("codec") ?: media?.str("videoCodec"),
             dolbyVisionProfile = profile,
-            hdr10Compatible = if (profile != null) profile in setOf(7, 8) && video?.int("DOVIBLCompatID") in setOf(1, 6)
+            hdr10Compatible = if (profile != null) profile in setOf(7, 8) && video?.int("DOVIBLCompatID") == 1
                 else hdr10,
             audio = streams.filter { it.int("streamType") == 2 }.mapNotNull { audio ->
                 val id = audio.int("id") ?: return@mapNotNull null

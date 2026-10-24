@@ -95,7 +95,7 @@ fun planPlayback(
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
         return PlaybackPlan.Direct(url, offsetMs)
     }
-    if (!forceTranscode && !forceSdr && Playback.canDirectPlay(item)) {
+    if (!forceTranscode && !forceSdr && audioStreamId == null && Playback.canDirectPlay(item)) {
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
         return PlaybackPlan.Direct(url, offsetMs)
     }

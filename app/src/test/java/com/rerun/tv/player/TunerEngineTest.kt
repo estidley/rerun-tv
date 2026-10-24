@@ -53,6 +53,7 @@ class TunerEngineTest {
     private lateinit var listener: Player.Listener
     private val sources = mutableListOf<MediaSource>()
     private var wallTime: Long? = null
+    private var hdrSupported = false
 
     @Before
     fun setUp() = runBlocking {
@@ -65,6 +66,10 @@ class TunerEngineTest {
         `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
         `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(false)
         `when`(settings.subtitleLanguageValue()).thenReturn("auto")
+        `when`(settings.audioLanguageValue()).thenReturn("auto")
+        `when`(settings.hdrModeValue()).thenReturn("AUTO")
+        `when`(api.get(anyString(), anyString(), anyString(), isNull(), isNull()))
+            .thenReturn("""{"MediaContainer":{"Metadata":[]}}""")
         `when`(settings.serverToken).thenReturn("test-only-placeholder")
         `when`(settings.clientId).thenReturn("test-client")
         doAnswer { listener = it.getArgument(0); null }.`when`(player).addListener(any(Player.Listener::class.java))
@@ -72,6 +77,7 @@ class TunerEngineTest {
         engine = TunerEngine(
             RuntimeEnvironment.getApplication(), repo, settings, OkHttpClient(), api,
             clock = { wallTime ?: System.currentTimeMillis() },
+            hdrSupported = { hdrSupported },
         ) { player }
     }
 
@@ -189,13 +195,35 @@ class TunerEngineTest {
         assertTrue(C.TRACK_TYPE_TEXT in parameters.value.disabledTrackTypes)
 
         val spanishTracks = Tracks(listOf(Tracks.Group(
-            TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("spa").build()),
+            TrackGroup(Format.Builder().setId("plex-subtitle-8").setSampleMimeType("application/x-subrip").setLanguage("spa").build()),
             false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(false),
         )))
         listener.onTracksChanged(spanishTracks)
         verify(player, atLeastOnce()).trackSelectionParameters = parameters.capture()
         assertFalse(C.TRACK_TYPE_TEXT in parameters.value.disabledTrackTypes)
         assertTrue(parameters.value.overrides.isNotEmpty())
+    }
+
+    @Test
+    fun automaticEmbeddedSubtitlesUsePlexSelectedTrackRatherThanTheFirstLanguage() = runBlocking {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"key":"/library/streams/7","selected":true}""",
+            """"languageCode":"eng"},{"id":8,"streamType":3,"codec":"srt","languageCode":"spa","selected":true}""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        val english = TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("eng").build())
+        val spanish = TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("spa").build())
+        listener.onTracksChanged(Tracks(listOf(english, spanish).map {
+            Tracks.Group(it, false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(false))
+        }))
+        val parameters = ArgumentCaptor.forClass(TrackSelectionParameters::class.java)
+        verify(player, atLeastOnce()).trackSelectionParameters = parameters.capture()
+        assertTrue(spanish in parameters.value.overrides)
+        assertFalse(english in parameters.value.overrides)
     }
 
     @Test
@@ -292,6 +320,111 @@ class TunerEngineTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(11))
         await { sources.size == 2 }
         assertEquals(EntryKind.PROGRAM, engine.state.value.located!!.entry.kind)
+    }
+
+    @Test
+    fun hdrAutoConvertsForUnsupportedDisplayAndTheOverrideConvertsOnSupportedDisplays() = runBlocking {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.convertingHdr)
+        assertEquals("0", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("directStream"))
+        assertEquals("h264", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("videoCodec"))
+        hdrSupported = true
+        engine.refreshPlaybackPreferences()
+        await { sources.size == 2 }
+        assertFalse(engine.state.value.convertingHdr)
+        assertTrue(sources.last().mediaItem.localConfiguration!!.uri.path!!.contains("/library/parts"))
+        `when`(settings.hdrModeValue()).thenReturn("CONVERT")
+        engine.refreshPlaybackPreferences()
+        await { sources.size == 3 }
+        assertTrue(engine.state.value.convertingHdr)
+    }
+
+    @Test
+    fun preferredAndManualAudioTracksSurviveRetunesButNotTheNextAiring() = runBlocking {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""",
+            """"id":21,"streamType":2,"languageCode":"eng","codec":"aac","selected":true},
+            {"id":22,"streamType":2,"languageCode":"spa","codec":"aac"},{"id":7,"streamType":3""",
+        )
+        val item = PlexParse.movies(metadata).single()
+        prepare("east", item)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        `when`(settings.audioLanguageValue()).thenReturn("es")
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals(22, engine.state.value.selectedAudioId)
+        assertEquals("22", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("audioStreamID"))
+        val previousTune = engine.state.value.tuneId
+        engine.selectAudioTrack(21, previousTune)
+        await { sources.size == 2 }
+        assertEquals("21", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("audioStreamID"))
+        engine.tune("east")
+        await { sources.size == 3 }
+        assertEquals(21, engine.state.value.selectedAudioId)
+        try {
+            engine.selectAudioTrack(22, previousTune)
+            fail("Stale picker must not affect a new tune")
+        } catch (_: IllegalStateException) { }
+        val nextNow = System.currentTimeMillis()
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", nextNow - 30_000, nextNow + 600_000, EntryKind.PROGRAM, item.key),
+        ))
+        engine.tune("east")
+        await { sources.size == 4 }
+        assertEquals(22, engine.state.value.selectedAudioId)
+    }
+
+    @Test
+    fun nativeHdrErrorsRetryOnceAsSdrAndThenExplainServerRequirements() = runBlocking {
+        hdrSupported = true
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        val error = PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_DECODING_FAILED)
+        listener.onPlayerError(error)
+        await { sources.size == 2 }
+        assertTrue(engine.state.value.convertingHdr)
+        listener.onPlayerError(error)
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertTrue(engine.state.value.message!!.contains("Enable HDR tone mapping"))
+        assertEquals(2, sources.size)
+    }
+
+    @Test
+    fun hdrAdsUseTheSameConversionPolicyAndRejectHdrOutputFromTheServer() = runBlocking {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        val ad = PlexParse.movies(metadata).single().copy(durationMs = 30_000)
+        prepare("east", ad)
+        val now = System.currentTimeMillis()
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 5_000, now + 55_000, EntryKind.FILLER, null),
+        ))
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.convertingHdr)
+        val hdrTracks = Tracks(listOf(Tracks.Group(
+            TrackGroup(Format.Builder().setSampleMimeType("video/hevc")
+                .setColorInfo(androidx.media3.common.ColorInfo.Builder().setColorTransfer(C.COLOR_TRANSFER_ST2084).build())
+                .build()),
+            false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(true),
+        )))
+        listener.onTracksChanged(hdrTracks)
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertTrue(engine.state.value.message!!.contains("Plex returned HDR instead of SDR"))
     }
 
     private fun videoWithSubtitle(codec: String): String =

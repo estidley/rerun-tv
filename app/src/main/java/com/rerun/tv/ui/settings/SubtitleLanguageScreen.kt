@@ -23,8 +23,8 @@ internal fun languageName(code: String): String =
     if (code == "auto") "Automatic" else Locale.forLanguageTag(code).getDisplayLanguage(Locale.getDefault())
 
 @Composable
-fun SubtitleLanguageScreen(controller: TvController) {
-    val selected by controller.subtitleLanguage.collectAsState()
+fun SubtitleLanguageScreen(controller: TvController, audio: Boolean = false) {
+    val selected by (if (audio) controller.audioLanguage else controller.subtitleLanguage).collectAsState()
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
     val first = remember { FocusRequester() }
@@ -34,8 +34,12 @@ fun SubtitleLanguageScreen(controller: TvController) {
     BackHandler { controller.go(Screen.Settings) }
     LaunchedEffect(Unit) { first.requestFocus() }
     TvStage("BACK settings") {
-        BasicText("SUBTITLE LANGUAGE", style = Retro.Title)
-        BasicText("Automatic uses Plex's selected track. A chosen language stays off when unavailable.", style = Retro.Caption)
+        BasicText(if (audio) "AUDIO LANGUAGE" else "SUBTITLE LANGUAGE", style = Retro.Title)
+        BasicText(
+            if (audio) "Automatic uses Plex's selected track. If a preferred language is unavailable, the default audio plays."
+            else "Automatic uses Plex's selected track. A chosen language stays off when unavailable.",
+            style = Retro.Caption,
+        )
         error?.let { BasicText(it, style = Retro.Caption) }
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             languages.forEachIndexed { index, code ->
@@ -43,7 +47,7 @@ fun SubtitleLanguageScreen(controller: TvController) {
                     languageName(code), {
                         scope.launch {
                             try {
-                                controller.setSubtitleLanguage(code)
+                                if (audio) controller.setAudioLanguage(code) else controller.setSubtitleLanguage(code)
                                 controller.go(Screen.Settings)
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e

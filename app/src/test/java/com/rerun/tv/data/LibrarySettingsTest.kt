@@ -150,4 +150,18 @@ class LibrarySettingsTest {
         assertEquals("FIFTIES", reopened.colorTheme().first())
         assertEquals("LARGE", reopened.guideDensity().first())
     }
+
+    @Test
+    fun hdrAndAudioPreferencesPersistAcrossSignOut() = runBlocking {
+        assertEquals("AUTO", settings.hdrModeValue())
+        assertEquals("auto", settings.audioLanguageValue())
+        settings.setHdrMode("CONVERT")
+        settings.setAudioLanguage("fr")
+        settings.signOut()
+        val reopened = Settings(RuntimeEnvironment.getApplication(), db.settings())
+        assertEquals("CONVERT", reopened.hdrMode().first())
+        assertEquals("CONVERT", reopened.hdrModeValue())
+        assertEquals("fr", reopened.audioLanguage().first())
+        assertEquals("fr", reopened.audioLanguageValue())
+    }
 }

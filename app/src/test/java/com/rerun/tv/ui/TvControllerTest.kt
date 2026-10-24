@@ -33,13 +33,14 @@ class TvControllerTest {
     private lateinit var engine: TunerEngine
     private lateinit var app: RerunApp
     private lateinit var settings: Settings
+    private lateinit var repo: ScheduleRepo
     private lateinit var sync: com.rerun.tv.data.LibrarySync
     private val rows = MutableStateFlow<List<ChannelRow>>(emptyList())
 
     @Before
     fun setUp() = runBlocking {
         app = mock(RerunApp::class.java)
-        val repo = mock(ScheduleRepo::class.java)
+        repo = mock(ScheduleRepo::class.java)
         settings = mock(Settings::class.java)
         sync = mock(com.rerun.tv.data.LibrarySync::class.java)
         `when`(app.sync).thenReturn(sync)
@@ -51,6 +52,8 @@ class TvControllerTest {
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
         `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         controller = TvController(app, engine)
     }
@@ -142,6 +145,34 @@ class TvControllerTest {
         controller.startWatching()
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(Screen.Onboarding, controller.screen.value)
+        verify(engine).clear()
+    }
+
+    @Test
+    fun removingWestReturnsToEastWithoutLeavingOrUnmutingSettings() = runBlocking<Unit> {
+        val east = ChannelRow.of(ChannelDef("east", 1, "East", ChannelKind.CUSTOM, Rules()), false, false)
+        `when`(repo.active()).thenReturn(listOf(east))
+        controller.tuneTo("removed-music", sound = false)
+        controller.tuneTo("east:w", sound = false)
+        controller.go(Screen.Settings)
+        clearInvocations(engine)
+        controller.reconcileChannels()
+        assertEquals("east", controller.currentChannelId())
+        assertEquals(Screen.Settings, controller.screen.value)
+        verify(engine).tune("east")
+        verify(engine, never()).setVisible(true)
+        controller.lastChannel()
+        assertEquals("east", controller.currentChannelId())
+    }
+
+    @Test
+    fun removingTheOnlyChannelClearsPlaybackWithoutLeavingTheMenu() = runBlocking<Unit> {
+        `when`(repo.active()).thenReturn(emptyList())
+        controller.tuneTo("music:jazz", sound = false)
+        controller.go(Screen.Settings)
+        controller.reconcileChannels()
+        assertEquals(null, controller.currentChannelId())
+        assertEquals(Screen.Settings, controller.screen.value)
         verify(engine).clear()
     }
 }

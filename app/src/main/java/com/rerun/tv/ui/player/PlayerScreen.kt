@@ -9,6 +9,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -84,7 +86,17 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
                     controller.posterUrl(nextItem),
                 )
             }
-            Phase.DIFFICULTIES -> DifficultiesCard()
+            Phase.DIFFICULTIES -> {
+                DifficultiesCard()
+                state.message?.let { message ->
+                    BasicText(
+                        message, style = Retro.Body,
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .background(Retro.GuideBlueDeep)
+                            .padding(horizontal = 48.dp, vertical = 32.dp),
+                    )
+                }
+            }
             Phase.TUNING -> if (fx.static) StaticNoise(Modifier.fillMaxSize()) else Box(Modifier.fillMaxSize().background(Color.Black))
             Phase.PLAYING -> Unit
         }

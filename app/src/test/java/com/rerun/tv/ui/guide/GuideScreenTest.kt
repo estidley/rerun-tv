@@ -68,6 +68,8 @@ class GuideScreenTest {
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
         `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         schedule = mock(ScheduleRepo::class.java)
         `when`(schedule.guideRevision).thenReturn(revision)

@@ -47,6 +47,8 @@ sealed interface Screen {
     data object Libraries : Screen
     data object AdLibrary : Screen
     data object SubtitleLanguage : Screen
+    data object AudioLanguage : Screen
+    data object AudioTracks : Screen
 }
 
 /** App-level state and remote-control actions. One per activity. */
@@ -74,6 +76,18 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     val colorTheme: StateFlow<String> = app.settings.colorTheme().stateIn(scope, SharingStarted.Eagerly, "STANDARD_BLUE")
     val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "COMFORTABLE")
     val subtitleLanguage: StateFlow<String> = app.settings.subtitleLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
+    val audioLanguage: StateFlow<String> = app.settings.audioLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
+    val hdrMode: StateFlow<String> = app.settings.hdrMode().stateIn(scope, SharingStarted.Eagerly, "AUTO")
+
+    suspend fun setAudioLanguage(value: String) {
+        app.settings.setAudioLanguage(value)
+        engine.refreshPlaybackPreferences()
+    }
+
+    suspend fun setHdrMode(value: com.rerun.core.plex.HdrMode) {
+        app.settings.setHdrMode(value.name)
+        engine.refreshPlaybackPreferences()
+    }
 
     fun setGuideDensity(value: com.rerun.tv.ui.guide.GuideDensity) {
         scope.launch { app.settings.setGuideDensity(value.name) }
@@ -198,6 +212,22 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             engine.clear()
             go(Screen.Onboarding)
         } else currentId?.let { engine.tune(it) } ?: startWatching()
+    }
+
+    /** Keep menus open while replacing a feed that a lineup change removed. */
+    suspend fun reconcileChannels() {
+        val generation = connectionGeneration
+        val list = app.schedule.active()
+        if (generation != connectionGeneration) return
+        val ids = list.map { it.id }.toSet()
+        previousId = previousId?.takeIf { it in ids }
+        channelBeforeRestart = channelBeforeRestart?.takeIf { it in ids }
+        val current = currentId ?: return
+        if (current in ids || (current == Lineup.RESTART_ID && app.schedule.channel(current) != null)) return
+        if (generation != connectionGeneration) return
+        val replacement = list.firstOrNull { it.id == Lineup.eastOf(current) } ?: list.firstOrNull()
+        currentId = replacement?.id
+        if (replacement == null) engine.clear() else engine.tune(replacement.id)
     }
 
     fun tuneTo(id: String, sound: Boolean = true) {

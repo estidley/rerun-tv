@@ -64,6 +64,8 @@ class SettingsScreenTest {
         `when`(controller.colorTheme).thenReturn(MutableStateFlow("STANDARD_BLUE"))
         `when`(controller.guideDensity).thenReturn(MutableStateFlow("COMFORTABLE"))
         `when`(controller.subtitleLanguage).thenReturn(MutableStateFlow("auto"))
+        `when`(controller.audioLanguage).thenReturn(MutableStateFlow("auto"))
+        `when`(controller.hdrMode).thenReturn(MutableStateFlow("AUTO"))
         doAnswer {
             @Suppress("UNCHECKED_CAST")
             val continuation = it.rawArguments.last() as Continuation<Unit>
@@ -106,6 +108,7 @@ class SettingsScreenTest {
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
             "Compact", "■ Comfortable", "Large", "Subtitles", "Subtitle language: Automatic",
             "East and West", "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
+            "Audio language: Automatic", "Current program audio tracks", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )
         for ((index, label) in labels.withIndex()) {
             compose.onNodeWithText(label).assertIsFocused()
