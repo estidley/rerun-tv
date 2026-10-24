@@ -104,6 +104,56 @@ class TunerEngineTest {
     }
 
     @Test
+    fun unsupportedMusicTranscodesInsteadOfCountingDownThroughUnplayedSongs() = runBlocking<Unit> {
+        val item = PlexParse.tracks(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Song","duration":240000,
+            "Media":[{"container":"wma","audioCodec":"wmav2","Part":[{"key":"/library/parts/1/file.wma"}]}]}]}}""",
+        ).single()
+        prepare("music:jazz", item)
+        wallTime = System.currentTimeMillis()
+        engine.tune("music:jazz")
+        await { sources.size == 1 }
+        val uri = sources.single().mediaItem.localConfiguration!!.uri
+        assertEquals("/audio/:/transcode/universal/start.m3u8", uri.path)
+        assertEquals("60", uri.getQueryParameter("offset"))
+        assertEquals(Phase.TUNING, engine.state.value.phase)
+        listener.onPlaybackStateChanged(Player.STATE_READY)
+        assertEquals(Phase.PLAYING, engine.state.value.phase)
+        verify(api, never()).get(anyString(), anyString(), anyString(), isNull(), isNull())
+    }
+
+    @Test
+    fun musicDecodeFailureRetriesWithAudioTranscodingAndResetsOnTheNextSong() = runBlocking<Unit> {
+        val item = PlexParse.tracks(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Song","duration":240000,
+            "Media":[{"container":"mp4","audioCodec":"alac","Part":[{"key":"/library/parts/1/file.m4a"}]}]}]}}""",
+        ).single()
+        prepare("music:jazz", item)
+        engine.tune("music:jazz")
+        await { sources.size == 1 }
+        assertTrue(sources.last().mediaItem.localConfiguration!!.uri.path!!.startsWith("/library/parts"))
+        engine.setVisible(false)
+        val error = PlaybackException("Test", null, PlaybackException.ERROR_CODE_DECODING_FAILED)
+        listener.onPlayerError(error)
+        await { sources.size == 2 }
+        assertEquals("/audio/:/transcode/universal/start.m3u8", sources.last().mediaItem.localConfiguration!!.uri.path)
+        listener.onPlaybackStateChanged(Player.STATE_READY)
+        assertEquals(Phase.PLAYING, engine.state.value.phase)
+        verify(player, never()).setVolume(1f)
+        listener.onPlayerError(error)
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertTrue(engine.state.value.message!!.contains("audio transcoder"))
+        assertEquals(2, sources.size)
+        val now = System.currentTimeMillis()
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("music:jazz", now - 10_000, now + 200_000, EntryKind.PROGRAM, item.key),
+        ))
+        engine.tune("music:jazz")
+        await { sources.size == 3 }
+        assertTrue(sources.last().mediaItem.localConfiguration!!.uri.path!!.startsWith("/library/parts"))
+    }
+
+    @Test
     fun restartedTranscodeDoesNotReturnToZeroOnRetune() = runBlocking {
         val item = PlexParse.episodes(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Episode","duration":1800000}]}}""",

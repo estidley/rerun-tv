@@ -17,7 +17,7 @@ object Playback {
     private val containers = setOf("mkv", "mp4", "m4v", "mov", "ts")
     private val video = setOf("h264", "hevc", "mpeg2video", "vp9", "av1")
     private val audio = setOf("aac", "ac3", "eac3", "mp3", "opus", "flac", "vorbis")
-    private val trackContainers = setOf("mp3", "m4a", "mp4", "aac", "flac", "ogg", "opus", "wav")
+    private val trackContainers = setOf("mp3", "mpeg", "m4a", "mp4", "aac", "flac", "ogg", "opus", "wav")
 
     fun canDirectPlay(item: MediaItem): Boolean =
         canCopyVideo(item) && item.audioCodec?.lowercase() in audio
@@ -39,6 +39,16 @@ object Playback {
         val path = item.partKey
         if (!ServerUri.isAcceptable(base) || !ServerUri.isLibraryPath(path)) return null
         return base.trimEnd('/') + path
+    }
+
+    fun audioTranscodeUrl(base: String, item: MediaItem, clientId: String, session: String, offsetMs: Long): String? {
+        val meta = "/library/metadata/${item.key}"
+        if (!ServerUri.isAcceptable(base) || item.key.isBlank() || !ServerUri.isLibraryPath(meta)) return null
+        return base.trimEnd('/') + "/audio/:/transcode/universal/start.m3u8" +
+            "?path=${enc(meta)}&mediaIndex=0&partIndex=0&protocol=hls" +
+            "&offset=${offsetMs / 1000}&fastSeek=1&directPlay=0&directStream=0&audioCodec=aac" +
+            "&session=${enc(session)}&X-Plex-Session-Identifier=${enc(session)}" +
+            "&X-Plex-Client-Identifier=${enc(clientId)}&X-Plex-Product=Rerun&X-Plex-Platform=Android"
     }
 
     fun transcodeUrl(
@@ -98,9 +108,13 @@ fun planPlayback(
     if (item == null) return PlaybackPlan.UpNext("missing")
     if (!ServerUri.isAcceptable(base)) return PlaybackPlan.UpNext("server")
     if (item.kind == MediaKind.TRACK) {
-        if (!Playback.canPlayTrack(item)) return PlaybackPlan.UpNext("audio")
-        val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
-        return PlaybackPlan.Direct(url, offsetMs)
+        if (!forceTranscode && Playback.canPlayTrack(item)) {
+            val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
+            return PlaybackPlan.Direct(url, offsetMs)
+        }
+        val url = Playback.audioTranscodeUrl(base, item, clientId, session, offsetMs)
+            ?: return PlaybackPlan.UpNext("audio")
+        return PlaybackPlan.Transcoded(url)
     }
     if (!forceTranscode && !forceSdr && !normalizeLoudness && audioStreamId == null && Playback.canDirectPlay(item)) {
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")

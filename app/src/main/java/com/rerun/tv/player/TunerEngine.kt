@@ -119,6 +119,7 @@ class TunerEngine(
     private var identity: PlaybackIdentity? = null
     private var audioOverride: Int? = null
     private var hdrFallback = false
+    private var audioFallback = false
     private var currentHdr = false
     private var convertingHdr = false
     private var normalizingAudio = false
@@ -139,11 +140,16 @@ class TunerEngine(
 
                 override fun onPlayerError(error: PlaybackException) {
                     val id = _state.value.channel?.id
-                    if (currentHdr && !convertingHdr && !hdrFallback && id != null) {
+                    if (_state.value.item?.kind == MediaKind.TRACK && !transcoded && !audioFallback && id != null) {
+                        audioFallback = true
+                        tune(id)
+                    } else if (currentHdr && !convertingHdr && !hdrFallback && id != null) {
                         hdrFallback = true
                         tune(id)
                     } else difficulties(
                         if (convertingHdr) HDR_HELP else if (normalizingAudio) NORMALIZATION_HELP
+                        else if (_state.value.item?.kind == MediaKind.TRACK)
+                            "Music playback failed. Check the Plex server connection and audio transcoder."
                         else "Playback failed. Retrying shortly.",
                     )
                 }
@@ -188,6 +194,7 @@ class TunerEngine(
     fun refreshPlaybackPreferences() {
         audioOverride = null
         hdrFallback = false
+        audioFallback = false
         _state.value.channel?.id?.let(::tune)
     }
 
@@ -272,6 +279,7 @@ class TunerEngine(
                     identity = nextIdentity
                     audioOverride = null
                     hdrFallback = false
+                    audioFallback = false
                 }
                 val nextItem = loc.next?.let { n ->
                     if (n.kind == EntryKind.PROGRAM) repo.item(n.itemKey)
@@ -332,7 +340,8 @@ class TunerEngine(
                     item?.let { if (audio?.codec != null) it.copy(audioCodec = audio.codec) else it },
                     base, settings.clientId, "$session-$seq", offset, subtitlesOn && subtitleAvailable,
                     subtitleStreamId = subtitle?.id,
-                    forceTranscode = subtitle != null && subtitle.mimeType == null,
+                    forceTranscode = (item?.kind == MediaKind.TRACK && audioFallback) ||
+                        (subtitle != null && subtitle.mimeType == null),
                     audioStreamId = audio?.id?.takeIf { details.audio.size > 1 },
                     forceSdr = convertingHdr,
                     normalizeLoudness = normalize,
@@ -365,7 +374,9 @@ class TunerEngine(
                     is PlaybackPlan.UpNext -> {
                         transcoded = false
                         player.stop()
-                        _state.value = _state.value.copy(phase = Phase.UP_NEXT)
+                        if (item?.kind == MediaKind.TRACK) {
+                            difficulties("Unable to prepare this music track. Re-sync the music library in Settings.")
+                        } else _state.value = _state.value.copy(phase = Phase.UP_NEXT)
                     }
                 }
             } catch (e: CancellationException) {
@@ -460,6 +471,7 @@ class TunerEngine(
         identity = null
         audioOverride = null
         hdrFallback = false
+        audioFallback = false
         currentHdr = false
         convertingHdr = false
         normalizingAudio = false

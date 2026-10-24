@@ -46,6 +46,7 @@ diagnostics; HTTP token attachment follows the trusted Plex host policy.
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music uses hourly station blocks.
+- Each guide opening selects the current station and wall-clock program after loading; subsequent browsing is not reset by schedule reloads.
 
 ## Startup, updates and lifecycle
 
@@ -62,6 +63,9 @@ resume starts the appropriate current/replacement station. Sign-out cancels and 
 ## Playback compatibility and transitions
 
 Direct playback is preferred for the supported container/video/audio policy in `Playback`.
+Music formats outside the direct-play policy (or missing format metadata) use the Plex audio
+universal transcoder with AAC/HLS output. A failed direct music stream retries through audio
+conversion once per airing; conversion failures show an error instead of a silent Up Next loop.
 Multi-audio selection uses an explicit Plex stream ID. Audio-only conversion allows video copy without
 1080p/bitrate caps; required video conversion retains its compatibility limits.
 Subtitles can use external or embedded text, otherwise Plex burn-in.

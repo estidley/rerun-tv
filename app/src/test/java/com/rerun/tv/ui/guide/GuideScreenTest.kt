@@ -18,6 +18,9 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isSelected
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.Rules
@@ -109,6 +112,67 @@ class GuideScreenTest {
     @Test
     @Config(qualifiers = "w3840dp-h2160dp-mdpi")
     fun guideUsesAdditionalRowsAt4k() = assertGuideRendering()
+
+    @Test
+    fun openingAndReopeningSelectsTheCurrentStationAndProgramAfterLoading() = runBlocking<Unit> {
+        val now = System.currentTimeMillis()
+        val showGuide = mutableStateOf(true)
+        val release = java.util.concurrent.CountDownLatch(1)
+        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(
+            listOf("test:30", "test:40").associateWith { id ->
+                listOf(
+                    ScheduleEntry(id, now - 60_000, now + 600_000, EntryKind.PROGRAM, null),
+                    ScheduleEntry(id, now + 600_000, now + 3_600_000, EntryKind.PROGRAM, null),
+                )
+            },
+        )
+        doAnswer {
+            check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            Unit
+        }.`when`(schedule).ensure(anyLong())
+        controller.tuneTo("test:30", sound = false)
+        try {
+            compose.setContent { if (showGuide.value) GuideScreen(controller, schedule) }
+            compose.onNodeWithText("Updating guide...").assertExists()
+        } finally {
+            release.countDown()
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasAnyAncestor(hasTestTag("guide-row:test:30")) and isSelected())
+                .fetchSemanticsNodes().size == 1
+        }
+        val initial = compose.onNode(
+            hasAnyAncestor(hasTestTag("guide-row:test:30")) and isSelected(),
+        ).fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        val next = compose.onNode(
+            hasAnyAncestor(hasTestTag("guide-row:test:30")) and isSelected(),
+        ).fetchSemanticsNode().boundsInRoot
+        assertTrue(next.left > initial.left)
+        compose.runOnIdle { revision.value++ }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+        }
+        assertEquals(next.left, compose.onNode(
+            hasAnyAncestor(hasTestTag("guide-row:test:30")) and isSelected(),
+        ).fetchSemanticsNode().boundsInRoot.left, 1f)
+        compose.runOnIdle { showGuide.value = false }
+        compose.waitForIdle()
+        compose.runOnIdle {
+            controller.tuneTo("test:40", sound = false)
+            showGuide.value = true
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasAnyAncestor(hasTestTag("guide-row:test:40")) and isSelected())
+                .fetchSemanticsNodes().size == 1
+        }
+        assertEquals(initial.left, compose.onNode(
+            hasAnyAncestor(hasTestTag("guide-row:test:40")) and isSelected(),
+        ).fetchSemanticsNode().boundsInRoot.left, 1f)
+        compose.onRoot().performKeyInput { pressKey(Key.Enter) }
+        assertEquals(Screen.Player, controller.screen.value)
+        assertEquals("test:40", controller.currentChannelId())
+    }
 
     @Test
     fun emptyGuideCanOpenSettingsAndChannelsWithTheRemote() {

@@ -41,6 +41,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -93,6 +95,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
+    var selectCurrentOnOpen by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -115,8 +118,12 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
         val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
         focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, rows.lastIndex.coerceAtLeast(-1))
     }
-    LaunchedEffect(updating) {
-        if (updating) focusRow = -1
+    LaunchedEffect(updating, rows) {
+        if (!updating && loadError == null && rows.isNotEmpty() && selectCurrentOnOpen) {
+            focusRow = rows.indexOfFirst { it.id == controller.currentChannelId() }.coerceAtLeast(0)
+            focusTime = System.currentTimeMillis()
+            selectCurrentOnOpen = false
+        }
     }
     LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading) {
         if (update.busy || startup.loading) return@LaunchedEffect
@@ -316,6 +323,7 @@ private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Bo
     }
     Box(
         Modifier.offset(x = x).width(w).fillMaxHeight()
+            .semantics { this.selected = selected }
             .background(if (selected) Retro.Yellow else rowColor)
             .border(1.dp, if (selected) Retro.White else Retro.Border.copy(alpha = 0.6f))
             .padding(horizontal = 10.dp),
