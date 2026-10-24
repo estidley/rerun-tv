@@ -128,4 +128,22 @@ class PlexParseTest {
         assertEquals(412, PlexParse.totalSize(fixture("movies.json")))
         assertEquals(3, PlexParse.totalSize(fixture("sections.json")))
     }
+
+    @Test
+    fun subtitlesUseTheFirstPartAndKeepExternalKeys() {
+        val streams = PlexParse.subtitles(
+            """{"MediaContainer":{"Metadata":[{"Media":[{"Part":[{"Stream":[
+              {"id":1,"streamType":1,"codec":"h264"},
+              {"id":2,"streamType":3,"codec":"srt","key":"/library/streams/2","languageCode":"eng","selected":1},
+              {"id":3,"streamType":3,"codec":"pgs"}
+            ]},{"Stream":[{"id":4,"streamType":3,"codec":"srt"}]}]}]}]}}""",
+        )
+        assertEquals(listOf(2, 3), streams.map { it.id })
+        assertEquals("/library/streams/2", streams.first().key)
+        assertEquals("eng", streams.first().language)
+        assertEquals(true, streams.first().selected)
+        assertEquals("application/x-subrip", streams.first().mimeType)
+        assertNull(streams[1].mimeType)
+        assertEquals(emptyList(), PlexParse.subtitles("""{"MediaContainer":{}}"""))
+    }
 }

@@ -29,6 +29,9 @@ import com.rerun.tv.ui.crt.CrtLevel
 import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(controller: TvController) {
@@ -87,7 +90,8 @@ fun SettingsScreen(controller: TvController) {
                                 app.settings.setFlag(Settings.EAST_WEST, next)
                                 app.sync.refreshChannels()
                             } catch (e: Exception) {
-                                runCatching { app.settings.setFlag(Settings.EAST_WEST, !next) }
+                                withContext(NonCancellable) { app.settings.setFlag(Settings.EAST_WEST, !next) }
+                                if (e is CancellationException) throw e
                                 syncStatus = "Lineup failed: ${e.message}"
                             } finally {
                                 lineupBusy = false
@@ -103,8 +107,8 @@ fun SettingsScreen(controller: TvController) {
                         if (!lineupBusy) scope.launch {
                             lineupBusy = true
                             val next = !musicOn
-                            app.settings.setFlag(Settings.MUSIC, next)
                             try {
+                                app.settings.setFlag(Settings.MUSIC, next)
                                 if (next) {
                                     app.sync.sync().collect { p ->
                                         syncStatus = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}"
@@ -115,6 +119,8 @@ fun SettingsScreen(controller: TvController) {
                                     syncStatus = "Music channels off"
                                 }
                             } catch (e: Exception) {
+                                withContext(NonCancellable) { app.settings.setFlag(Settings.MUSIC, !next) }
+                                if (e is CancellationException) throw e
                                 syncStatus = "Sync failed: ${e.message}"
                             } finally {
                                 lineupBusy = false
@@ -150,12 +156,16 @@ fun SettingsScreen(controller: TvController) {
             BasicText("Plex server: $server" + if (lastSync > 0) "   ·   last synced ${clockTime(lastSync)}" else "", style = Retro.Body)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("Re-sync now", {
-                    if (syncStatus == null || syncStatus == "Done") scope.launch {
+                    if (!lineupBusy) scope.launch {
+                        lineupBusy = true
                         try {
                             app.sync.sync().collect { p -> syncStatus = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}" }
                             lastSync = app.settings.lastSyncMs()
                         } catch (e: Exception) {
+                            if (e is CancellationException) throw e
                             syncStatus = "Sync failed: ${e.message}"
+                        } finally {
+                            lineupBusy = false
                         }
                     }
                 })

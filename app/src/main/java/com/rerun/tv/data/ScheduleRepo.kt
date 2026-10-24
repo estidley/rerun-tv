@@ -1,6 +1,8 @@
 package com.rerun.tv.data
 
 import com.rerun.core.catalog.Lineup
+import com.rerun.core.catalog.StoredChannel
+import androidx.room.withTransaction
 import com.rerun.core.codec.StateCodec
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
@@ -38,6 +40,21 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     suspend fun channel(id: String): ChannelRow? = db.channels().byId(id)
     suspend fun active(): List<ChannelRow> = db.channels().active()
 
+    /** Commit library/lineup changes atomically with respect to schedule generation. */
+    suspend fun refreshChannels(eastWest: Boolean, music: Boolean, items: List<MediaItem>? = null) = mutex.withLock {
+        db.withTransaction {
+            if (items != null) db.items().replaceAll(items.map(ItemRow::of))
+            val contents = items ?: db.items().all().map { it.toItem() }
+            val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
+            val planned = Lineup.plan(contents, existing, eastWest, music)
+            db.channels().upsertAll(
+                planned.channels.map { ChannelRow.of(it.def, it.builtIn, it.dormant, it.poolMs) },
+            )
+            for (id in planned.deleteIds) removeChannel(id)
+        }
+        invalidateLibrary()
+    }
+
     /** Tops up any active channel with less than a day of schedule left. */
     suspend fun ensure(nowMs: Long) = mutex.withLock {
         db.entries().pruneBefore(nowMs - KEEP_PAST_MS)
@@ -51,19 +68,21 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
 
     /** Plants one episode on the hidden "From the Top" channel, starting now at 0:00. */
     suspend fun airFromStart(item: MediaItem, nowMs: Long) = mutex.withLock {
-        val def = ChannelDef(
-            id = Lineup.RESTART_ID,
-            number = Lineup.RESTART_NUMBER,
-            name = "From the Top",
-            kind = ChannelKind.CUSTOM,
-            rules = Rules(kinds = setOf(MediaKind.EPISODE)),
-            hidden = true,
-        )
-        db.channels().upsert(ChannelRow.of(def, builtIn = true, dormant = false, poolMs = item.durationMs))
-        db.entries().deleteChannel(Lineup.RESTART_ID)
-        db.states().delete(Lineup.RESTART_ID)
-        val end = nowMs + item.durationMs.coerceAtLeast(1L)
-        db.entries().insertAll(listOf(EntryRow.of(ScheduleEntry(Lineup.RESTART_ID, nowMs, end, EntryKind.PROGRAM, item.key))))
+        db.withTransaction {
+            val def = ChannelDef(
+                id = Lineup.RESTART_ID,
+                number = Lineup.RESTART_NUMBER,
+                name = "From the Top",
+                kind = ChannelKind.CUSTOM,
+                rules = Rules(kinds = setOf(MediaKind.EPISODE)),
+                hidden = true,
+            )
+            db.channels().upsert(ChannelRow.of(def, builtIn = true, dormant = false, poolMs = item.durationMs))
+            db.entries().deleteChannel(Lineup.RESTART_ID)
+            db.states().delete(Lineup.RESTART_ID)
+            val end = nowMs + item.durationMs.coerceAtLeast(1L)
+            db.entries().insertAll(listOf(EntryRow.of(ScheduleEntry(Lineup.RESTART_ID, nowMs, end, EntryKind.PROGRAM, item.key))))
+        }
     }
 
     private suspend fun topUp(row: ChannelRow, nowMs: Long) {
@@ -100,8 +119,10 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             row.id,
             Lineup.WEST_LAG_MS,
         ).filter { it.endMs > nowMs - KEEP_PAST_MS }
-        db.entries().deleteChannel(row.id)
-        if (shifted.isNotEmpty()) db.entries().insertAll(shifted.map(EntryRow::of))
+        db.withTransaction {
+            db.entries().deleteChannel(row.id)
+            if (shifted.isNotEmpty()) db.entries().insertAll(shifted.map(EntryRow::of))
+        }
     }
 
     suspend fun entries(channelId: String, fromMs: Long, toMs: Long): List<ScheduleEntry> =
@@ -115,24 +136,30 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
      * West is derived, so an East edit drops the shifted copy and builds it again.
      */
     suspend fun resetFuture(channelId: String, nowMs: Long) = mutex.withLock {
-        if (!Lineup.isWest(channelId)) {
-            val current = db.entries().range(channelId, nowMs, nowMs + 1).firstOrNull()
-            db.entries().deleteFrom(channelId, current?.endMs ?: nowMs)
-            db.channels().byId(channelId)?.let { topUp(it, nowMs) }
+        db.withTransaction {
+            if (!Lineup.isWest(channelId)) {
+                val current = db.entries().range(channelId, nowMs, nowMs + 1).firstOrNull()
+                db.entries().deleteFrom(channelId, current?.endMs ?: nowMs)
+                db.channels().byId(channelId)?.let { topUp(it, nowMs) }
+            }
+            val west = db.channels().byId(Lineup.westId(channelId)) ?: return@withTransaction
+            db.entries().deleteChannel(west.id)
+            mirrorWest(west, nowMs)
         }
-        val west = db.channels().byId(Lineup.westId(channelId)) ?: return@withLock
-        db.entries().deleteChannel(west.id)
-        mirrorWest(west, nowMs)
     }
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {
-        db.channels().upsert(row)
-        if (row.hidden && !Lineup.isWest(row.id)) removeChannel(Lineup.westId(row.id))
+        db.withTransaction {
+            db.channels().upsert(row)
+            if (row.hidden && !Lineup.isWest(row.id)) removeChannel(Lineup.westId(row.id))
+        }
     }
 
     suspend fun deleteChannel(id: String) = mutex.withLock {
-        removeChannel(id)
-        if (!Lineup.isWest(id)) removeChannel(Lineup.westId(id))
+        db.withTransaction {
+            removeChannel(id)
+            if (!Lineup.isWest(id)) removeChannel(Lineup.westId(id))
+        }
     }
 
     private suspend fun removeChannel(id: String) {

@@ -1,6 +1,7 @@
 package com.rerun.core.plex
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -30,6 +31,12 @@ class ServerUriTest {
 
     @Test
     fun cleartextIsLocalOnly() {
+        assertTrue(ServerUri.allowsCleartext("fc00::1"))
+        assertTrue(ServerUri.allowsCleartext("fd12::1"))
+        assertTrue(ServerUri.isAcceptable("http://[fd12::1]:32400"))
+        assertTrue(ServerUri.shouldAttachToken("http", "fd12::1", null))
+        assertFalse(ServerUri.allowsCleartext("2001:db8::1"))
+        assertFalse(ServerUri.allowsCleartext("fe00::1"))
         assertTrue(ServerUri.allowsCleartext("192.168.1.20"))
         assertTrue(ServerUri.allowsCleartext("10.1.2.3"))
         assertTrue(ServerUri.allowsCleartext("127.0.0.1"))
@@ -48,6 +55,9 @@ class ServerUriTest {
 
     @Test
     fun tokenStaysOffUnrelatedHosts() {
+        val ipv6 = ServerUri.hostOf("https://[2001:db8::1]:32400")
+        assertEquals("2001:db8::1", ipv6)
+        assertTrue(ServerUri.shouldAttachToken("https", "2001:db8::1", ipv6))
         assertTrue(ServerUri.mayCarryToken("https", "plex.tv", null))
         assertFalse(ServerUri.shouldAttachToken("https", "plex.tv", null))
         assertTrue(ServerUri.shouldAttachToken("https", "abc.plex.direct", null))

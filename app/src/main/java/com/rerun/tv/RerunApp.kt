@@ -39,7 +39,7 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
         http = plexHttpClient(settings)
         plex = PlexApi({ settings.clientId }, http)
         schedule = ScheduleRepo(db, Scheduler(ZoneId.systemDefault()))
-        sync = LibrarySync(plex, db, settings) { schedule.invalidateLibrary() }
+        sync = LibrarySync(plex, settings, schedule)
         // An update can rename stock channels and add extras from the library already saved.
         // Music tracks are fetched only after that switch is turned on.
         appScope.launch {

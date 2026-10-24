@@ -19,6 +19,23 @@ data class PlexConnection(val uri: String, val local: Boolean, val relay: Boolea
 data class PlexServer(val name: String, val clientId: String, val accessToken: String?, val connections: List<PlexConnection>)
 data class Section(val key: String, val type: String, val title: String)
 
+data class SubtitleStream(
+    val id: Int,
+    val codec: String?,
+    val key: String?,
+    val language: String?,
+    val selected: Boolean,
+) {
+    val mimeType: String? get() = when (codec?.lowercase()) {
+        "srt" -> "application/x-subrip"
+        "ass", "ssa" -> "text/x-ssa"
+        "vtt", "webvtt" -> "text/vtt"
+        "ttml" -> "application/ttml+xml"
+        "mov_text", "tx3g" -> "application/x-quicktime-tx3g"
+        else -> null
+    }
+}
+
 /** Turns Plex JSON responses into core models. Missing fields become null/empty, never errors. */
 object PlexParse {
     private val json = Json { ignoreUnknownKeys = true }
@@ -58,6 +75,16 @@ object PlexParse {
         container(text).arr("Directory").map { Section(it.str("key").orEmpty(), it.str("type").orEmpty(), it.str("title").orEmpty()) }
 
     fun totalSize(text: String): Int = container(text).let { it.int("totalSize") ?: it.int("size") ?: 0 }
+
+    /** Streams for the same first media/part that playback uses. */
+    fun subtitles(text: String): List<SubtitleStream> =
+        container(text).arr("Metadata").firstOrNull()?.arr("Media")?.firstOrNull()
+            ?.arr("Part")?.firstOrNull()?.arr("Stream").orEmpty()
+            .filter { it.int("streamType") == 3 }
+            .mapNotNull { s ->
+                val id = s.int("id") ?: return@mapNotNull null
+                SubtitleStream(id, s.str("codec"), s.str("key"), s.str("languageCode"), s.bool("selected") || s.int("selected") == 1)
+            }
 
     fun movies(text: String): List<MediaItem> = container(text).arr("Metadata").map { m ->
         val media = m.arr("Media").firstOrNull()

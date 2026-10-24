@@ -65,6 +65,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 dependencies {
@@ -88,6 +89,9 @@ dependencies {
     implementation(libs.security.crypto)
     implementation(libs.coil.compose)
     implementation(libs.coil.okhttp)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.mockito)
 }
 
 val checkReleaseKeystore = tasks.register("checkReleaseKeystore") {

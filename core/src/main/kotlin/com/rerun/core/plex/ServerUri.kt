@@ -44,7 +44,7 @@ object ServerUri {
     fun shouldAttachToken(scheme: String, host: String, pinnedHost: String?): Boolean =
         mayCarryToken(scheme, host, pinnedHost) && !isPlexTv(host)
 
-    fun hostOf(uri: String): String? = parse(uri)?.host
+    fun hostOf(uri: String): String? = parse(uri)?.host?.removePrefix("[")?.removeSuffix("]")
 
     /** Relative Plex path. Rejects scheme changes, userinfo, and parent segments. */
     fun isLibraryPath(path: String?): Boolean {
@@ -78,7 +78,8 @@ object ServerUri {
         } catch (_: Exception) {
             return false
         }
-        return addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress
+        val uniqueLocal = addr.address.size == 16 && (addr.address[0].toInt() and 0xfe) == 0xfc
+        return addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress || uniqueLocal
     }
 
     /** Numeric only, so a hostname can never be resolved here. */

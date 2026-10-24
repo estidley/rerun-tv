@@ -26,23 +26,26 @@ Set-RerunJdk
 if (-not $env:ANDROID_HOME -and -not (Test-Path "$root\local.properties")) {
     $sdk = Join-Path $env:LOCALAPPDATA 'Android\Sdk'
     if (Test-Path $sdk) { "sdk.dir=$($sdk -replace '\\','\\')" | Set-Content "$root\local.properties" -Encoding ASCII }
-    else { throw "Android SDK not found. Install it or set ANDROID_HOME." }
+    else { throw 'Android SDK not found. Install it or set ANDROID_HOME.' }
 }
 
 if (-not $SkipBuild) {
     & "$PSScriptRoot\keystore.ps1"
-    if (-not $?) { throw "Keystore setup failed" }
+    if (-not $?) { throw 'Keystore setup failed' }
     & "$root\gradlew.bat" ':app:assembleRelease' --console=plain
-    if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+    if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 }
 
 $apk = Join-Path $root 'app\build\outputs\apk\release\app-release.apk'
-if (-not (Test-Path $apk)) { throw "APK not found at $apk" }
+if (-not (Test-Path $apk)) { throw "APK not found at $($apk)" }
 
-adb connect "${TvIp}:5555" | Write-Host
-Write-Host "If the TV shows 'Allow USB debugging?', choose Always allow, then press Enter here."
-adb -s "${TvIp}:5555" wait-for-device
-adb -s "${TvIp}:5555" install -r $apk
-if ($LASTEXITCODE -ne 0) { throw "Install failed" }
-adb -s "${TvIp}:5555" shell monkey -p com.rerun.tv -c android.intent.category.LAUNCHER 1 | Out-Null
-Write-Host "Rerun is installed and starting on the TV."
+adb connect "$($TvIp):5555" | Write-Information -InformationAction Continue
+if ($LASTEXITCODE -ne 0) { throw 'ADB connection failed' }
+Write-Information "If the TV shows 'Allow USB debugging?', choose Always allow, then press Enter here." -InformationAction Continue
+adb -s "$($TvIp):5555" wait-for-device
+if ($LASTEXITCODE -ne 0) { throw 'Waiting for the TV failed' }
+adb -s "$($TvIp):5555" install -r $apk
+if ($LASTEXITCODE -ne 0) { throw 'Install failed' }
+adb -s "$($TvIp):5555" shell monkey -p com.rerun.tv -c android.intent.category.LAUNCHER 1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Starting Rerun failed' }
+Write-Information 'Rerun is installed and starting on the TV.' -InformationAction Continue

@@ -29,10 +29,10 @@ class CodecTest {
                 genres = setOf("Horror"), excludeGenres = setOf("Comedy"), decades = setOf(1980, 1990),
                 ratings = setOf("R"), kinds = setOf(MediaKind.MOVIE), labels = setOf("Halloween"),
                 collections = setOf("Friday the 13th"), tmdbIds = setOf("948"), titles = setOf("Halloween"),
-                networks = setOf("syfy"),
+                networks = setOf("syfy"), bucket = 1, bucketCount = 3,
             ),
             order = PlayOrder.IN_ORDER,
-            blocks = listOf(TimeBlock(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), LocalTime.of(21, 0), LocalTime.of(3, 0), Rules(ratings = setOf("R")))),
+            blocks = listOf(TimeBlock(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), LocalTime.of(21, 0), LocalTime.of(3, 0), Rules(ratings = setOf("R"), bucket = 2, bucketCount = 4))),
             kidsSafe = false, hidden = true, movieEveryMs = 3_600_000,
         )
         assertEquals(def, ChannelCodec.decode(ChannelCodec.encode(def)))

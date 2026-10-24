@@ -109,7 +109,9 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun go(screen: Screen) {
-        _screen.value = screen
+        _screen.value = if (screen is Screen.Editor && screen.channelId != null) {
+            Screen.Editor(Lineup.eastOf(screen.channelId))
+        } else screen
     }
 
     /** Back from the guide: return to the picture, and arm "Back again exits". */
@@ -135,7 +137,10 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     fun resume() { currentId?.let { engine.tune(it) } ?: startWatching() }
 
     fun tuneTo(id: String, sound: Boolean = true) {
-        if (id != currentId) previousId = currentId
+        if (currentId == Lineup.RESTART_ID && id != Lineup.RESTART_ID) {
+            previousId = previousId?.takeUnless { it == id } ?: channelBeforeRestart
+            channelBeforeRestart = null
+        } else if (id != currentId) previousId = currentId
         currentId = id
         if (sound && effects.value.sound) NoiseBurst.play()
         engine.tune(id)
@@ -170,6 +175,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             if (snap.channel?.id != returnTo) return@launch
             channelBeforeRestart = previousId
             app.schedule.airFromStart(item, System.currentTimeMillis())
+            if (currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
             engine.armReturn(returnTo)
             tuneTo(Lineup.RESTART_ID)
         }

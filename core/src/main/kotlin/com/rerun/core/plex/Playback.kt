@@ -46,6 +46,7 @@ object Playback {
         session: String,
         offsetMs: Long,
         subtitles: Boolean = false,
+        subtitleStreamId: Int? = null,
     ): String? {
         val meta = "/library/metadata/${item.key}"
         if (!ServerUri.isAcceptable(base) || !ServerUri.isLibraryPath(meta)) return null
@@ -56,6 +57,7 @@ object Playback {
             "&offset=${offsetMs / 1000}" +
             "&fastSeek=1&directPlay=0&directStream=1&directStreamAudio=0" +
             "&videoResolution=1920x1080&maxVideoBitrate=20000&subtitles=$subs" +
+            (if (subtitles && subtitleStreamId != null) "&subtitleStreamID=$subtitleStreamId" else "") +
             "&session=${enc(session)}&X-Plex-Session-Identifier=${enc(session)}" +
             "&X-Plex-Client-Identifier=${enc(clientId)}&X-Plex-Product=Rerun&X-Plex-Platform=Android"
     }
@@ -76,6 +78,8 @@ fun planPlayback(
     session: String,
     offsetMs: Long,
     subtitles: Boolean = false,
+    subtitleStreamId: Int? = null,
+    forceTranscode: Boolean = false,
 ): PlaybackPlan {
     if (item == null) return PlaybackPlan.UpNext("missing")
     if (!ServerUri.isAcceptable(base)) return PlaybackPlan.UpNext("server")
@@ -84,10 +88,11 @@ fun planPlayback(
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
         return PlaybackPlan.Direct(url, offsetMs)
     }
-    if (Playback.canDirectPlay(item)) {
+    if (!forceTranscode && Playback.canDirectPlay(item)) {
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
         return PlaybackPlan.Direct(url, offsetMs)
     }
-    val url = Playback.transcodeUrl(base, item, clientId, session, offsetMs, subtitles) ?: return PlaybackPlan.UpNext("server")
+    val url = Playback.transcodeUrl(base, item, clientId, session, offsetMs, subtitles, subtitleStreamId)
+        ?: return PlaybackPlan.UpNext("server")
     return PlaybackPlan.Transcoded(url)
 }

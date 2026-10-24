@@ -5,14 +5,21 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import com.rerun.tv.RerunApp
 import com.rerun.tv.player.TunerEngine
 import com.rerun.tv.ui.channels.ChannelEditor
@@ -38,7 +45,7 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val app = application as RerunApp
         controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
-        setContent { RerunRoot(controller, onPoweredOff = { finish() }) }
+        setContent { RerunRoot(controller, onPoweredOff = { finish() }, onPlayerKeyEvent = ::handlePlayerKeyEvent) }
     }
 
     override fun onStart() {
@@ -58,8 +65,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Remote-control routing while watching. Other screens use normal D-pad focus. */
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (controller.screen.value != Screen.Player) return super.dispatchKeyEvent(event)
+    private fun handlePlayerKeyEvent(event: KeyEvent): Boolean {
+        if (controller.screen.value != Screen.Player) return false
         val code = event.keyCode
         val isOk = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
         if (event.action == KeyEvent.ACTION_DOWN) {
@@ -83,8 +90,7 @@ class MainActivity : ComponentActivity() {
                 code == KeyEvent.KEYCODE_LAST_CHANNEL -> controller.lastChannel()
                 code == KeyEvent.KEYCODE_DPAD_RIGHT || code == KeyEvent.KEYCODE_INFO -> controller.showBanner()
                 code == KeyEvent.KEYCODE_MENU || code == KeyEvent.KEYCODE_GUIDE -> controller.go(Screen.Guide)
-                code == KeyEvent.KEYCODE_BACK -> controller.backFromPlayer()
-                else -> return super.dispatchKeyEvent(event)
+                else -> return false
             }
             return true
         }
@@ -96,30 +102,39 @@ class MainActivity : ComponentActivity() {
             }
             if (code in HANDLED) return true
         }
-        return super.dispatchKeyEvent(event)
+        return false
     }
 
     private companion object {
         val HANDLED = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_LAST_CHANNEL, KeyEvent.KEYCODE_INFO,
-            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_GUIDE,
         )
     }
 }
 
 @Composable
-fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit) {
+fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEvent: (KeyEvent) -> Boolean) {
     val screen by controller.screen.collectAsState()
     val crt by controller.crtLevel.collectAsState()
     val exiting by controller.exiting.collectAsState()
     val fx by controller.effects.collectAsState()
+    val playerFocus = remember { FocusRequester() }
+    BackHandler(enabled = screen == Screen.Player) { controller.backFromPlayer() }
+    LaunchedEffect(screen) {
+        if (screen == Screen.Player) playerFocus.requestFocus()
+    }
     val level = CrtLevel.from(crt)
     // Lay everything out on a fixed 1920×1080 canvas, whatever the TV's density.
     val view = androidx.compose.ui.platform.LocalView.current
     val canvas = androidx.compose.ui.unit.Density(density = view.resources.displayMetrics.widthPixels / 1920f, fontScale = 1f)
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides canvas) {
-    ProvideCrtLevel(level) { Box(Modifier.fillMaxSize().background(Color.Black)) {
+    ProvideCrtLevel(level) { Box(
+        Modifier.fillMaxSize().background(Color.Black)
+            .onPreviewKeyEvent { onPlayerKeyEvent(it.nativeKeyEvent) }
+            .focusRequester(playerFocus).focusable(enabled = screen == Screen.Player),
+    ) {
         when (val s = screen) {
             Screen.Onboarding -> OnboardingScreen(controller)
             Screen.Player -> PlayerScreen(controller)

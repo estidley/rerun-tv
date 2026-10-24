@@ -15,20 +15,25 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import okhttp3.OkHttpClient
 import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.MediaItem
+import com.rerun.core.model.MediaKind
 import com.rerun.core.plex.PlaybackPlan
+import com.rerun.core.plex.PlexParse
+import com.rerun.core.plex.ServerUri
 import com.rerun.core.plex.TokenRedaction
 import com.rerun.core.plex.planPlayback
 import com.rerun.core.schedule.EntryKind
 import com.rerun.core.schedule.Located
 import com.rerun.core.schedule.locate
 import com.rerun.tv.data.ChannelRow
+import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -64,6 +69,8 @@ class TunerEngine(
     private val repo: ScheduleRepo,
     private val settings: Settings,
     httpClient: OkHttpClient,
+    private val api: PlexApi = PlexApi({ settings.clientId }, httpClient),
+    playerFactory: (Context) -> ExoPlayer = { ExoPlayer.Builder(it).build() },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
@@ -83,6 +90,7 @@ class TunerEngine(
     private var subtitlesOn = false
     private var transcoded = false
     private var restartReturn: String? = null
+    private var restartFresh = false
 
     /** Called when the hidden start-over channel finishes and the TV should go back. */
     var onReturned: ((String) -> Unit)? = null
@@ -90,7 +98,7 @@ class TunerEngine(
     private val _state = MutableStateFlow(TunerState())
     val state: StateFlow<TunerState> = _state.asStateFlow()
 
-    private val player: ExoPlayer = ExoPlayer.Builder(context).build().apply {
+    private val player: ExoPlayer = playerFactory(context).apply {
             playWhenReady = true
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
@@ -102,6 +110,10 @@ class TunerEngine(
                 override fun onTracksChanged(tracks: Tracks) = applySubtitles(tracks)
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY && _state.value.phase == Phase.TUNING &&
+                        _state.value.item?.kind == MediaKind.TRACK) {
+                        _state.value = _state.value.copy(phase = Phase.PLAYING)
+                    }
                     if (playbackState != Player.STATE_ENDED || _state.value.phase != Phase.PLAYING) return
                     // The start-over channel is a one-shot. When the episode ends, go back.
                     if (_state.value.channel?.id == Lineup.RESTART_ID) {
@@ -119,6 +131,7 @@ class TunerEngine(
     /** Remember which channel to restore when the start-over episode ends. */
     fun armReturn(channelId: String) {
         restartReturn = channelId
+        restartFresh = true
     }
 
     /** Subtitle switch. Direct play selects a text track; a transcode has to be requested again. */
@@ -126,7 +139,7 @@ class TunerEngine(
         subtitlesOn = on
         applySubtitles(player.currentTracks)
         val id = _state.value.channel?.id ?: return
-        if (transcoded && _state.value.phase != Phase.DIFFICULTIES) tune(id)
+        if (_state.value.item?.kind != MediaKind.TRACK && _state.value.phase != Phase.DIFFICULTIES) tune(id)
     }
 
     fun tune(channelId: String) {
@@ -151,6 +164,7 @@ class TunerEngine(
                 val entries = withContext(Dispatchers.IO) { repo.entries(channelId, now - 1, now + 6 * 3_600_000L) }
                 val loc = locate(entries, now)
                 if (loc == null) {
+                    if (channelId == Lineup.RESTART_ID) return@launch leaveRestart()
                     val upcoming = entries.firstOrNull { it.startMs > now }
                     if (upcoming == null) return@launch difficulties()
                     // Nothing stored for right now. Off Air waits for the next entry.
@@ -181,16 +195,38 @@ class TunerEngine(
                 val base = settings.serverBase()
                 val token = settings.serverToken ?: settings.accountToken
                 if (base == null || token == null) return@launch difficulties()
+                val subtitle = if (subtitlesOn && item != null && item.kind != MediaKind.TRACK) {
+                    val path = "/library/metadata/${item.key}"
+                    require(ServerUri.isLibraryPath(path)) { "Invalid Plex metadata path" }
+                    val streams = PlexParse.subtitles(api.get(base, path, token))
+                    streams.firstOrNull { it.selected } ?: streams.firstOrNull()
+                } else null
                 // Whatever time loading took, add it back so we land exactly on schedule.
-                // Start-over is pinned at 0:00 so the loading delay is not added in.
-                val fromStart = channelId == Lineup.RESTART_ID
+                // Only the first tune starts at zero; retries and subtitle changes keep position.
+                val fromStart = channelId == Lineup.RESTART_ID && restartFresh
+                restartFresh = false
                 val lag = System.currentTimeMillis() - now
                 val offset = if (fromStart) 0L else loc.offsetMs + lag
-                when (val plan = planPlayback(item, base, settings.clientId, session, offset, subtitlesOn)) {
+                when (val plan = planPlayback(
+                    item, base, settings.clientId, session, offset, subtitlesOn,
+                    subtitleStreamId = subtitle?.id,
+                    forceTranscode = subtitle != null && subtitle.mimeType == null,
+                )) {
                     is PlaybackPlan.Direct -> {
                         transcoded = false
                         applySubtitles(player.currentTracks)
-                        player.setMediaSource(ProgressiveMediaSource.Factory(http).createMediaSource(ExoItem.fromUri(plan.url)))
+                        val media = ExoItem.Builder().setUri(plan.url)
+                        if (subtitle?.key != null) {
+                            require(ServerUri.isLibraryPath(subtitle.key)) { "Invalid Plex subtitle path" }
+                            media.setSubtitleConfigurations(listOf(
+                                ExoItem.SubtitleConfiguration.Builder(Uri.parse(base.trimEnd('/') + subtitle.key))
+                                    .setMimeType(subtitle.mimeType)
+                                    .setLanguage(subtitle.language)
+                                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                                    .build(),
+                            ))
+                        }
+                        player.setMediaSource(DefaultMediaSourceFactory(http).createMediaSource(media.build()))
                         player.prepare()
                         player.seekTo(if (fromStart) 0L else plan.startMs + (System.currentTimeMillis() - now - lag))
                     }
@@ -206,15 +242,18 @@ class TunerEngine(
                         _state.value = _state.value.copy(phase = Phase.UP_NEXT)
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 difficulties()
             }
         }
     }
 
-    /** Re-tune the same channel the moment the current entry ends. Start-over goes back instead. */
+    /** Linear channels follow wall time; start-over returns on playback end, not a metadata timer. */
     private fun scheduleRollover(channelId: String, endMs: Long) {
-        val r = Runnable { if (channelId == Lineup.RESTART_ID) leaveRestart() else tune(channelId) }
+        if (channelId == Lineup.RESTART_ID) return
+        val r = Runnable { tune(channelId) }
         rollover = r
         handler.postDelayed(r, (endMs - System.currentTimeMillis()).coerceAtLeast(0))
     }
@@ -229,10 +268,12 @@ class TunerEngine(
 
     private fun applySubtitles(tracks: Tracks) {
         val builder = player.trackSelectionParameters.buildUpon()
+        builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
         if (subtitlesOn && !transcoded) {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.length > 0 }
-            if (group != null) builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+            val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+            val index = group?.let { g -> (0 until g.length).firstOrNull { g.isTrackSupported(it) } }
+            if (group != null && index != null) builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
         } else {
             // Off, or already burned into a transcode.
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)

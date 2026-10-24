@@ -49,5 +49,6 @@ class EditingTest {
         assertTrue(validateDraft(d, emptyList()).isNotEmpty())
         assertEquals(emptyList(), validateDraft(d.copy(number = 1400), emptyList()))
         assertTrue(validateDraft(d.copy(number = 10_000), emptyList()).isNotEmpty())
+        assertTrue(validateDraft(d.copy(number = Lineup.RESTART_NUMBER), emptyList()).isNotEmpty())
     }
 }

@@ -15,11 +15,11 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 - **Theme channels:** Fright Night, The Void, Laughing Stock, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes show up only when that genre has at least 4 hours: True-ish (documentaries), Canned Laughter (sitcoms), Sob Story (dramedies), Cold Read (psychic and paranormal), This Just In (news), and others such as The Matinee and Case File.
 - **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.
 - **Custom channels:** pick genres, shows, collections, decades and ratings right on the TV.
-- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. East keeps its name. West adds `-W`. A new West feed is off air until East has three hours of schedule.
+- **East and West:** Settings can add a West feed of the same schedule, 3 hours later. East keeps its name. West adds `-W`. A new West feed is off air until East has three hours of schedule. Editing either feed edits East and updates its West twin.
 - **Off air:** a time with nothing scheduled says Off Air in the guide and on the screen, then the next program starts. A short break already on the schedule still says Up Next.
 - **Music:** if the Plex server has music, Settings can add a station for each genre with at least 4 hours.
-- **Subtitles:** off until you turn them on in Settings.
-- **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel.
+- **Subtitles:** off until you turn them on in Settings. Embedded and external text subtitles play directly; other formats are burned in by Plex.
+- **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel. The temporary channel stays out of the channel editor and last-channel history; channel 999 is reserved for it.
 - **Empty channels stay hidden** until you have at least 4 hours of content for them. Extra channels are not listed at all until they qualify.
 - **Locked 48-hour schedule.** The guide never lies, and library changes never yank you out of a movie.
 - **Read-only.** Nothing you watch is reported back to Plex. Your Continue Watching stays clean.
@@ -68,7 +68,7 @@ Vintage commercials are generally still under copyright. Keep downloaded copies 
 ## Development
 
 - `core/` is pure Kotlin: catalog, routing, scheduler, tune math, and Plex parsing. It has unit tests: `./gradlew :core:test`.
-- `app/` is the Android shell: Compose UI, Media3 player, and Room. `./gradlew :app:assembleDebug` needs no signing key. A release build needs the key created by `scripts/keystore.ps1`.
+- `app/` is the Android shell: Compose UI, Media3 player, and Room. JVM regression tests run with `.\gradlew.bat :app:testDebugUnitTest` (Robolectric). `./gradlew :app:assembleDebug` needs no signing key. A release build needs the key created by `scripts/keystore.ps1`.
 - `tools/ktest/` runs the core tests with only a Kotlin compiler jar, for machines without Maven access.
 
 Design spec and plans live in `docs/superpowers/`.

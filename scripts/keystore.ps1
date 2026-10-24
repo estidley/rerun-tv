@@ -9,7 +9,7 @@
   Usage:  .\scripts\keystore.ps1
 #>
 param(
-    [string]$Password
+    [securestring]$Password
 )
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\jdk.ps1"
@@ -21,7 +21,7 @@ $propsPath = Join-Path $root 'keystore.properties'
 $hasJks = Test-Path -LiteralPath $jks
 $hasProps = Test-Path -LiteralPath $propsPath
 if ($hasJks -and $hasProps) {
-    Write-Host "Using the existing release keystore."
+    Write-Information 'Using the existing release keystore.' -InformationAction Continue
     return
 }
 if ($hasJks -xor $hasProps) {
@@ -32,7 +32,7 @@ Deleting them creates a new signing key. The TV will refuse that as an update, a
 "@
 }
 
-function New-RerunPassword {
+function Get-RerunRandomPassword {
     $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.ToCharArray()
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     try {
@@ -53,22 +53,20 @@ function New-RerunPassword {
     }
 }
 
-function Read-RerunPassword {
-    if (-not [string]::IsNullOrEmpty($Password)) { return $Password }
-    $interactive = $false
-    try { $interactive = -not [Console]::IsInputRedirected } catch { $interactive = $false }
-    if (-not $interactive) { return $null }
-    try {
-        Write-Host "Release keystore password. Press Enter to generate a random one."
+function Read-RerunPassword([securestring]$ProvidedPassword) {
+    $secure = $ProvidedPassword
+    if ($null -eq $secure) {
+        $interactive = -not [Console]::IsInputRedirected
+        if (-not $interactive) { return $null }
+        Write-Information 'Release keystore password. Press Enter to generate a random one.' -InformationAction Continue
         $secure = Read-Host -AsSecureString
-        if ($null -eq $secure -or $secure.Length -eq 0) { return $null }
-        $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-        try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) }
-        finally {
-            if ($ptr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
-        }
-    } catch {
-        return $null
+    }
+    if ($null -eq $secure -or $secure.Length -eq 0) { return $null }
+    $ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try {
+        return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    } finally {
+        if ($ptr -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }
     }
 }
 
@@ -77,6 +75,7 @@ function ConvertTo-JavaProperty([string]$Value) {
     foreach ($c in $Value.ToCharArray()) {
         $code = [int]$c
         if ($c -eq '\') { [void]$sb.Append('\\'); continue }
+        if ($c -eq ' ') { [void]$sb.Append('\ '); continue }
         if ($c -eq "`n") { [void]$sb.Append('\n'); continue }
         if ($c -eq "`r") { [void]$sb.Append('\r'); continue }
         if ($c -eq "`t") { [void]$sb.Append('\t'); continue }
@@ -89,15 +88,16 @@ function ConvertTo-JavaProperty([string]$Value) {
     return $sb.ToString()
 }
 
-$chosen = Read-RerunPassword
+$chosen = Read-RerunPassword -ProvidedPassword $Password
 $generated = $null -eq $chosen
-$plain = if ($generated) { New-RerunPassword } else { $chosen }
-if ([string]::IsNullOrEmpty($plain)) { throw "No release keystore password was provided." }
+$plain = if ($generated) { Get-RerunRandomPassword } else { $chosen }
+if ([string]::IsNullOrEmpty($plain)) { throw 'No release keystore password was provided.' }
 
 $keytool = Join-Path $env:JAVA_HOME 'bin\keytool.exe'
-if (-not (Test-Path -LiteralPath $keytool)) { throw "keytool was not found under JAVA_HOME ($env:JAVA_HOME)." }
+if (-not (Test-Path -LiteralPath $keytool)) { throw "keytool was not found under JAVA_HOME ($($env:JAVA_HOME))." }
 
 $wrote = $false
+$previousPassword = $env:RERUN_KEYSTORE_PASS
 $env:RERUN_KEYSTORE_PASS = $plain
 try {
     & $keytool @(
@@ -112,7 +112,7 @@ try {
         '-storepass:env', 'RERUN_KEYSTORE_PASS',
         '-keypass:env', 'RERUN_KEYSTORE_PASS'
     )
-    if ($LASTEXITCODE -ne 0) { throw "keytool could not create the release keystore." }
+    if ($LASTEXITCODE -ne 0) { throw 'keytool could not create the release keystore.' }
     $text = @(
         "storeFile=$(ConvertTo-JavaProperty 'rerun-release.jks')"
         "storePassword=$(ConvertTo-JavaProperty $plain)"
@@ -123,15 +123,15 @@ try {
     [System.IO.File]::WriteAllText($propsPath, $text + "`n", $utf8)
     $wrote = $true
 } finally {
-    Remove-Item Env:RERUN_KEYSTORE_PASS -ErrorAction SilentlyContinue
+    $env:RERUN_KEYSTORE_PASS = $previousPassword
     if (-not $wrote) {
         Remove-Item -LiteralPath $jks, $propsPath -Force -ErrorAction SilentlyContinue
     }
 }
 
 if ($generated) {
-    Write-Host "Generated a random release-keystore password."
+    Write-Information 'Generated a random release-keystore password.' -InformationAction Continue
 } else {
-    Write-Host "Created the release keystore."
+    Write-Information 'Created the release keystore.' -InformationAction Continue
 }
-Write-Host "The password is only in keystore.properties. That file and rerun-release.jks are gitignored. Back both up."
+Write-Information 'The password is only in keystore.properties. That file and rerun-release.jks are gitignored. Back both up.' -InformationAction Continue

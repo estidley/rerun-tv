@@ -12,8 +12,14 @@ serializationJson = "1.12.0"
 securityCrypto = "1.1.0"
 coil = "3.6.3"
 lifecycle = "2.11.0"
+junit = "4.13.2"
+robolectric = "4.17"
+mockito = "5.24.0"
 
 [libraries]
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+mockito = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }

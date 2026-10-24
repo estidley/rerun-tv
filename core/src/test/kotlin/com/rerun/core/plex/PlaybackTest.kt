@@ -58,6 +58,10 @@ class PlaybackTest {
         assertTrue("subtitles=burn" in on!!, on)
         val plan = planPlayback(movie("1001").copy(audioCodec = "dca"), base, "c", "s", 0, subtitles = true)
         assertTrue(plan is PlaybackPlan.Transcoded && "subtitles=burn" in plan.url)
+        val image = planPlayback(
+            movie("1001"), base, "c", "s", 60_000, subtitles = true, subtitleStreamId = 7, forceTranscode = true,
+        )
+        assertTrue(image is PlaybackPlan.Transcoded && "subtitles=burn&subtitleStreamID=7" in image.url)
     }
 
     @Test

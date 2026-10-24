@@ -72,7 +72,8 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
         val d = row?.def ?: run {
             val used = rows.map { it.number }.toSet()
             ChannelDef(
-                id = "custom:" + UUID.randomUUID().toString().take(8), number = (401..999).first { it !in used },
+                id = "custom:" + UUID.randomUUID().toString().take(8),
+                number = (401..9999).first { it !in used && it != Lineup.RESTART_NUMBER },
                 name = "", kind = ChannelKind.CUSTOM, rules = Rules(genres = emptySet()),
             )
         }
@@ -154,16 +155,12 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                                 val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
                                 if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
                                 val pool = Resolver.pool(toSave, app.schedule.libraryItems())
-                                val wasHidden = existing?.hidden == true
                                 app.schedule.saveChannel(
                                     ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = Resolver.isDormant(pool), poolMs = pool.sumOf { it.durationMs }),
                                 )
-                                // West rows are created by a lineup refresh. Bring the twin back when
-                                // this channel is new or was just unhidden.
-                                val restoreWest = !toSave.hidden && !Lineup.isWest(toSave.id) &&
-                                    (existing == null || wasHidden) &&
-                                    app.settings.isOn(Settings.EAST_WEST)
-                                if (restoreWest) app.sync.refreshChannels()
+                                if (!Lineup.isWest(toSave.id) && app.settings.isOn(Settings.EAST_WEST)) {
+                                    app.sync.refreshChannels()
+                                }
                                 app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
                                 controller.go(Screen.Channels)
                             }

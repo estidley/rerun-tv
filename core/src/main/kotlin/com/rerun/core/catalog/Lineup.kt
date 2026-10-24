@@ -7,6 +7,7 @@ import com.rerun.core.model.MediaKind
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import com.rerun.core.schedule.ScheduleEntry
+import java.util.UUID
 
 /** A channel row the lineup planner can see. Room stays outside core. */
 data class StoredChannel(val def: ChannelDef, val builtIn: Boolean)
@@ -79,7 +80,10 @@ object Lineup {
                 val prev = existingById[template.id] ?: continue
                 if (looksStock(prev.def, template)) continue
                 val kept = prev.def.copy(name = Catalog.chooseName(template.id, prev.def.name, template.name))
-                upserts += PlannedChannel(kept, prev.builtIn, dormant = true, poolMs = poolMs(kept, library))
+                val pool = poolMs(kept, library)
+                val dormant = (kept.kind == ChannelKind.MUSIC && !music) || pool < Resolver.DORMANT_MS
+                upserts += PlannedChannel(kept, prev.builtIn, dormant, pool)
+                if (feedsOn(eastWest, kept, dormant)) upserts += westOf(kept, kept.name, pool)
                 seen += template.id
                 continue
             }
@@ -97,7 +101,14 @@ object Lineup {
 
         for (prev in existing) {
             val id = prev.def.id
-            if (id in seen || id == RESTART_ID || isGenerated(id)) continue
+            if (id in seen || id == RESTART_ID || isWest(id)) continue
+            if (isGenerated(id)) {
+                // A genre can disappear completely; retain edits even without a live template.
+                if (id.startsWith("music:") && !looksStockMusic(prev.def)) {
+                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = true, poolMs = poolMs(prev.def, library))
+                }
+                continue
+            }
             val pool = poolMs(prev.def, library)
             val dormant = Resolver.isDormant(Resolver.pool(prev.def, library))
             val baseName = Catalog.stripFeed(prev.def.name)
@@ -166,6 +177,7 @@ object Lineup {
         val name = Catalog.stripFeed(stored.name)
         val nameOk = name == template.name || name in Catalog.retiredNames(template.id)
         return nameOk &&
+            stored.number == template.number &&
             stored.kind == template.kind &&
             stored.rules == template.rules &&
             stored.order == template.order &&
@@ -173,6 +185,14 @@ object Lineup {
             stored.hidden == template.hidden &&
             stored.kidsSafe == template.kidsSafe &&
             stored.movieEveryMs == template.movieEveryMs
+    }
+
+    private fun looksStockMusic(stored: ChannelDef): Boolean {
+        val genre = stored.rules.genres.singleOrNull() ?: return false
+        return stored == ChannelDef(
+            stored.id, stored.number, genre, ChannelKind.MUSIC,
+            Rules(genres = setOf(genre), kinds = setOf(MediaKind.TRACK)),
+        )
     }
 
     fun musicTemplates(library: List<MediaItem>): List<ChannelDef> {
@@ -185,13 +205,12 @@ object Lineup {
             }
         }
         val reserved = reservedNumbers()
-        val usedIds = HashSet<String>()
         var next = MUSIC_BASE
-        return totals.keys.sortedWith(String.CASE_INSENSITIVE_ORDER).map { genre ->
+        return totals.keys.sorted().distinctBy { it.lowercase() }.sortedWith(String.CASE_INSENSITIVE_ORDER).map { genre ->
             while (next in reserved) next++
             val number = next++
             ChannelDef(
-                id = musicId(genre, usedIds),
+                id = musicId(genre),
                 number = number,
                 name = genre,
                 kind = ChannelKind.MUSIC,
@@ -200,7 +219,7 @@ object Lineup {
         }
     }
 
-    private fun musicId(genre: String, used: MutableSet<String>): String {
+    private fun musicId(genre: String): String {
         val slug = genre.lowercase()
             .map { if (it.isLetterOrDigit()) it else ' ' }
             .joinToString("")
@@ -209,13 +228,9 @@ object Lineup {
             .filter { it.isNotEmpty() }
             .joinToString("-")
             .ifEmpty { "genre" }
-        var id = "music:$slug"
-        var n = 2
-        while (!used.add(id)) {
-            id = "music:$slug-$n"
-            n++
-        }
-        return id
+        val normalized = genre.trim().lowercase()
+        val suffix = if (normalized == slug) "" else "-${UUID.nameUUIDFromBytes(normalized.toByteArray(Charsets.UTF_8))}"
+        return "music:$slug$suffix"
     }
 
     private fun reservedNumbers(): Set<Int> {

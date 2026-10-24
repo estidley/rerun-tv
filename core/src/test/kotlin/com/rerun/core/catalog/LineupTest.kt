@@ -206,6 +206,45 @@ class LineupTest {
     }
 
     @Test
+    fun editedExtraUsesItsOwnPoolWhenTheStockPoolDoesNotQualify() {
+        val drama = Lineup.optionalThemes().first { it.id == "opt:drama" }
+        val edited = drama.copy(rules = Rules(genres = setOf("Comedy")))
+        val library = listOf(movie("m", genres = setOf("Comedy"), durationMs = 4 * HOUR))
+        val plan = Lineup.plan(library, listOf(StoredChannel(edited, true)), eastWest = true, music = false)
+        assertFalse(plan.channels.first { it.def.id == drama.id }.dormant)
+        assertTrue(plan.channels.any { it.def.id == Lineup.westId(drama.id) })
+    }
+
+    @Test
+    fun numberOnlyEditsAreNotDeleted() {
+        val drama = Lineup.optionalThemes().first { it.id == "opt:drama" }.copy(number = 450)
+        val plan = Lineup.plan(emptyList(), listOf(StoredChannel(drama, true)), eastWest = false, music = false)
+        assertEquals(450, plan.channels.first { it.def.id == drama.id }.def.number)
+        assertFalse(drama.id in plan.deleteIds)
+    }
+
+    @Test
+    fun renamedMusicStationSurvivesTheLastTrackBeingRemoved() {
+        val songs = listOf(track("t", durationMs = 4 * HOUR))
+        val renamed = Lineup.musicTemplates(songs).single().copy(name = "My Jazz")
+        val plan = Lineup.plan(emptyList(), listOf(StoredChannel(renamed, true)), eastWest = true, music = true)
+        assertEquals("My Jazz", plan.channels.first { it.def.id == renamed.id }.def.name)
+        assertTrue(plan.channels.first { it.def.id == renamed.id }.dormant)
+        assertFalse(renamed.id in plan.deleteIds)
+    }
+
+    @Test
+    fun collidingGenreSlugsKeepTheirIdentityWhenAnotherGenreDisappears() {
+        val songs = listOf(track("a", genre = "Jazz!"), track("b", genre = "Jazz?"))
+        val both = Lineup.musicTemplates(songs).associate { it.name to it.id }
+        assertNotEquals(both["Jazz!"], both["Jazz?"])
+        for (song in songs) {
+            val one = Lineup.musicTemplates(listOf(song)).single()
+            assertEquals(both.getValue(one.name), one.id)
+        }
+    }
+
+    @Test
     fun customChannelGetsAWestTwin() {
         val library = listOf(movie("d", genres = setOf("Drama"), durationMs = 4 * HOUR))
         val custom = StoredChannel(

@@ -7,6 +7,7 @@ function Set-RerunJdk {
         $java = Join-Path $JdkHome 'bin\java.exe'
         if (-not (Test-Path $java)) { return $false }
         $banner = & $java -version 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { return $false }
         if ($banner -notmatch 'version "(\d+)') { return $false }
         return [int]$Matches[1] -ge 17
     }
