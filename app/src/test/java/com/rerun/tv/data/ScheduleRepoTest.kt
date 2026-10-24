@@ -7,6 +7,12 @@ import com.rerun.core.model.MediaItem
 import com.rerun.core.plex.PlexParse
 import com.rerun.core.schedule.Scheduler
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Dispatchers
+import org.mockito.Mockito.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -82,6 +88,90 @@ class ScheduleRepoTest {
         repo.refreshChannels(false, false, listOf(movie("2")))
         assertNull(repo.item("1"))
         assertNotNull(repo.item("2"))
+    }
+
+    @Test
+    fun cachedLibrarySharesOneListAndInvalidationReloadsIt() = runBlocking {
+        db.items().replaceAll(listOf(ItemRow.of(movie("1"))))
+        val first = repo.libraryItems()
+        assertSame(first, repo.libraryItems())
+        assertSame(first.single(), repo.item("1"))
+        db.items().replaceAll(listOf(ItemRow.of(movie("2"))))
+        repo.invalidateLibrary()
+        val second = repo.libraryItems()
+        assertNotSame(first, second)
+        assertEquals(listOf("2"), second.map { it.key })
+        assertNull(repo.item("1"))
+    }
+
+    @Test
+    fun concurrentColdReadersShareOneDatabaseReadOffMainThread() = runBlocking<Unit> {
+        val database = mock(RerunDb::class.java)
+        val dao = mock(ItemDao::class.java)
+        `when`(database.items()).thenReturn(dao)
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        doAnswer {
+            assertNotEquals(android.os.Looper.getMainLooper().thread, Thread.currentThread())
+            started.countDown()
+            check(release.await(10, TimeUnit.SECONDS))
+            listOf(ItemRow.of(movie("1")))
+        }.`when`(dao).all()
+        val cached = ScheduleRepo(database, Scheduler(ZoneId.of("UTC")))
+        val first = async(Dispatchers.Default) { cached.libraryItems() }
+        val second = async(Dispatchers.Default) { cached.libraryItems() }
+        try {
+            assertTrue(started.await(10, TimeUnit.SECONDS))
+        } finally {
+            release.countDown()
+        }
+        assertSame(first.await(), second.await())
+        verify(dao, times(1)).all()
+    }
+
+    @Test
+    fun invalidationDuringColdLoadCannotPublishStaleLibrary() = runBlocking {
+        val database = mock(RerunDb::class.java)
+        val dao = mock(ItemDao::class.java)
+        `when`(database.items()).thenReturn(dao)
+        val started = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val reads = AtomicInteger()
+        doAnswer {
+            if (reads.incrementAndGet() == 1) {
+                started.countDown()
+                check(release.await(10, TimeUnit.SECONDS))
+                listOf(ItemRow.of(movie("old")))
+            } else listOf(ItemRow.of(movie("new")))
+        }.`when`(dao).all()
+        val cached = ScheduleRepo(database, Scheduler(ZoneId.of("UTC")))
+        val pending = async(Dispatchers.Default) { cached.libraryItems() }
+        try {
+            assertTrue(started.await(10, TimeUnit.SECONDS))
+            cached.invalidateLibrary()
+        } finally {
+            release.countDown()
+        }
+        assertEquals(listOf("new"), pending.await().map { it.key })
+        assertNull(cached.item("old"))
+        assertEquals(2, reads.get())
+    }
+
+    @Test
+    fun failedLibraryReadPropagatesAndCanBeRetried() = runBlocking {
+        val database = mock(RerunDb::class.java)
+        val dao = mock(ItemDao::class.java)
+        `when`(database.items()).thenReturn(dao)
+        `when`(dao.all()).thenThrow(IllegalStateException("Storage unavailable"))
+            .thenReturn(listOf(ItemRow.of(movie("1"))))
+        val cached = ScheduleRepo(database, Scheduler(ZoneId.of("UTC")))
+        try {
+            cached.libraryItems()
+            fail("Storage failures must not create an empty snapshot")
+        } catch (e: IllegalStateException) {
+            assertEquals("Storage unavailable", e.message)
+        }
+        assertEquals(listOf("1"), cached.libraryItems().map { it.key })
     }
 
     @Test

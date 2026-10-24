@@ -135,7 +135,7 @@ class SettingsScreenTest {
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
             "Compact", "■ Comfortable", "Large", "Subtitles", "Subtitle language: Automatic",
             "East and West", "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
-            "Audio language: Automatic", "Current program audio tracks", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
+            "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )
         for ((index, label) in labels.withIndex()) {
             compose.onNodeWithText(label).assertIsFocused()
@@ -161,6 +161,13 @@ class SettingsScreenTest {
         compose.onNodeWithText("CRT Subtle").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithText("Static sound").assertIsFocused()
+    }
+
+    @Test
+    fun normalizationTogglePersistsAndRefreshesPlayback() = runBlocking<Unit> {
+        compose.onNodeWithText("Normalize loudness").performScrollTo().performClick()
+        verify(settings).setFlag(Settings.NORMALIZE_LOUDNESS, true)
+        verify(controller).setNormalizeLoudness(true)
     }
 
     @Test

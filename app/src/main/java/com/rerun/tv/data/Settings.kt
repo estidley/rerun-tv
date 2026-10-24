@@ -206,6 +206,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val GUIDE_DENSITY = "guide_density"
         const val SUBTITLE_LANGUAGE = "subtitle_language"
         const val AUDIO_LANGUAGE = "audio_language"
+        const val NORMALIZE_LOUDNESS = "normalize_loudness"
         const val HDR_MODE = "hdr_mode"
     }
 }

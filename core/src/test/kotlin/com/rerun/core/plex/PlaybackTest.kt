@@ -12,6 +12,34 @@ class PlaybackTest {
     private val base = "https://192-168-1-20.abc.plex.direct:32400"
 
     @Test
+    fun normalizationRequestsAudioTranscodeWithoutVideoLimits() {
+        val plan = planPlayback(movie("1"), base, "c", "s", 30_000, normalizeLoudness = true, audioStreamId = 8)
+        assertTrue(plan is PlaybackPlan.Transcoded)
+        val url = (plan as PlaybackPlan.Transcoded).url
+        assertTrue("&normalizeLoudness=1&" in url)
+        assertTrue("&audioCodec=aac&" in url)
+        assertTrue("&directStream=1&directStreamAudio=0" in url)
+        assertTrue("&audioStreamID=8&" in url)
+        assertFalse("videoResolution=" in url)
+        assertFalse("maxVideoBitrate=" in url)
+        assertTrue(planPlayback(movie("1"), base, "c", "s", 0) is PlaybackPlan.Direct)
+        assertTrue(planPlayback(track("1"), base, "c", "s", 0, normalizeLoudness = true) is PlaybackPlan.Direct)
+    }
+
+    @Test
+    fun audioNormalizationCapabilityIsPerStreamAndDefaultsOff() {
+        for (value in listOf("true", "1", "\"1\"")) {
+            val details = PlexParse.videoDetails(
+                """{"MediaContainer":{"Metadata":[{"Media":[{"Part":[{"Stream":[
+                {"id":8,"streamType":2,"canNormalizeLoudness":$value},
+                {"id":9,"streamType":2}]}]}]}]}}""",
+            )
+            assertTrue(details.audio[0].canNormalizeLoudness)
+            assertFalse(details.audio[1].canNormalizeLoudness)
+        }
+    }
+
+    @Test
     fun h264AacDirectPlays() {
         val m = movie("1002").copy(container = "mp4", videoCodec = "h264", audioCodec = "aac", partKey = "/library/parts/78/1/file.mp4")
         assertTrue(Playback.canDirectPlay(m))

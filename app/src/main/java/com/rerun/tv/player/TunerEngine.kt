@@ -21,7 +21,7 @@ import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.core.plex.PlaybackPlan
-import com.rerun.core.plex.PlexParse
+import com.rerun.core.plex.Playback
 import com.rerun.core.plex.ServerUri
 import com.rerun.core.plex.selectSubtitle
 import com.rerun.core.plex.subtitleLanguageCode
@@ -53,9 +53,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import java.util.UUID
 
 enum class Phase { TUNING, PLAYING, UP_NEXT, OFF_AIR, DIFFICULTIES }
+const val CLIP_FADE_MS = 180
 
 data class TunerState(
     val channel: ChannelRow? = null,
@@ -71,6 +73,8 @@ data class TunerState(
     val selectedAudioId: Int? = null,
     val convertingHdr: Boolean = false,
     val message: String? = null,
+    val sameChannelTransition: Boolean = false,
+    val fadingOut: Boolean = false,
 )
 
 /**
@@ -117,6 +121,8 @@ class TunerEngine(
     private var hdrFallback = false
     private var currentHdr = false
     private var convertingHdr = false
+    private var normalizingAudio = false
+    private val metadataCache = PlaybackMetadataCache()
 
     /** Called when the hidden start-over channel finishes and the TV should go back. */
     var onReturned: ((String) -> Unit)? = null
@@ -136,7 +142,10 @@ class TunerEngine(
                     if (currentHdr && !convertingHdr && !hdrFallback && id != null) {
                         hdrFallback = true
                         tune(id)
-                    } else difficulties(if (convertingHdr) HDR_HELP else "Playback failed. Retrying shortly.")
+                    } else difficulties(
+                        if (convertingHdr) HDR_HELP else if (normalizingAudio) NORMALIZATION_HELP
+                        else "Playback failed. Retrying shortly.",
+                    )
                 }
 
                 override fun onTracksChanged(tracks: Tracks) {
@@ -207,15 +216,23 @@ class TunerEngine(
         if (channelId != Lineup.RESTART_ID) restartReturn = null
         tuneJob?.cancel()
         clearTimers()
-        player.stop()
+        val previous = _state.value
+        val sameChannel = previous.channel?.id == channelId
+        if (!sameChannel) player.stop()
         transcoded = false
         currentHdr = false
         convertingHdr = false
+        normalizingAudio = false
         val seq = ++tuneSeq
         tuneJob = scope.launch {
+            if (sameChannel && previous.phase == Phase.PLAYING) {
+                _state.value = previous.copy(sameChannelTransition = true, fadingOut = true)
+                delay(CLIP_FADE_MS.toLong())
+            }
+            if (sameChannel) player.stop()
             val t0 = clock()
             val channel = repo.channel(channelId)
-            _state.value = TunerState(channel = channel, phase = Phase.TUNING, tuneId = seq)
+            _state.value = TunerState(channel = channel, phase = Phase.TUNING, tuneId = seq, sameChannelTransition = sameChannel)
             if (channel == null) return@launch difficulties()
             if (channelId != Lineup.RESTART_ID) settings.setLastChannel(channelId)
             try {
@@ -274,21 +291,33 @@ class TunerEngine(
                 val metadata = if (item != null && item.kind != MediaKind.TRACK) {
                     val path = "/library/metadata/${item.key}"
                     require(ServerUri.isLibraryPath(path)) { "Invalid Plex metadata path" }
-                    api.get(base, path, token)
+                    metadataCache.get(base, token, repo.guideRevision.value, item.key) { api.get(base, path, token) }
                 } else null
-                val details = metadata?.let(PlexParse::videoDetails) ?: VideoDetails()
+                val details = metadata?.video ?: VideoDetails()
                 val preferredAudio = selectAudio(details.audio, settings.audioLanguageValue())
                 val audio = details.audio.firstOrNull { it.id == audioOverride } ?: preferredAudio
                 val mode = HdrMode.from(settings.hdrModeValue())
                 currentHdr = details.range != DynamicRange.SDR
                 val supported = !currentHdr || mode != HdrMode.AUTO || hdrSupported(details)
                 convertingHdr = requiresSdr(details, mode, supported) || (currentHdr && hdrFallback)
+                val normalizationRequested = item?.kind != MediaKind.TRACK && settings.isOn(Settings.NORMALIZE_LOUDNESS)
+                val subtitleStreams = if (subtitlesOn) metadata?.subtitles.orEmpty() else emptyList()
+                val subtitle = selectSubtitle(subtitleStreams, subtitleLanguage)
+                val normalizationCompatible = !convertingHdr && subtitle == null && details.range != DynamicRange.DOLBY_VISION &&
+                    item?.let { Playback.canDirectPlay(if (audio?.codec != null) it.copy(audioCodec = audio.codec) else it) } == true
+                val normalize = normalizationRequested && audio?.canNormalizeLoudness == true && normalizationCompatible
+                normalizingAudio = normalize
                 _state.value = _state.value.copy(
                     audioTracks = details.audio, selectedAudioId = audio?.id, convertingHdr = convertingHdr,
-                    message = if (convertingHdr) "Converting HDR to SDR using Plex tone mapping." else null,
+                    message = listOfNotNull(
+                        if (convertingHdr) "Converting HDR to SDR using Plex tone mapping." else null,
+                        if (normalizationRequested && !normalize)
+                            if (audio?.canNormalizeLoudness != true)
+                                "Plex loudness normalization unavailable for this audio track. Enable audio loudness analysis in Plex (Plex Pass required)."
+                            else "Plex loudness normalization unavailable with this video format, conversion, or subtitle burn-in."
+                        else null,
+                    ).joinToString(" ").ifEmpty { null },
                 )
-                val subtitleStreams = if (subtitlesOn && metadata != null) PlexParse.subtitles(metadata) else emptyList()
-                val subtitle = selectSubtitle(subtitleStreams, subtitleLanguage)
                 selectedSubtitle = subtitle
                 embeddedSubtitleIndex = subtitleStreams.filter { it.key == null }.indexOfFirst { it.id == subtitle?.id }
                 subtitleAvailable = subtitle != null
@@ -305,6 +334,7 @@ class TunerEngine(
                     forceTranscode = subtitle != null && subtitle.mimeType == null,
                     audioStreamId = audio?.id?.takeIf { details.audio.size > 1 },
                     forceSdr = convertingHdr,
+                    normalizeLoudness = normalize,
                 )) {
                     is PlaybackPlan.Direct -> {
                         transcoded = false
@@ -341,7 +371,10 @@ class TunerEngine(
                 throw e
             } catch (e: Exception) {
                 android.util.Log.e("TunerEngine", "Unable to prepare playback (${e.javaClass.simpleName})")
-                difficulties(if (convertingHdr) HDR_HELP else "Couldn't load playback. Check the Plex server connection.")
+                difficulties(
+                    if (convertingHdr) HDR_HELP else if (normalizingAudio) NORMALIZATION_HELP
+                    else "Couldn't load playback. Check the Plex server connection.",
+                )
             }
         }
     }
@@ -421,23 +454,28 @@ class TunerEngine(
 
     fun clear() {
         stop()
+        metadataCache.clear()
         restartReturn = null
         identity = null
         audioOverride = null
         hdrFallback = false
         currentHdr = false
         convertingHdr = false
+        normalizingAudio = false
         _state.value = TunerState(phase = Phase.OFF_AIR)
     }
 
     fun release() {
         stop()
+        metadataCache.clear()
         scope.cancel()
         player.release()
     }
 
     private companion object {
         const val RETRY_MS = 15_000L
+        const val NORMALIZATION_HELP = "Plex normalized audio playback failed. Check Plex Pass and audio loudness analysis, " +
+            "or turn off Normalize loudness in Settings."
         const val HDR_HELP = "HDR conversion failed. Enable HDR tone mapping in Plex Server > Transcoder " +
             "(Plex Pass required), or use an SDR version. Dolby Vision compatibility depends on the server and profile."
 

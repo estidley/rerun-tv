@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +45,7 @@ import kotlin.math.roundToInt
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.tv.ui.theme.Retro
+import kotlinx.coroutines.delay
 
 internal enum class MusicCue(val label: String) {
     GROOVE("GROOVE"), AMPLIFIED("AMPLIFIED"), LOUNGE("LOUNGE"),
@@ -65,9 +68,31 @@ internal fun musicTime(milliseconds: Long): String {
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
 }
 
+@Composable
+private fun MusicProgress(item: MediaItem, positionMs: Long, position: (() -> Long)?, accent: Color, secondary: Color) {
+    var playingPosition by remember(item.key, position) { mutableLongStateOf(position?.invoke() ?: positionMs) }
+    LaunchedEffect(item.key, position) {
+        if (position != null) {
+            while (true) {
+                playingPosition = position()
+                delay(250)
+            }
+        }
+    }
+    val current = if (position == null) positionMs else playingPosition
+    BasicText(
+        "${musicTime(current.coerceIn(0, item.durationMs.coerceAtLeast(0)))} / ${musicTime(item.durationMs)}",
+        style = Retro.Body.copy(color = secondary, shadow = null),
+    )
+    Box(Modifier.fillMaxWidth().height(4.dp).background(Retro.GuideBlueLight)) {
+        val progress = if (item.durationMs > 0) (current.toFloat() / item.durationMs).coerceIn(0f, 1f) else 0f
+        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(accent))
+    }
+}
+
 /** All artwork, text, and decoration drift together; nothing bright stays fixed on the CRT. */
 @Composable
-internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, positionMs: Long) {
+internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, positionMs: Long, position: (() -> Long)? = null) {
     val genre = channelName ?: item.genres.firstOrNull() ?: "Music"
     val cue = MusicCue.from(genre)
     val decade = item.year?.let { it / 10 * 10 }
@@ -139,14 +164,7 @@ internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, po
                         item.showTitle ?: "Unknown album", style = Retro.Body.copy(color = Retro.Dim, shadow = null),
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
-                    BasicText(
-                        "${musicTime(positionMs.coerceIn(0, item.durationMs.coerceAtLeast(0)))} / ${musicTime(item.durationMs)}",
-                        style = Retro.Body.copy(color = secondary, shadow = null),
-                    )
-                    Box(Modifier.fillMaxWidth().height(4.dp).background(Retro.GuideBlueLight)) {
-                        val progress = if (item.durationMs > 0) (positionMs.toFloat() / item.durationMs).coerceIn(0f, 1f) else 0f
-                        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(accent))
-                    }
+                    MusicProgress(item, positionMs, position, accent, secondary)
                 }
             }
             Spacer(Modifier.height(16.dp))

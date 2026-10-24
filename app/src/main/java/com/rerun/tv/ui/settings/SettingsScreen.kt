@@ -61,9 +61,10 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val eastWest by remember(app.settings) { app.settings.flag(Settings.EAST_WEST, false) }.collectAsState(false)
     val musicOn by remember(app.settings) { app.settings.flag(Settings.MUSIC, false) }.collectAsState(false)
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
+    val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
     val shownEastWest = update.eastWest ?: eastWest
     val shownMusic = update.music ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1, 2, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -225,7 +226,24 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("Audio language: ${languageName(audioLanguage)}", { controller.go(Screen.AudioLanguage) }, modifier = buttonFocus(9, 0))
                 TvButton("Current program audio tracks", { controller.go(Screen.AudioTracks) }, modifier = buttonFocus(9, 1))
+                TvButton("Normalize loudness", {
+                    scope.launch {
+                        try {
+                            controller.setNormalizeLoudness(!normalizeLoudness)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            localStatus = "Couldn't change loudness normalization: ${e.message}"
+                        }
+                    }
+                }, modifier = buttonFocus(9, 2), selected = normalizeLoudness)
             }
+            BasicText(
+                "Level programs and ads using Plex audio transcoding. Requires Plex Pass, a recent server, and " +
+                    "Analyze audio tracks for loudness in Plex Server > Library for both libraries. " +
+                    "Unavailable tracks, video conversion, Dolby Vision, and subtitle burn-in play at original volume. " +
+                    "Does not normalize music stations.",
+                style = Retro.Caption,
+            )
             BasicText("HDR PLAYBACK", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HdrMode.entries.forEachIndexed { index, mode ->

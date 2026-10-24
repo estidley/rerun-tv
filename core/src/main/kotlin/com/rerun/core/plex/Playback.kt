@@ -50,6 +50,7 @@ object Playback {
         audioStreamId: Int? = null,
         forceSdr: Boolean = false,
         forceVideoTranscode: Boolean = false,
+        normalizeLoudness: Boolean = false,
     ): String? {
         val meta = "/library/metadata/${item.key}"
         if (!ServerUri.isAcceptable(base) || !ServerUri.isLibraryPath(meta)) return null
@@ -60,7 +61,9 @@ object Playback {
             "&offset=${offsetMs / 1000}" +
             "&fastSeek=1&directPlay=0&directStream=${if (forceSdr || forceVideoTranscode) 0 else 1}&directStreamAudio=0" +
             (if (forceSdr) "&videoCodec=h264&videoProfile=high&videoBitDepth=8" else "") +
-            "&videoResolution=1920x1080&maxVideoBitrate=20000&subtitles=$subs" +
+            (if (normalizeLoudness) "&normalizeLoudness=1&audioCodec=aac" else "") +
+            (if (normalizeLoudness && !forceSdr && !forceVideoTranscode) "" else "&videoResolution=1920x1080&maxVideoBitrate=20000") +
+            "&subtitles=$subs" +
             (if (subtitles && subtitleStreamId != null) "&subtitleStreamID=$subtitleStreamId" else "") +
             (audioStreamId?.let { "&audioStreamID=$it" } ?: "") +
             "&session=${enc(session)}&X-Plex-Session-Identifier=${enc(session)}" +
@@ -87,6 +90,7 @@ fun planPlayback(
     forceTranscode: Boolean = false,
     audioStreamId: Int? = null,
     forceSdr: Boolean = false,
+    normalizeLoudness: Boolean = false,
 ): PlaybackPlan {
     if (item == null) return PlaybackPlan.UpNext("missing")
     if (!ServerUri.isAcceptable(base)) return PlaybackPlan.UpNext("server")
@@ -95,13 +99,13 @@ fun planPlayback(
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
         return PlaybackPlan.Direct(url, offsetMs)
     }
-    if (!forceTranscode && !forceSdr && audioStreamId == null && Playback.canDirectPlay(item)) {
+    if (!forceTranscode && !forceSdr && !normalizeLoudness && audioStreamId == null && Playback.canDirectPlay(item)) {
         val url = Playback.directUrl(base, item) ?: return PlaybackPlan.UpNext("server")
         return PlaybackPlan.Direct(url, offsetMs)
     }
     val url = Playback.transcodeUrl(
         base, item, clientId, session, offsetMs, subtitles, subtitleStreamId,
-        audioStreamId, forceSdr, forceVideoTranscode = forceTranscode,
+        audioStreamId, forceSdr, forceVideoTranscode = forceTranscode, normalizeLoudness = normalizeLoudness,
     )
         ?: return PlaybackPlan.UpNext("server")
     return PlaybackPlan.Transcoded(url)

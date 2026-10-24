@@ -85,4 +85,19 @@ class MusicScreenTest {
         assertEquals(before, Recomposer.runningRecomposers.value.sumOf { it.changeCount })
         assertNotEquals(initial, compose.onNodeWithTag("music-card").fetchSemanticsNode().boundsInRoot)
     }
+
+    @Test
+    fun liveMusicProgressStillUpdatesWithoutAParentClock() {
+        val track = PlexParse.tracks(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"t","title":"Night Drive","duration":240000}]}}""",
+        ).single()
+        var position = 0L
+        compose.mainClock.autoAdvance = false
+        compose.setContent { MusicScreen(track, "Jazz", null, 0) { position } }
+        compose.onNodeWithText("0:00 / 4:00").assertExists()
+        compose.runOnIdle { position = 81_000 }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("1:21 / 4:00").assertExists()
+        compose.onNodeWithText("Night Drive").assertIsDisplayed()
+    }
 }

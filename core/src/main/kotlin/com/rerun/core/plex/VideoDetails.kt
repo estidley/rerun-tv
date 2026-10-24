@@ -27,6 +27,7 @@ data class AudioStream(
     val codec: String?,
     val channels: Int?,
     val selected: Boolean,
+    val canNormalizeLoudness: Boolean = false,
 )
 
 fun selectAudio(streams: List<AudioStream>, language: String): AudioStream? {

@@ -20,15 +20,24 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Keeps every active channel's locked schedule at least a day ahead. */
 class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     private val mutex = Mutex()
-    @Volatile private var library: Map<String, MediaItem>? = null
+    private data class LibrarySnapshot(val items: List<MediaItem>, val byKey: Map<String, MediaItem>)
+    private val libraryLoad = Mutex()
+    private val libraryLock = Any()
+    private var library: LibrarySnapshot? = null
+    private var libraryGeneration = 0L
     private val _guideRevision = MutableStateFlow(0L)
     val guideRevision = _guideRevision.asStateFlow()
 
-    fun invalidateLibrary() { library = null }
+    fun invalidateLibrary() = synchronized(libraryLock) {
+        libraryGeneration++
+        library = null
+    }
 
     suspend fun signOut(settings: Settings) = mutex.withLock {
         settings.signOut()
@@ -36,12 +45,33 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         _guideRevision.value++
     }
 
-    private suspend fun lib(): Map<String, MediaItem> =
-        library ?: db.items().all().map { it.toItem() }.associateBy { it.key }.also { library = it }
+    private suspend fun lib(): LibrarySnapshot {
+        synchronized(libraryLock) { library }?.let { return it }
+        return libraryLoad.withLock {
+            var loaded: LibrarySnapshot?
+            do {
+                val generation = synchronized(libraryLock) {
+                    library?.let { return@withLock it }
+                    libraryGeneration
+                }
+                val snapshot = withContext(Dispatchers.IO) {
+                    val byKey = db.items().all().associate { row -> row.key to row.toItem() }
+                    LibrarySnapshot(byKey.values.toList(), byKey)
+                }
+                loaded = synchronized(libraryLock) {
+                    if (generation == libraryGeneration) {
+                        library = snapshot
+                        snapshot
+                    } else null
+                }
+            } while (loaded == null)
+            loaded
+        }
+    }
 
-    suspend fun item(key: String?): MediaItem? = key?.let { lib()[it] }
+    suspend fun item(key: String?): MediaItem? = key?.let { lib().byKey[it] }
 
-    suspend fun libraryItems(): List<MediaItem> = lib().values.toList()
+    suspend fun libraryItems(): List<MediaItem> = lib().items
 
     suspend fun allChannelRows(): List<ChannelRow> = db.channels().all()
 
@@ -141,7 +171,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         val last = db.entries().lastEnd(row.id)
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
-        val pool = Resolver.pool(def, lib().values.toList())
+        val pool = Resolver.pool(def, lib().items)
         val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = row.id.hashCode().toLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs)
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))

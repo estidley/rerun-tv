@@ -25,6 +25,7 @@ import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.*
@@ -54,17 +55,20 @@ class TunerEngineTest {
     private val sources = mutableListOf<MediaSource>()
     private var wallTime: Long? = null
     private var hdrSupported = false
+    private val revision = MutableStateFlow(0L)
 
     @Before
     fun setUp() = runBlocking {
         player = mock(ExoPlayer::class.java)
         repo = mock(ScheduleRepo::class.java)
+        `when`(repo.guideRevision).thenReturn(revision)
         settings = mock(Settings::class.java)
         api = mock(PlexApi::class.java)
         `when`(player.trackSelectionParameters).thenReturn(TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT)
         `when`(player.currentTracks).thenReturn(Tracks.EMPTY)
         `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
         `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(false)
+        `when`(settings.isOn(Settings.NORMALIZE_LOUDNESS)).thenReturn(false)
         `when`(settings.subtitleLanguageValue()).thenReturn("auto")
         `when`(settings.audioLanguageValue()).thenReturn("auto")
         `when`(settings.hdrModeValue()).thenReturn("AUTO")
@@ -136,7 +140,7 @@ class TunerEngineTest {
     }
 
     @Test
-    fun togglingSubtitlesLoadsAndRemovesExternalTextDuringDirectPlay() = runBlocking {
+    fun togglingSubtitlesLoadsAndRemovesExternalTextDuringDirectPlay() = runBlocking<Unit> {
         val metadata = videoWithSubtitle("srt")
         prepare("east", PlexParse.movies(metadata).single())
         `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
@@ -155,6 +159,27 @@ class TunerEngineTest {
         engine.setSubtitles(false)
         await { sources.size == 3 }
         assertTrue(sources[2].mediaItem.localConfiguration!!.subtitleConfigurations.isEmpty())
+        verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
+    }
+
+    @Test
+    fun metadataIsReusedOnRetuneButReloadedAfterSyncAndClear() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        engine.tune("east")
+        await { sources.size == 2 }
+        verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
+        revision.value++
+        engine.tune("east")
+        await { sources.size == 3 }
+        verify(api, times(2)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
+        engine.clear()
+        engine.tune("east")
+        await { sources.size == 4 }
+        verify(api, times(3)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
     }
 
     @Test
@@ -323,7 +348,7 @@ class TunerEngineTest {
     }
 
     @Test
-    fun hdrAutoConvertsForUnsupportedDisplayAndTheOverrideConvertsOnSupportedDisplays() = runBlocking {
+    fun hdrAutoConvertsForUnsupportedDisplayAndTheOverrideConvertsOnSupportedDisplays() = runBlocking<Unit> {
         val metadata = videoWithSubtitle("srt").replace(
             """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
         )
@@ -343,6 +368,7 @@ class TunerEngineTest {
         engine.refreshPlaybackPreferences()
         await { sources.size == 3 }
         assertTrue(engine.state.value.convertingHdr)
+        verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
     }
 
     @Test
@@ -435,6 +461,136 @@ class TunerEngineTest {
             ]}
           ]}]}]}}"""
 
+    @Test
+    fun normalizationAppliesToProgramsAndAdsButWarnsForUnanalyzedTracks() = runBlocking {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""",
+            """"id":8,"streamType":2,"codec":"aac","selected":true,"canNormalizeLoudness":1},{"id":7,"streamType":3""",
+        )
+        val item = PlexParse.movies(metadata).single()
+        prepare("east", item)
+        `when`(settings.isOn(Settings.NORMALIZE_LOUDNESS)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals("1", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("normalizeLoudness"))
+        assertNull(engine.state.value.message)
+        engine.setVisible(false)
+        val now = System.currentTimeMillis()
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(item.copy(durationMs = 30_000))))
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 5_000, now + 55_000, EntryKind.FILLER, null),
+        ))
+        engine.tune("east")
+        await { sources.size == 2 }
+        assertEquals("1", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("normalizeLoudness"))
+        verify(player).setVolume(0f)
+        listener.onPlayerError(PlaybackException("Test", null, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS))
+        assertTrue(engine.state.value.message!!.contains("normalized audio playback failed"))
+        engine.clear()
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder"))
+            .thenReturn(metadata.replace(""""canNormalizeLoudness":1""", """"canNormalizeLoudness":0"""))
+        engine.tune("east")
+        await { sources.size == 3 }
+        assertNull(sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("normalizeLoudness"))
+        assertTrue(engine.state.value.message!!.contains("unavailable"))
+    }
+
+    @Test
+    fun normalizationDoesNotOverrideHdrConversionOrSubtitleBurnIn() = runBlocking {
+        val metadata = videoWithSubtitle("pgs").replace(
+            """"id":7,"streamType":3""",
+            """"id":8,"streamType":2,"codec":"aac","selected":true,"canNormalizeLoudness":1},
+            {"id":9,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.NORMALIZE_LOUDNESS)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.convertingHdr)
+        assertNull(sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("normalizeLoudness"))
+        assertTrue(engine.state.value.message!!.contains("unavailable"))
+        hdrSupported = true
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        engine.tune("east")
+        await { sources.size == 2 }
+        assertEquals("burn", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("subtitles"))
+        assertNull(sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("normalizeLoudness"))
+    }
+
+    @Test
+    fun sameStationFadesBeforeStoppingButStationChangesStillTuneImmediately() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare("east", item)
+        prepare("other", item)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertFalse(engine.state.value.sameChannelTransition)
+        listener.onRenderedFirstFrame()
+        engine.setVisible(false)
+        clearInvocations(player)
+        engine.tune("east")
+        assertTrue(engine.state.value.fadingOut)
+        assertTrue(engine.state.value.sameChannelTransition)
+        verify(player, never()).stop()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+        verify(player, never()).stop()
+        await { sources.size == 2 }
+        assertEquals(Phase.TUNING, engine.state.value.phase)
+        assertFalse(engine.state.value.fadingOut)
+        listener.onRenderedFirstFrame()
+        assertEquals(Phase.PLAYING, engine.state.value.phase)
+        verify(player, never()).setVolume(1f)
+        engine.tune("other")
+        await { sources.size == 3 }
+        assertFalse(engine.state.value.sameChannelTransition)
+        assertFalse(engine.state.value.fadingOut)
+    }
+
+    @Test
+    fun scheduledProgramToAdRolloverFadesAndKeepsTheWallClockOffset() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single().copy(audioCodec = "dca", durationMs = 30_000)
+        prepare("east", item)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(item)))
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 10_000, EntryKind.PROGRAM, item.key),
+            ScheduleEntry("east", now + 10_000, now + 40_000, EntryKind.FILLER, null),
+        ))
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        clearInvocations(player)
+        wallTime = now + 12_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
+        assertTrue(engine.state.value.fadingOut)
+        verify(player, never()).stop()
+        await { sources.size == 2 }
+        assertTrue(engine.state.value.sameChannelTransition)
+        assertEquals(EntryKind.FILLER, engine.state.value.located!!.entry.kind)
+        assertEquals("2", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("offset"))
+    }
+
+    @Test
+    fun changingStationDuringFadeCancelsTheOldMediaReplacement() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare("east", item)
+        prepare("other", item)
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        engine.tune("east")
+        assertTrue(engine.state.value.fadingOut)
+        engine.tune("other")
+        await { sources.size == 2 }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(500))
+        assertEquals(2, sources.size)
+        assertEquals("other", engine.state.value.channel?.id)
+        assertFalse(engine.state.value.sameChannelTransition)
+    }
+
     private suspend fun prepare(id: String, item: MediaItem) {
         val row = ChannelRow.of(ChannelDef(id, 1, "Test", ChannelKind.CUSTOM, Rules()), false, false)
         val now = System.currentTimeMillis()
@@ -448,7 +604,7 @@ class TunerEngineTest {
     private fun await(condition: () -> Boolean) {
         val deadline = System.nanoTime() + 10_000_000_000L
         while (!condition() && System.nanoTime() < deadline) {
-            shadowOf(Looper.getMainLooper()).idle()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(10))
             Thread.sleep(10)
         }
         assertTrue("Tuner did not finish preparing", condition())

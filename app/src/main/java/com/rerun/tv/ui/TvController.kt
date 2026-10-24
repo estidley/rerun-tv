@@ -178,6 +178,11 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         engine.refreshPlaybackPreferences()
     }
 
+    suspend fun setNormalizeLoudness(enabled: Boolean) {
+        app.settings.setFlag(com.rerun.tv.data.Settings.NORMALIZE_LOUDNESS, enabled)
+        engine.refreshPlaybackPreferences()
+    }
+
     suspend fun setHdrMode(value: com.rerun.core.plex.HdrMode) {
         app.settings.setHdrMode(value.name)
         engine.refreshPlaybackPreferences()
