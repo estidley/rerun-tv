@@ -40,8 +40,6 @@ import com.rerun.tv.ui.guide.GuideDensity
 import com.rerun.core.plex.HdrMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) {
@@ -55,16 +53,16 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val hdrMode by controller.hdrMode.collectAsState()
     var server by remember { mutableStateOf("") }
     var lastSync by remember { mutableStateOf(0L) }
-    var syncStatus by remember { mutableStateOf<String?>(null) }
-    var lineupBusy by remember { mutableStateOf(false) }
+    var localStatus by remember { mutableStateOf<String?>(null) }
+    val update by controller.lineupUpdate.collectAsState()
+    val lineupBusy = update.busy
+    val syncStatus = localStatus ?: update.error ?: update.message
     var signingOut by remember { mutableStateOf(false) }
     val eastWest by remember(app.settings) { app.settings.flag(Settings.EAST_WEST, false) }.collectAsState(false)
     val musicOn by remember(app.settings) { app.settings.flag(Settings.MUSIC, false) }.collectAsState(false)
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
-    var pendingEastWest by remember { mutableStateOf<Boolean?>(null) }
-    var pendingMusic by remember { mutableStateOf<Boolean?>(null) }
-    val shownEastWest = pendingEastWest ?: eastWest
-    val shownMusic = pendingMusic ?: musicOn
+    val shownEastWest = update.eastWest ?: eastWest
+    val shownMusic = update.music ?: musicOn
     val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1, 2, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
@@ -84,9 +82,6 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             down = vertical(row + 1)
         }
     }
-
-    LaunchedEffect(eastWest) { if (pendingEastWest == eastWest) pendingEastWest = null }
-    LaunchedEffect(musicOn) { if (pendingMusic == musicOn) pendingMusic = null }
 
     BackHandler { if (!signingOut) controller.go(Screen.Guide) }
     LaunchedEffect(Unit) {
@@ -164,25 +159,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     "East and West",
                     {
                         if (!lineupBusy) {
-                            lineupBusy = true
-                            val next = !shownEastWest
-                            pendingEastWest = next
-                            syncStatus = "Updating East and West..."
-                            scope.launch {
-                                try {
-                                    app.settings.setFlag(Settings.EAST_WEST, next)
-                                    app.sync.refreshChannels()
-                                    controller.reconcileChannels()
-                                    syncStatus = "East and West ${if (next) "on" else "off"}"
-                                } catch (e: Exception) {
-                                    withContext(NonCancellable) { app.settings.setFlag(Settings.EAST_WEST, !next) }
-                                    pendingEastWest = null
-                                    if (e is CancellationException) throw e
-                                    syncStatus = "Lineup failed: ${e.message}"
-                                } finally {
-                                    lineupBusy = false
-                                }
-                            }
+                            localStatus = null
+                            controller.setEastWestEnabled(!shownEastWest)
                         }
                     },
                     modifier = buttonFocus(6, 0),
@@ -193,38 +171,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     "Music",
                     {
                         if (!lineupBusy) {
-                            lineupBusy = true
-                            val next = !shownMusic
-                            pendingMusic = next
-                            syncStatus = "Updating music..."
-                            scope.launch {
-                                try {
-                                    if (next) {
-                                        val included = app.settings.selectedLibraries()
-                                        require(app.sync.libraries().any { it.type == "artist" && (included == null || it.key in included) }) {
-                                            "Include a Plex music library in Manage libraries first."
-                                        }
-                                    }
-                                    app.settings.setFlag(Settings.MUSIC, next)
-                                    if (next) {
-                                        app.sync.sync().collect { p ->
-                                            syncStatus = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}"
-                                        }
-                                        lastSync = app.settings.lastSyncMs()
-                                    } else {
-                                        app.sync.refreshChannels()
-                                        syncStatus = "Music channels off"
-                                    }
-                                    controller.reconcileChannels()
-                                } catch (e: Exception) {
-                                    withContext(NonCancellable) { app.settings.setFlag(Settings.MUSIC, !next) }
-                                    pendingMusic = null
-                                    if (e is CancellationException) throw e
-                                    syncStatus = "Sync failed: ${e.message}"
-                                } finally {
-                                    lineupBusy = false
-                                }
-                            }
+                            localStatus = null
+                            controller.setMusicEnabled(!shownMusic)
                         }
                     },
                     modifier = buttonFocus(6, 1),
@@ -242,35 +190,27 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             )
 
             BasicText("LIBRARY", style = Retro.GuideNumber)
-            BasicText("Plex server: $server" + if (lastSync > 0) "   ·   last synced ${clockTime(lastSync)}" else "", style = Retro.Body)
+            val shownLastSync = update.lastSyncMs ?: lastSync
+            BasicText("Plex server: $server" + if (shownLastSync > 0) "   ·   last synced ${clockTime(shownLastSync)}" else "", style = Retro.Body)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("Manage libraries", { controller.go(Screen.Libraries) }, modifier = buttonFocus(7, 0), enabled = !lineupBusy)
                 TvButton("Re-sync now", {
-                    if (!lineupBusy) scope.launch {
-                        lineupBusy = true
-                        try {
-                            app.sync.sync().collect { p -> syncStatus = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}" }
-                            controller.reconcileChannels()
-                            lastSync = app.settings.lastSyncMs()
-                        } catch (e: Exception) {
-                            if (e is CancellationException) throw e
-                            syncStatus = "Sync failed: ${e.message}"
-                        } finally {
-                            lineupBusy = false
-                        }
+                    if (!lineupBusy) {
+                        localStatus = null
+                        controller.resyncLibrary()
                     }
                 }, modifier = buttonFocus(7, 1))
                 TvButton("Channels", { controller.go(Screen.Channels) }, modifier = buttonFocus(7, 2))
                 TvButton("Sign out", {
                     if (!signingOut) {
                         signingOut = true
-                        syncStatus = "Signing out..."
+                        localStatus = "Signing out..."
                         scope.launch {
                             try {
                                 controller.signOut()
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
-                                syncStatus = "Sign out failed: ${e.message}"
+                                localStatus = "Sign out failed: ${e.message}"
                             } finally {
                                 signingOut = false
                             }
@@ -295,7 +235,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                                 controller.setHdrMode(mode)
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
-                                syncStatus = "Couldn't change HDR playback: ${e.message}"
+                                localStatus = "Couldn't change HDR playback: ${e.message}"
                             }
                         }
                     }, modifier = buttonFocus(10, index), selected = HdrMode.from(hdrMode) == mode)

@@ -2,6 +2,7 @@ package com.rerun.tv.ui.player
 
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.Recomposer
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -66,5 +67,22 @@ class MusicScreenTest {
         assertEquals("0:00", musicTime(-1))
         assertEquals("0:00", musicTime(0))
         assertEquals("61:01", musicTime(3_661_000))
+    }
+
+    @Test
+    fun artworkDriftDoesNotRecomposeTheMusicScreen() {
+        val track = PlexParse.tracks(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"t","title":"Night Drive","duration":240000}]}}""",
+        ).single()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { MusicScreen(track, "Jazz", null, 0) }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        val before = Recomposer.runningRecomposers.value.sumOf { it.changeCount }
+        val initial = compose.onNodeWithTag("music-card").fetchSemanticsNode().boundsInRoot
+        compose.mainClock.advanceTimeBy(10_000)
+        compose.waitForIdle()
+        assertEquals(before, Recomposer.runningRecomposers.value.sumOf { it.changeCount })
+        assertNotEquals(initial, compose.onNodeWithTag("music-card").fetchSemanticsNode().boundsInRoot)
     }
 }

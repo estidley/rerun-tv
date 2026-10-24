@@ -37,7 +37,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.tv.ui.theme.Retro
@@ -87,10 +89,12 @@ internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, po
         val cardHeight = maxHeight * 0.62f
         val artSize = minOf(cardWidth * 0.34f, cardHeight * 0.67f)
         Column(
-            Modifier.offset(
-                x = (maxWidth - cardWidth) * (0.08f + x * 0.84f),
-                y = (maxHeight - cardHeight) * (0.08f + y * 0.84f),
-            ).size(cardWidth, cardHeight).testTag("music-card").padding(16.dp),
+            Modifier.offset {
+                IntOffset(
+                    ((maxWidth - cardWidth).toPx() * (0.08f + x * 0.84f)).roundToInt(),
+                    ((maxHeight - cardHeight).toPx() * (0.08f + y * 0.84f)).roundToInt(),
+                )
+            }.size(cardWidth, cardHeight).testTag("music-card").padding(16.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             BasicText(

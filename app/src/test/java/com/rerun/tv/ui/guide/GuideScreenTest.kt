@@ -27,6 +27,8 @@ import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
+import com.rerun.tv.data.LibrarySync
+import com.rerun.tv.data.SyncProgress
 import com.rerun.tv.player.TunerEngine
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.Screen
@@ -35,6 +37,8 @@ import com.rerun.tv.ui.theme.ProvideColorTheme
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.flow
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -57,6 +61,7 @@ class GuideScreenTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var controller: TvController
     private lateinit var schedule: ScheduleRepo
+    private lateinit var sync: LibrarySync
     private val channels = MutableStateFlow<List<ChannelRow>>(emptyList())
     private val revision = MutableStateFlow(0L)
 
@@ -71,10 +76,13 @@ class GuideScreenTest {
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
+        `when`(settings.isOn(anyString(), anyBoolean())).thenReturn(false)
         schedule = mock(ScheduleRepo::class.java)
         `when`(schedule.guideRevision).thenReturn(revision)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(schedule)
+        sync = mock(LibrarySync::class.java)
+        `when`(app.sync).thenReturn(sync)
         channels.value = (0 until 50).map {
             ChannelRow.of(
                 ChannelDef("test:$it", it + 1, "A long channel name $it", ChannelKind.CUSTOM, Rules()),
@@ -167,6 +175,60 @@ class GuideScreenTest {
     }
 
     @Test
+    fun clockTicksDoNotReloadAnUnchangedGuide() = runBlocking<Unit> {
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+        }
+        clearInvocations(schedule)
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(90_000)
+        compose.waitForIdle()
+        verify(schedule, never()).ensure(anyLong())
+        verify(schedule, never()).allEntries(anyLong(), anyLong())
+    }
+
+    @Test
+    fun guideWaitsForMusicScanAndShowsProgressBeforeLoadingTheNewLineup() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        val start = com.rerun.core.schedule.gridFloor(System.currentTimeMillis())
+        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(mapOf(
+            "music:jazz" to listOf(ScheduleEntry("music:jazz", start, start + 4 * 3_600_000L, EntryKind.PROGRAM, "track")),
+        ))
+        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
+        `when`(sync.sync()).thenReturn(flow {
+            emit(SyncProgress("Music", 1, 2))
+            finish.await()
+            channels.value = listOf(ChannelRow.of(
+                ChannelDef("music:jazz", 2000, "Jazz", ChannelKind.MUSIC, Rules()),
+                builtIn = true, dormant = false,
+            ))
+            emit(SyncProgress("Done", 2, 2, true))
+        })
+        controller.setMusicEnabled(true)
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.onNodeWithText("Updating guide...").assertExists()
+        compose.onNodeWithText("Music 1/2").assertExists()
+        compose.onNodeWithTag("guide-grid").assertDoesNotExist()
+        verify(schedule, never()).ensure(anyLong())
+        compose.onRoot().performKeyInput {
+            pressKey(Key.DirectionDown)
+            pressKey(Key.Menu)
+            pressKey(Key.DirectionRight)
+            pressKey(Key.Enter)
+        }
+        compose.runOnIdle {
+            assertEquals(Screen.Settings, controller.screen.value)
+            finish.complete(Unit)
+        }
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+        }
+        verify(schedule).ensure(anyLong())
+        compose.onAllNodesWithText("Jazz Music")[0].assertExists()
+    }
+
+    @Test
     fun slowScheduleBuildHidesGridAndShowsElapsedTime() = runBlocking<Unit> {
         val release = java.util.concurrent.CountDownLatch(1)
         doAnswer {
@@ -178,6 +240,20 @@ class GuideScreenTest {
             compose.onNodeWithText("Updating guide...").assertExists()
             compose.onNodeWithText("Elapsed: 0s").assertExists()
             compose.onNodeWithTag("guide-grid").assertDoesNotExist()
+            compose.onRoot().performKeyInput {
+                pressKey(Key.DirectionDown)
+                pressKey(Key.Menu)
+                pressKey(Key.DirectionRight)
+                pressKey(Key.Enter)
+            }
+            compose.runOnIdle { assertEquals(Screen.Settings, controller.screen.value) }
+            compose.onRoot().performKeyInput {
+                pressKey(Key.DirectionDown)
+                pressKey(Key.DirectionLeft)
+                pressKey(Key.Enter)
+            }
+            compose.runOnIdle { assertEquals(Screen.Channels, controller.screen.value) }
+            verify(schedule, never()).channel(anyString())
         } finally {
             release.countDown()
         }

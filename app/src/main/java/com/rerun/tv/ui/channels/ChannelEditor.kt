@@ -36,6 +36,7 @@ import com.rerun.core.catalog.validateDraft
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
+import com.rerun.core.model.MediaItem
 import com.rerun.core.model.PlayOrder
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
@@ -48,16 +49,18 @@ import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvFrame
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Build or change a channel: what feeds it, filters, play order. */
 @Composable
-fun ChannelEditor(controller: TvController, channelId: String?) {
-    val app = RerunApp.instance
+fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = RerunApp.instance) {
     val scope = rememberCoroutineScope()
     var existing by remember { mutableStateOf<ChannelRow?>(null) }
     var draft by remember { mutableStateOf<ChannelDef?>(null) }
     var facets by remember { mutableStateOf<Facets?>(null) }
+    var library by remember { mutableStateOf<List<MediaItem>?>(null) }
     var numberText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var poolHours by remember { mutableStateOf("") }
@@ -77,15 +80,18 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                 name = "", kind = ChannelKind.CUSTOM, rules = Rules(genres = emptySet()),
             )
         }
+        val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
+        facets = withContext(Dispatchers.Default) { Facets.from(contents) }
+        library = contents
         draft = d
         numberText = d.number.toString()
-        facets = Facets.from(app.schedule.libraryItems())
         runCatching { first.requestFocus() }
     }
-    LaunchedEffect(draft) {
+    LaunchedEffect(draft?.rules, draft?.blocks, library) {
         val d = draft ?: return@LaunchedEffect
-        val ms = Resolver.pool(d, app.schedule.libraryItems()).sumOf { it.durationMs }
-        poolHours = "%.1f hours of content".format(ms / 3_600_000.0) + if (Resolver.isDormant(Resolver.pool(d, app.schedule.libraryItems()))) "  (needs 4 to go on the air)" else ""
+        val contents = library ?: return@LaunchedEffect
+        val ms = withContext(Dispatchers.Default) { Resolver.pool(d, contents).sumOf { it.durationMs } }
+        poolHours = "%.1f hours of content".format(ms / 3_600_000.0) + if (ms < Resolver.DORMANT_MS) "  (needs 4 to go on the air)" else ""
     }
 
     val d = draft
@@ -154,9 +160,10 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                                 val toSave = draft ?: return@launch
                                 val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
                                 if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
-                                val pool = Resolver.pool(toSave, app.schedule.libraryItems())
+                                val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
+                                val ms = withContext(Dispatchers.Default) { Resolver.pool(toSave, contents).sumOf { it.durationMs } }
                                 app.schedule.saveChannel(
-                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = Resolver.isDormant(pool), poolMs = pool.sumOf { it.durationMs }),
+                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = ms < Resolver.DORMANT_MS, poolMs = ms),
                                 )
                                 if (!Lineup.isWest(toSave.id) && app.settings.isOn(Settings.EAST_WEST)) {
                                     app.sync.refreshChannels()

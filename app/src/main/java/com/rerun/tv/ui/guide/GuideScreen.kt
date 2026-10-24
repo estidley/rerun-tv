@@ -77,6 +77,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val rows by controller.channels.collectAsState()
     val density by controller.guideDensity.collectAsState()
     val revision by schedule.guideRevision.collectAsState()
+    val update by controller.lineupUpdate.collectAsState()
     val focus = remember { FocusRequester() }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -87,10 +88,10 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
+    val updating = loading || update.busy
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
-    var refreshTick by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -98,13 +99,12 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             now = System.currentTimeMillis()
             windowStart = maxOf(windowStart, gridFloor(now))
             focusTime = maxOf(focusTime, now)
-            refreshTick++
         }
     }
-    LaunchedEffect(loading, windowStart, revision, attempt) {
+    LaunchedEffect(updating) {
         elapsedSeconds = 0
         val started = android.os.SystemClock.elapsedRealtime()
-        while (loading) {
+        while (updating) {
             delay(1_000)
             elapsedSeconds = (android.os.SystemClock.elapsedRealtime() - started) / 1_000
         }
@@ -114,7 +114,11 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
         val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
         focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, rows.lastIndex.coerceAtLeast(-1))
     }
-    LaunchedEffect(windowStart, rows, revision, attempt, refreshTick) {
+    LaunchedEffect(updating) {
+        if (updating) focusRow = -1
+    }
+    LaunchedEffect(windowStart, rows, revision, attempt, update.busy) {
+        if (update.busy) return@LaunchedEffect
         loading = true
         loadError = null
         now = System.currentTimeMillis()
@@ -151,9 +155,10 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val focusedChannel = rows.getOrNull(focusRow)
     val focusedBlock = focusedChannel?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
     val focusedItem = focusedBlock?.itemKey?.let { items[it] }
-    val header = rows.isEmpty() || focusRow < 0
+    val header = updating || rows.isEmpty() || focusRow < 0
 
     fun move(dRow: Int) {
+        if (updating) return
         focusRow = (focusRow + dRow).coerceIn(-1, rows.size - 1)
     }
 
@@ -181,9 +186,9 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> when {
                         header -> controller.go(if (headerIndex == 0) Screen.Channels else Screen.Settings)
                         loadError != null -> attempt++
-                        !loading && focusedChannel != null -> { controller.go(Screen.Player); controller.tuneTo(focusedChannel.id) }
+                        !updating && focusedChannel != null -> { controller.go(Screen.Player); controller.tuneTo(focusedChannel.id) }
                     }
-                    Key.Menu -> focusedChannel?.let { controller.go(Screen.Editor(it.id)) }
+                    Key.Menu -> if (!updating) focusedChannel?.let { controller.go(Screen.Editor(it.id)) }
                     else -> return@onPreviewKeyEvent false
                 }
                 true
@@ -204,17 +209,18 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem))
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                if (loading || loadError != null || rows.isEmpty()) {
+                if (updating || loadError != null || rows.isEmpty()) {
                     Column(Modifier.align(Alignment.Center).testTag("guide-status")) {
                         BasicText(
-                            loadError ?: if (loading) "Updating guide..." else "No channels yet. Open Settings and run a library sync.",
+                            if (updating) "Updating guide..." else loadError ?: "No channels yet. Open Settings and run a library sync.",
                             style = Retro.Title,
                         )
                         BasicText(
-                            if (loadError != null) "Press OK to retry, or UP for Settings."
-                            else if (loading) "Elapsed: ${elapsedSeconds}s" else "Press UP for Settings.",
+                            if (updating) "Elapsed: ${elapsedSeconds}s"
+                            else if (loadError != null) "Press OK to retry, or UP for Settings." else "Press UP for Settings.",
                             style = Retro.Body,
                         )
+                        if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
                     }
                     return@BoxWithConstraints
                 }
@@ -259,7 +265,12 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                     }
                 }
             }
-            BasicText("▲▼ channels   ◀▶ time   OK watch   ☰ edit channel   BACK return", style = Retro.Caption)
+            update.error?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Yellow)) }
+            BasicText(
+                if (updating) "◀▶ Channels / Settings   OK open   BACK return"
+                else "▲▼ channels   ◀▶ time   OK watch   ☰ edit channel   BACK return",
+                style = Retro.Caption,
+            )
         }
     }
 }

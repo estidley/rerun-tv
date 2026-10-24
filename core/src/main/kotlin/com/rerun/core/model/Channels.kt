@@ -62,8 +62,7 @@ data class Rules(
     fun matches(item: MediaItem, networkId: String? = item.network): Boolean {
         if (item.kind !in kinds) return false
         if (bucketCount > 1 && bucketOf(item, bucketCount) != bucket) return false
-        val itemGenres = item.genres.normed()
-        if (nExclude.isNotEmpty() && itemGenres.any { it in nExclude }) return false
+        if (nExclude.isNotEmpty() && item.genres.any { norm(it) in nExclude }) return false
         if (decades.isNotEmpty()) {
             val y = item.year ?: return false
             if (y / 10 * 10 !in decades) return false
@@ -76,11 +75,11 @@ data class Rules(
 
         if (networkId != null && norm(networkId) in nNetworks) return true
         val title = if (item.kind == MediaKind.EPISODE) item.showTitle else item.title
-        if (title != null && titleKey(title) in nTitles) return true
-        if (item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true
-        if (item.labels.any { norm(it) in nLabels }) return true
-        if (item.collections.any { norm(it) in nCollections }) return true
-        if (itemGenres.any { it in nGenres }) return true
+        if (nTitles.isNotEmpty() && title != null && titleKey(title) in nTitles) return true
+        if (nTmdb.isNotEmpty() && item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true
+        if (nLabels.isNotEmpty() && item.labels.any { norm(it) in nLabels }) return true
+        if (nCollections.isNotEmpty() && item.collections.any { norm(it) in nCollections }) return true
+        if (nGenres.isNotEmpty() && item.genres.any { norm(it) in nGenres }) return true
         return false
     }
 }

@@ -12,6 +12,10 @@ import com.rerun.tv.ui.player.NoiseBurst
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 
 data class Effects(
@@ -36,6 +41,15 @@ data class Effects(
         val KEYS = listOf(STATIC, SOUND, ROLL, POWER)
     }
 }
+
+data class LineupUpdate(
+    val busy: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+    val music: Boolean? = null,
+    val eastWest: Boolean? = null,
+    val lastSyncMs: Long? = null,
+)
 
 sealed interface Screen {
     data object Onboarding : Screen
@@ -78,6 +92,86 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     val subtitleLanguage: StateFlow<String> = app.settings.subtitleLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val audioLanguage: StateFlow<String> = app.settings.audioLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val hdrMode: StateFlow<String> = app.settings.hdrMode().stateIn(scope, SharingStarted.Eagerly, "AUTO")
+
+    private val _lineupUpdate = MutableStateFlow(LineupUpdate())
+    val lineupUpdate = _lineupUpdate.asStateFlow()
+    private var lineupJob: Job? = null
+    private var signingOut = false
+
+    fun setMusicEnabled(enabled: Boolean) {
+        updateLineup("Updating music...", "Sync failed", music = enabled) {
+            if (enabled) {
+                val included = app.settings.selectedLibraries()
+                require(app.sync.libraries().any { it.type == "artist" && (included == null || it.key in included) }) {
+                    "Include a Plex music library in Manage libraries first."
+                }
+            }
+            changeLineupFlag(com.rerun.tv.data.Settings.MUSIC, enabled) {
+                if (enabled) syncLibrary() else {
+                    app.sync.refreshChannels()
+                    _lineupUpdate.value = _lineupUpdate.value.copy(message = "Music channels off")
+                }
+            }
+            reconcileChannels()
+        }
+    }
+
+    fun setEastWestEnabled(enabled: Boolean) {
+        updateLineup("Updating East and West...", "Lineup failed", eastWest = enabled) {
+            changeLineupFlag(com.rerun.tv.data.Settings.EAST_WEST, enabled) { app.sync.refreshChannels() }
+            reconcileChannels()
+            _lineupUpdate.value = _lineupUpdate.value.copy(message = "East and West ${if (enabled) "on" else "off"}")
+        }
+    }
+
+    fun resyncLibrary() {
+        updateLineup("Reading libraries", "Sync failed") {
+            syncLibrary()
+            reconcileChannels()
+        }
+    }
+
+    /** Navigation must not cancel a library update or roll back the user's lineup switch. */
+    private fun updateLineup(
+        message: String, failure: String, music: Boolean? = null, eastWest: Boolean? = null,
+        operation: suspend () -> Unit,
+    ) {
+        if (_lineupUpdate.value.busy || signingOut) return
+        _lineupUpdate.value = LineupUpdate(
+            true, message, music = music, eastWest = eastWest, lastSyncMs = _lineupUpdate.value.lastSyncMs,
+        )
+        lineupJob = scope.launch {
+            try {
+                operation()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _lineupUpdate.value = _lineupUpdate.value.copy(message = null, error = "$failure: ${e.message}")
+            } finally {
+                _lineupUpdate.value = _lineupUpdate.value.copy(busy = false, music = null, eastWest = null)
+            }
+        }
+    }
+
+    private suspend fun changeLineupFlag(key: String, enabled: Boolean, operation: suspend () -> Unit) {
+        val previous = app.settings.isOn(key)
+        try {
+            app.settings.setFlag(key, enabled)
+            operation()
+        } catch (e: Exception) {
+            withContext(NonCancellable) { app.settings.setFlag(key, previous) }
+            throw e
+        }
+    }
+
+    private suspend fun syncLibrary() {
+        app.sync.sync().collect { p ->
+            _lineupUpdate.value = _lineupUpdate.value.copy(
+                message = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}",
+            )
+        }
+        _lineupUpdate.value = _lineupUpdate.value.copy(lastSyncMs = app.settings.lastSyncMs())
+    }
 
     suspend fun setAudioLanguage(value: String) {
         app.settings.setAudioLanguage(value)
@@ -159,15 +253,22 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     suspend fun signOut() {
-        connectionGeneration++
-        engine.clear()
-        app.sync.signOut()
-        currentId = null
-        previousId = null
-        channelBeforeRestart = null
-        serverBase = null
-        _bannerUntil.value = 0L
-        go(Screen.Onboarding)
+        signingOut = true
+        try {
+            connectionGeneration++
+            lineupJob?.cancelAndJoin()
+            _lineupUpdate.value = LineupUpdate()
+            engine.clear()
+            app.sync.signOut()
+            currentId = null
+            previousId = null
+            channelBeforeRestart = null
+            serverBase = null
+            _bannerUntil.value = 0L
+            go(Screen.Onboarding)
+        } finally {
+            signingOut = false
+        }
     }
 
     /** Back from the guide: return to the picture, and arm "Back again exits". */

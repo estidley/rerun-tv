@@ -70,8 +70,15 @@ object Lineup {
      */
     fun plan(library: List<MediaItem>, existing: List<StoredChannel>, eastWest: Boolean, music: Boolean): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
-        val qualified = channels(library, music).map { it.id }.toSet()
-        val templates = Catalog.builtInChannels() + optional + movies + musicTemplates(library)
+        val durations = HashMap<ChannelDef, Long>()
+        fun duration(def: ChannelDef): Long = durations.getOrPut(def) { poolMs(def, library) }
+        val builtIn = Catalog.builtInChannels()
+        val stations = musicTemplates(library)
+        val movieMs = moviePoolMs(library)
+        val qualified = (builtIn + optional.filter { duration(it) >= Resolver.DORMANT_MS } +
+            movies.filter { movieMs >= movieThreshold(it.id) } +
+            if (music) stations.filter { duration(it) >= Resolver.DORMANT_MS } else emptyList()).map { it.id }.toSet()
+        val templates = builtIn + optional + movies + stations
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
@@ -80,7 +87,7 @@ object Lineup {
                 val prev = existingById[template.id] ?: continue
                 if (looksStock(prev.def, template)) continue
                 val kept = prev.def.copy(name = Catalog.chooseName(template.id, prev.def.name, template.name))
-                val pool = poolMs(kept, library)
+                val pool = duration(kept)
                 val dormant = (kept.kind == ChannelKind.MUSIC && !music) || pool < Resolver.DORMANT_MS
                 upserts += PlannedChannel(kept, prev.builtIn, dormant, pool)
                 if (feedsOn(eastWest, kept, dormant)) upserts += westOf(kept, kept.name, pool)
@@ -90,8 +97,8 @@ object Lineup {
             val prev = existingById[template.id]
             val base = prev?.def ?: template
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
-            val pool = poolMs(base, library)
-            val dormant = Resolver.isDormant(Resolver.pool(base, library))
+            val pool = duration(base)
+            val dormant = pool < Resolver.DORMANT_MS
             val showFeed = feedsOn(eastWest, base, dormant)
             val east = base.copy(name = baseName)
             upserts += PlannedChannel(east, prev?.builtIn ?: true, dormant, pool)
@@ -105,12 +112,12 @@ object Lineup {
             if (isGenerated(id)) {
                 // A genre can disappear completely; retain edits even without a live template.
                 if (id.startsWith("music:") && !looksStockMusic(prev.def)) {
-                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = true, poolMs = poolMs(prev.def, library))
+                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = true, poolMs = duration(prev.def))
                 }
                 continue
             }
-            val pool = poolMs(prev.def, library)
-            val dormant = Resolver.isDormant(Resolver.pool(prev.def, library))
+            val pool = duration(prev.def)
+            val dormant = pool < Resolver.DORMANT_MS
             val baseName = Catalog.stripFeed(prev.def.name)
             val showFeed = feedsOn(eastWest, prev.def, dormant)
             val east = prev.def.copy(name = baseName)
