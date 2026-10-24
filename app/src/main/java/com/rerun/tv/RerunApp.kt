@@ -15,7 +15,8 @@ import com.rerun.tv.data.plexHttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import java.time.ZoneId
@@ -28,6 +29,9 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
     lateinit var plex: PlexApi private set
     lateinit var schedule: ScheduleRepo private set
     lateinit var sync: LibrarySync private set
+    private lateinit var lineupRefresh: Deferred<Unit>
+
+    suspend fun awaitLineupRefresh() = lineupRefresh.await()
 
     override fun onCreate() {
         super.onCreate()
@@ -42,7 +46,7 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
         sync = LibrarySync(plex, settings, schedule)
         // An update can rename stock channels and add extras from the library already saved.
         // Music tracks are fetched only after that switch is turned on.
-        appScope.launch {
+        lineupRefresh = appScope.async {
             if (db.items().count() > 0) sync.refreshChannels()
         }
     }

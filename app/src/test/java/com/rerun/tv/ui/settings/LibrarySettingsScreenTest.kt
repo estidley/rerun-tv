@@ -41,6 +41,7 @@ class LibrarySettingsScreenTest {
         ))
         val theme = mutableStateOf(ColorTheme.STANDARD_BLUE)
         val controller = mock(TvController::class.java)
+        `when`(controller.lineupUpdate).thenReturn(kotlinx.coroutines.flow.MutableStateFlow(com.rerun.tv.ui.LineupUpdate()))
         compose.setContent {
             ProvideColorTheme(theme.value) { LibrarySettingsScreen(controller, app) }
         }
@@ -57,5 +58,7 @@ class LibrarySettingsScreenTest {
             compose.onNodeWithText("+ Shows").assertIsDisplayed().performClick()
             compose.onNodeWithText("x Movies").performClick()
         }
+        compose.onNodeWithText("Save and sync").performClick()
+        verify(controller).saveLibraries(setOf("movies"))
     }
 }

@@ -51,6 +51,12 @@ data class LineupUpdate(
     val lastSyncMs: Long? = null,
 )
 
+data class StartupState(
+    val loading: Boolean = false,
+    val empty: Boolean = false,
+    val error: String? = null,
+)
+
 sealed interface Screen {
     data object Onboarding : Screen
     data object Player : Screen
@@ -97,6 +103,10 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     val lineupUpdate = _lineupUpdate.asStateFlow()
     private var lineupJob: Job? = null
     private var signingOut = false
+    private val _startup = MutableStateFlow(StartupState(loading = app.settings.isSignedIn))
+    val startup = _startup.asStateFlow()
+    private var startupJob: Job? = null
+    private var foreground = true
 
     fun setMusicEnabled(enabled: Boolean) {
         updateLineup("Updating music...", "Sync failed", music = enabled) {
@@ -128,6 +138,16 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         updateLineup("Reading libraries", "Sync failed") {
             syncLibrary()
             reconcileChannels()
+        }
+    }
+
+    fun saveLibraries(selected: Set<String>) {
+        val selection = selected.toSet()
+        updateLineup("Reading libraries", "Sync failed") {
+            syncLibrary(selection)
+            val previous = currentId
+            reconcileChannels()
+            if (previous != null && currentId == previous && foreground) engine.tune(previous)
         }
     }
 
@@ -164,8 +184,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
-    private suspend fun syncLibrary() {
-        app.sync.sync().collect { p ->
+    private suspend fun syncLibrary(selected: Set<String>? = null) {
+        app.sync.sync(selected).collect { p ->
             _lineupUpdate.value = _lineupUpdate.value.copy(
                 message = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}",
             )
@@ -175,17 +195,17 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     suspend fun setAudioLanguage(value: String) {
         app.settings.setAudioLanguage(value)
-        engine.refreshPlaybackPreferences()
+        if (foreground) engine.refreshPlaybackPreferences()
     }
 
     suspend fun setNormalizeLoudness(enabled: Boolean) {
         app.settings.setFlag(com.rerun.tv.data.Settings.NORMALIZE_LOUDNESS, enabled)
-        engine.refreshPlaybackPreferences()
+        if (foreground) engine.refreshPlaybackPreferences()
     }
 
     suspend fun setHdrMode(value: com.rerun.core.plex.HdrMode) {
         app.settings.setHdrMode(value.name)
-        engine.refreshPlaybackPreferences()
+        if (foreground) engine.refreshPlaybackPreferences()
     }
 
     fun setGuideDensity(value: com.rerun.tv.ui.guide.GuideDensity) {
@@ -194,7 +214,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     suspend fun setSubtitleLanguage(value: String) {
         app.settings.setSubtitleLanguage(value)
-        engine.setSubtitles(app.settings.isOn(com.rerun.tv.data.Settings.SUBTITLES))
+        if (foreground) engine.setSubtitles(app.settings.isOn(com.rerun.tv.data.Settings.SUBTITLES))
     }
 
     fun setColorTheme(theme: com.rerun.tv.ui.theme.ColorTheme) {
@@ -251,7 +271,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun go(screen: Screen) {
-        engine.setVisible(screen == Screen.Player)
+        engine.setVisible(foreground && screen == Screen.Player)
         _screen.value = if (screen is Screen.Editor && screen.channelId != null) {
             Screen.Editor(Lineup.eastOf(screen.channelId))
         } else screen
@@ -261,7 +281,9 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         signingOut = true
         try {
             connectionGeneration++
+            startupJob?.cancelAndJoin()
             lineupJob?.cancelAndJoin()
+            _startup.value = StartupState()
             _lineupUpdate.value = LineupUpdate()
             engine.clear()
             app.sync.signOut()
@@ -284,40 +306,62 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     /** Start watching: last channel if still active, else the lowest-numbered one. */
     fun startWatching() {
+        if (signingOut) return
+        startupJob?.cancel()
+        _startup.value = StartupState(loading = true)
         val generation = connectionGeneration
-        scope.launch {
-            val base = app.settings.serverBase()
-            val lastSync = app.settings.lastSyncMs()
-            if (generation != connectionGeneration) return@launch
-            serverBase = base
-            if (serverBase == null || lastSync == 0L) {
-                engine.clear()
-                go(Screen.Onboarding)
-                return@launch
-            }
-            app.schedule.invalidateLibrary()
-            val list = app.schedule.active()
-            val last = app.settings.lastChannel()
-            if (generation != connectionGeneration) return@launch
-            val pick = list.firstOrNull { it.id == last } ?: list.firstOrNull()
-            go(Screen.Player)
-            currentId = currentId?.takeIf { id -> list.any { it.id == id } }
-            previousId = previousId?.takeIf { id -> list.any { it.id == id } }
-            if (pick != null) {
-                tuneTo(pick.id, sound = false)
-            } else {
-                currentId = null
-                engine.clear()
+        startupJob = scope.launch {
+            try {
+                val base = app.settings.serverBase()
+                val lastSync = app.settings.lastSyncMs()
+                if (generation != connectionGeneration) return@launch
+                serverBase = base
+                if (serverBase == null || lastSync == 0L) {
+                    engine.clear()
+                    _startup.value = StartupState()
+                    go(Screen.Onboarding)
+                    return@launch
+                }
+                app.awaitLineupRefresh()
+                app.schedule.invalidateLibrary()
+                val list = app.schedule.active()
+                val last = app.settings.lastChannel()
+                if (generation != connectionGeneration) return@launch
+                val pick = list.firstOrNull { it.id == last } ?: list.firstOrNull()
+                _startup.value = StartupState(empty = list.isEmpty())
+                if (screen.value == Screen.Onboarding) go(Screen.Player)
+                currentId = currentId?.takeIf { id -> list.any { it.id == id } }
+                previousId = previousId?.takeIf { id -> list.any { it.id == id } }
+                if (pick != null) {
+                    if (foreground) tuneTo(pick.id, sound = false) else currentId = pick.id
+                } else {
+                    currentId = null
+                    engine.clear()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (generation == connectionGeneration) {
+                    _startup.value = StartupState(error = "Couldn't load channels. Open Settings to retry the library sync.")
+                    android.util.Log.e("TvController", "Unable to load startup lineup (${e.javaClass.simpleName})")
+                }
             }
         }
     }
 
     fun resume() {
+        foreground = true
         engine.setVisible(screen.value == Screen.Player)
         if (!app.settings.isSignedIn) {
             engine.clear()
             go(Screen.Onboarding)
         } else currentId?.let { engine.tune(it) } ?: startWatching()
+    }
+
+    fun stop() {
+        foreground = false
+        engine.setVisible(false)
+        engine.stop()
     }
 
     /** Keep menus open while replacing a feed that a lineup change removed. */
@@ -326,14 +370,15 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         val list = app.schedule.active()
         if (generation != connectionGeneration) return
         val ids = list.map { it.id }.toSet()
+        _startup.value = _startup.value.copy(empty = list.isEmpty(), error = null)
         previousId = previousId?.takeIf { it in ids }
         channelBeforeRestart = channelBeforeRestart?.takeIf { it in ids }
-        val current = currentId ?: return
+        val current = currentId
         if (current in ids || (current == Lineup.RESTART_ID && app.schedule.channel(current) != null)) return
         if (generation != connectionGeneration) return
-        val replacement = list.firstOrNull { it.id == Lineup.eastOf(current) } ?: list.firstOrNull()
+        val replacement = current?.let { id -> list.firstOrNull { it.id == Lineup.eastOf(id) } } ?: list.firstOrNull()
         currentId = replacement?.id
-        if (replacement == null) engine.clear() else engine.tune(replacement.id)
+        if (replacement == null) engine.clear() else if (foreground) engine.tune(replacement.id)
     }
 
     fun tuneTo(id: String, sound: Boolean = true) {
@@ -342,8 +387,10 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             channelBeforeRestart = null
         } else if (id != currentId) previousId = currentId
         currentId = id
-        if (sound && effects.value.sound) NoiseBurst.play()
-        engine.tune(id)
+        if (foreground) {
+            if (sound && effects.value.sound) NoiseBurst.play()
+            engine.tune(id)
+        }
         showBanner()
     }
 

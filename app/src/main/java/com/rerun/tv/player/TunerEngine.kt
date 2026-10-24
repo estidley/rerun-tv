@@ -278,7 +278,8 @@ class TunerEngine(
                     else entries.firstOrNull { it.startMs >= n.endMs && it.kind == EntryKind.PROGRAM }?.let { repo.item(it.itemKey) }
                 }
                 _state.value = _state.value.copy(located = loc, item = item, nextItem = nextItem)
-                scheduleRollover(channelId, ad?.endMs ?: loc.entry.endMs)
+                scheduleRollover(channelId, if (loc.entry.kind == EntryKind.FILLER && loc.entry.startMs > now)
+                    loc.entry.startMs else ad?.endMs ?: loc.entry.endMs)
 
                 if (loc.entry.kind == EntryKind.FILLER && ad == null) {
                     player.stop()

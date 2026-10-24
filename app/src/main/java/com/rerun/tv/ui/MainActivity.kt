@@ -56,12 +56,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (controller.screen.value != Screen.Onboarding) controller.resume()
+        controller.resume()
     }
 
     override fun onStop() {
         super.onStop()
-        controller.engine.stop()
+        controller.stop()
     }
 
     override fun onDestroy() {

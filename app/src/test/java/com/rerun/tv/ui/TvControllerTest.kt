@@ -14,8 +14,14 @@ import com.rerun.tv.player.TunerEngine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.flow
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.intrinsics.startCoroutineUninterceptedOrReturn
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -146,6 +152,157 @@ class TvControllerTest {
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(Screen.Onboarding, controller.screen.value)
         verify(engine).clear()
+    }
+
+    @Test
+    fun preferenceUpdatesWhileStoppedDoNotRestartPlayback() = runBlocking<Unit> {
+        controller.stop()
+        clearInvocations(engine)
+        controller.setAudioLanguage("es")
+        controller.setHdrMode(com.rerun.core.plex.HdrMode.AUTO)
+        controller.setNormalizeLoudness(true)
+        controller.setSubtitleLanguage("es")
+        verify(engine, never()).refreshPlaybackPreferences()
+        verify(engine, never()).setSubtitles(anyBoolean())
+        verify(settings).setAudioLanguage("es")
+        verify(settings).setFlag(Settings.NORMALIZE_LOUDNESS, true)
+    }
+
+    @Test
+    fun resumingOnboardingRestoresForegroundEligibilityBeforeItsFirstTune() {
+        controller.stop()
+        controller.resume()
+        assertEquals(Screen.Onboarding, controller.screen.value)
+        controller.tuneTo("east", sound = false)
+        verify(engine).tune("east")
+    }
+
+    @Test
+    fun startupWaitsForAutomaticRefreshBeforeDecidingWhetherChannelsExist() = runBlocking<Unit> {
+        val ready = delayStartup()
+        val east = channel("east")
+        `when`(repo.active()).thenReturn(listOf(east))
+        controller.go(Screen.Player)
+        controller.startWatching()
+        assertTrue(controller.startup.value.loading)
+        assertFalse(controller.startup.value.empty)
+        verify(repo, never()).active()
+        ready.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(StartupState(), controller.startup.value)
+        verify(engine).tune("east")
+    }
+
+    @Test
+    fun startupOnlyPublishesEmptyAfterSuccessfulRefreshAndLookup() = runBlocking<Unit> {
+        val ready = delayStartup()
+        `when`(repo.active()).thenReturn(emptyList())
+        controller.startWatching()
+        assertFalse(controller.startup.value.empty)
+        ready.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(StartupState(empty = true), controller.startup.value)
+        verify(engine, never()).tune(anyString())
+    }
+
+    @Test
+    fun failedStartupIsNotReportedAsAnEmptyLineup() = runBlocking<Unit> {
+        val ready = delayStartup()
+        controller.startWatching()
+        ready.completeExceptionally(IllegalStateException("Database unavailable"))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(controller.startup.value.loading)
+        assertFalse(controller.startup.value.empty)
+        assertTrue(controller.startup.value.error!!.contains("Couldn't load channels"))
+        verify(repo, never()).active()
+    }
+
+    @Test
+    fun signingOutCancelsPendingStartupBeforeItCanTune() = runBlocking<Unit> {
+        val ready = delayStartup()
+        controller.startWatching()
+        controller.signOut()
+        ready.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(StartupState(), controller.startup.value)
+        assertEquals(Screen.Onboarding, controller.screen.value)
+        verify(engine, never()).tune(anyString())
+    }
+
+    @Test
+    fun startupCompletingInBackgroundDefersPlaybackUntilResume() = runBlocking<Unit> {
+        val ready = delayStartup()
+        `when`(repo.active()).thenReturn(listOf(channel("east")))
+        controller.startWatching()
+        controller.stop()
+        ready.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine, never()).tune(anyString())
+        controller.resume()
+        verify(engine).tune("east")
+    }
+
+    @Test
+    fun lineupUpdateCompletingAfterStopDefersReplacementUntilResume() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        `when`(settings.isSignedIn).thenReturn(true)
+        `when`(sync.sync()).thenReturn(flow {
+            emit(com.rerun.tv.data.SyncProgress("Updating guide", 0, 0))
+            finish.await()
+        })
+        `when`(repo.active()).thenReturn(listOf(channel("east")))
+        controller.tuneTo("east:w", sound = false)
+        controller.resyncLibrary()
+        controller.stop()
+        clearInvocations(engine)
+        finish.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(controller.lineupUpdate.value.busy)
+        assertEquals("east", controller.currentChannelId())
+        verify(engine, never()).tune(anyString())
+        controller.resume()
+        verify(engine).tune("east")
+    }
+
+    @Test
+    fun savingLibrariesSurvivesNavigationAfterCommitAndRetunesTheRemainingStation() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        var completed = false
+        `when`(repo.active()).thenReturn(listOf(channel("east")))
+        `when`(sync.sync(setOf("movies"))).thenReturn(flow {
+            emit(com.rerun.tv.data.SyncProgress("Updating guide", 0, 0))
+            finish.await()
+            completed = true
+        })
+        controller.tuneTo("east", sound = false)
+        clearInvocations(engine)
+        controller.go(Screen.Libraries)
+        controller.saveLibraries(setOf("movies"))
+        assertTrue(controller.lineupUpdate.value.busy)
+        controller.go(Screen.Settings)
+        finish.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(completed)
+        assertFalse(controller.lineupUpdate.value.busy)
+        assertEquals(Screen.Settings, controller.screen.value)
+        verify(engine).tune("east")
+        verify(engine, never()).setVisible(true)
+    }
+
+    private fun channel(id: String) =
+        ChannelRow.of(ChannelDef(id, 1, id, ChannelKind.CUSTOM, Rules()), false, false)
+
+    private suspend fun delayStartup(): CompletableDeferred<Unit> {
+        val ready = CompletableDeferred<Unit>()
+        `when`(settings.isSignedIn).thenReturn(true)
+        `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
+        `when`(settings.lastSyncMs()).thenReturn(123L)
+        doAnswer {
+            @Suppress("UNCHECKED_CAST")
+            val continuation = it.rawArguments.last() as Continuation<Unit>
+            (suspend { ready.await() }).startCoroutineUninterceptedOrReturn(continuation)
+        }.`when`(app).awaitLineupRefresh()
+        return ready
     }
 
     @Test

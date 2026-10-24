@@ -549,6 +549,27 @@ class TunerEngineTest {
     }
 
     @Test
+    fun tuningJustBeforeFillerStartsRetriesAtTheBreakStart() = runBlocking<Unit> {
+        val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 30_000)
+        prepare("east", ad)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 4_000, EntryKind.PROGRAM, ad.key),
+            ScheduleEntry("east", now + 4_000, now + 34_000, EntryKind.FILLER, null),
+        ))
+        engine.tune("east")
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        assertTrue(sources.isEmpty())
+        wallTime = now + 4_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        await { sources.size == 1 }
+        assertEquals(EntryKind.FILLER, engine.state.value.located!!.entry.kind)
+        assertTrue(engine.state.value.sameChannelTransition)
+    }
+
+    @Test
     fun scheduledProgramToAdRolloverFadesAndKeepsTheWallClockOffset() = runBlocking<Unit> {
         val item = PlexParse.movies(videoWithSubtitle("srt")).single().copy(audioCodec = "dca", durationMs = 30_000)
         prepare("east", item)

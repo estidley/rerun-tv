@@ -20,20 +20,20 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 - **Music:** enable Music in Settings and include your Plex music libraries in Manage libraries. The scan continues when you return to the guide; its progress and elapsed time stay visible until the lineup is ready. East/West changes and re-syncs also survive navigation between screens. Rerun imports audio tracks, not music videos, and adds a station for each genre with at least 4 hours. Genres inherit from albums/artists; untagged tracks go to Unclassified. The guide groups shuffled songs into hourly station blocks such as "Blues Music"; Off Air gaps remain visible. The music screen shows artist, song, album, square album art, elapsed time and song length. Genre/decade-inspired motifs travel slowly with the artwork and text across a black background to reduce fixed-image burn-in risk (not a guarantee against burn-in).
 - **Subtitles:** off until you turn them on in Settings. Choose a preferred language or Automatic (Plex's selected track). If your language is unavailable, subtitles stay off for that program. Embedded and external text subtitles play directly; other formats are burned in by Plex.
 - **Audio tracks:** choose a preferred audio language in Settings. Automatic uses Plex's selected track; an unavailable language falls back to the default. Hold Right for 2 seconds while watching, or choose Current program audio tracks in Settings, to select a track for this airing only. Multi-track video uses a Plex playback session with an explicit audio stream ID; it does not change saved Plex track selections or watch history.
-- **Normalize loudness:** optional and off by default in Settings > Audio. Requests Plex audio normalization for both programs and ads whose selected audio stream supports it, using audio transcoding while allowing video copy. Requires a recent Plex server (1.43.4+), Plex Pass, and **Analyze audio tracks for loudness** under Plex Server > Library, including the commercials library. Music stations are unchanged. Unanalyzed tracks, Dolby Vision, video conversion (including HDR-to-SDR), and subtitle burn-in skip normalization and show a warning; volume consistency is not guaranteed when either source is ineligible. This third-party integration still needs live Plex/TV validation; it does not change Plex's saved track selections or initiate analysis.
+- **Normalize loudness:** optional and off by default in Settings > Audio. Requests Plex audio normalization for both programs and ads whose selected audio stream supports it, using audio transcoding while allowing video copy. Requires a recent Plex server (1.43.4+), Plex Pass, and **Analyze audio tracks for loudness** under Plex Server > Library, including the commercials library. Music stations are unchanged. Unanalyzed tracks, Dolby Vision, video conversion (including HDR-to-SDR), and selected subtitles (including text) currently skip normalization and show a warning; volume consistency is not guaranteed when either source is ineligible. This third-party integration still needs live Plex/TV validation; it does not change Plex's saved track selections or initiate analysis.
 - **HDR compatibility:** Auto HDR checks the connected display and HDR decoder before direct playback. Select Convert HDR to SDR in Settings if your TV flashes or shows incorrect colors even when it reports HDR support; Prefer native HDR opts out of capability-based conversion. Conversion requests H.264 8-bit video with video remuxing disabled, and requires **Enable HDR tone mapping** in Plex Server > Transcoder and the server owner's Plex Pass. Server hardware must keep up; some Dolby Vision formats require an SDR version. Detected HDR playback errors retry once using SDR conversion. These settings apply to episodes, movies, and ad clips.
 - **Adaptive guide:** whole rows fill the available guide area when there are enough channels. Larger displays can show more rows; shorter lineups keep readable row heights. Channel names wrap when the row is tall enough, and alternating row colors make the grid easier to follow.
 - **Theme colors:** Settings offers Standard blue, 70s earth tones, and 50s diner colors. The choice applies immediately to the guide, menus, and overlays and is saved between sessions.
 - **Guide density:** choose Compact, Comfortable, or Large rows in Settings. All three fill the guide area when enough channels exist; taller rows allow more channel-name lines.
-- **Manage libraries:** change your included libraries from Settings without signing out. Library pickers show `+` for included libraries and `x` for excluded libraries, with text labels in every theme. Save and sync updates the selection only after a successful fetch and rebuilds the guide, including delayed West feeds, so excluded content no longer airs.
+- **Manage libraries:** change your included libraries from Settings without signing out. Library pickers show `+` for included libraries and `x` for excluded libraries, with text labels in every theme. Save and sync continues if you leave the screen, updates the selection only after a successful fetch, and rebuilds the guide, including delayed West feeds. Playback is reconciled with the new selection without closing menus; background completion waits until the app resumes before starting playback.
 - **Ad library:** setup asks you to select a Plex Other Videos or Movies library or Disable ads before choosing regular libraries. Selecting a source syncs its clips to a separate, persistent ad catalog; Settings also offers Force ad sync to refresh additions/removals. Failed syncs preserve the previous source and catalog. Off clears the catalog. The source is saved per server and excluded from regular library pickers/imports; re-sync regular libraries after selecting a previously imported library. Ads fill scheduled breaks without delaying programs; gaps too short for a clip show Up Next.
 - **Guide updates:** rebuilding the guide shows an updating message and elapsed time instead of an empty grid; only Channels and Settings are selectable during the update. The guide refreshes after syncs and as its time window advances, without reloading the schedule on every clock tick. Playback stays muted in the guide and other menus, even when a new program starts.
 - **Clip transitions:** programs and ads on the same station fade through black instead of showing static or picture roll. Actual station changes retain the configured tuning effects. The next clip still seeks to its scheduled wall-clock position.
 - **Start over:** hold Left for 2 seconds during an episode. It starts from the beginning on its own channel, and the TV returns when it ends. A short Left still jumps to the last channel. The temporary channel stays out of the channel editor and last-channel history; channel 999 is reserved for it.
 - **Empty channels stay hidden** until you have at least 4 hours of content for them. Extra channels are not listed at all until they qualify.
-- **Locked 48-hour schedule.** The guide never lies, and library changes never yank you out of a movie.
+- **Locked 48-hour schedule.** Routine top-ups append without reshuffling stored entries. Changing included libraries intentionally rebuilds schedules; removing scheduled media or channels can also replace playback.
 - **Read-only.** Nothing you watch is reported back to Plex. Your Continue Watching stays clean.
-- **Updates and sign-out:** database upgrades preserve server/library choices using explicit migrations, never a silent database reset. Missing server configuration returns to setup. Sign out clears Plex credentials and the local library/lineup while keeping display preferences.
+- **Updates and sign-out:** database upgrades preserve server/library choices using explicit migrations, never a silent database reset. Startup shows loading while refreshing saved channels, not premature no-channel instructions; failures remain distinct from an empty lineup. Missing server configuration returns to setup. Sign out clears Plex credentials and the local library/lineup while keeping display preferences.
 
 ## Install on a Fire TV
 
@@ -41,6 +41,7 @@ Requirements:
 - JDK 17 or newer (Gradle 9 will not run on JDK 11)
 - Android SDK (platform 37)
 - `adb` on PATH
+- A TV running Android 8.0/API 26 or newer; Android 7-based Fire OS devices are not supported.
 
 1. On the TV, unlock Developer Options: Settings → My Fire TV → About → click the device name 7 times.
 2. Turn on **ADB Debugging** in Developer Options.
@@ -63,6 +64,7 @@ To remove it: `.\scripts\restore.ps1 -TvIp 192.168.1.50`
 |---|---|---|
 | ▲ / ▼ | Channel up / down | Move between channels |
 | ◀ | Last channel | Earlier |
+| Hold ◀ 2s | Start current episode over | — |
 | ▶ / OK | Info banner | Later / tune in |
 | Hold OK 2s | Cycle CRT look (Off / Subtle / Full) | — |
 | Hold ▶ 2s | Select current program audio track | — |
@@ -79,14 +81,25 @@ Vintage commercials are generally still under copyright. Keep downloaded copies 
 
 ## Development
 
-- `core/` is pure Kotlin: catalog, routing, scheduler, tune math, and Plex parsing. It has unit tests: `./gradlew :core:test`.
-- `app/` is the Android shell: Compose UI, Media3 player, and Room. JVM regression tests run with `.\gradlew.bat :app:testDebugUnitTest` (Robolectric). `./gradlew :app:assembleDebug` needs no signing key. A release build needs the key created by `scripts/keystore.ps1`.
+- `core/` is pure Kotlin: catalog, routing, scheduler, tune math, and Plex parsing.
+- `app/` is the Android shell: Compose UI, Media3 player, and Room. JVM regression tests use Robolectric. A debug build needs no signing key. A release build needs the key created by `scripts/keystore.ps1`.
 - `tools/ktest/` runs the core tests with only a Kotlin compiler jar, for machines without Maven access.
 - Large-library scheduling and lineup workloads: `.\gradlew.bat :core:test --tests com.rerun.core.PerformanceWorkloadTest --rerun-tasks`. Timings and baseline-output fingerprints are in `core/build/test-results/test/TEST-com.rerun.core.PerformanceWorkloadTest.xml`; these are local JVM measurements, not TV frame-rate benchmarks.
 - Playback timers are local to visible overlays/music progress instead of polling the whole player UI. Library readers share a list/map snapshot loaded off the UI thread; concurrent cold loads are coalesced and invalidated loads cannot republish stale data.
 - Playback metadata is cached only in memory, up to 16 items for 60 seconds, scoped to the Plex server, credentials, and guide revision. Syncs and sign-out invalidate it; remote Plex track-selection changes may take up to a minute to appear on a subsequent tune. Display/decoder HDR support is still checked on each tune.
 
-Design spec and plans live in `docs/superpowers/`.
+From the repository root on Windows:
+
+```powershell
+. .\scripts\jdk.ps1
+Set-RerunJdk
+.\gradlew.bat :core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain --quiet
+if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
+```
+
+Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design reference](docs/superpowers/specs/2026-10-23-rerun-design.md). Delivered scope and outstanding device checks: [PR readiness](docs/superpowers/plans/2026-10-23-rerun-phase1-core-tv.md).
+
+HDHomeRun/live TV, TMDb enrichment, automatic commercial splitting, ad content/age filtering, and an idle timeout are not implemented. Review all clips in your chosen ad library yourself; Rerun does not screen ads for children. No device CPU/RAM/frame-rate gains or live Plex loudness measurements are claimed by the JVM benchmarks.
 
 ## Credits
 

@@ -37,6 +37,8 @@ import com.rerun.tv.player.Phase
 import com.rerun.tv.player.TunerState
 import com.rerun.tv.player.CLIP_FADE_MS
 import com.rerun.tv.ui.TvController
+import com.rerun.tv.ui.StartupState
+import com.rerun.tv.ui.LineupUpdate
 import com.rerun.tv.ui.crt.VerticalRoll
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.delay
@@ -48,6 +50,8 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
     val bannerUntil by controller.bannerUntil.collectAsState()
     val channels by controller.channels.collectAsState()
     val fx by controller.effects.collectAsState()
+    val startup by controller.startup.collectAsState()
+    val update by controller.lineupUpdate.collectAsState()
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -110,13 +114,27 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
             )
         }
 
-        if (channels.isEmpty() && state.channel == null) {
-            Box(Modifier.fillMaxSize().background(Retro.GuideBlue), contentAlignment = Alignment.Center) {
-                BasicText("No channels yet. Open Settings and run a library sync.", style = Retro.Title)
-            }
+        if (state.channel == null) {
+            StartupMessage(startup, update, channels.isEmpty())
         }
 
         PlayerOverlays(state, bannerUntil)
+    }
+}
+
+@Composable
+internal fun StartupMessage(startup: StartupState, update: LineupUpdate, channelsEmpty: Boolean) {
+    val message = when {
+        update.busy -> "Updating guide - please wait.\n${update.message.orEmpty()}"
+        startup.loading -> "Loading channels and updating guide - please wait."
+        startup.error != null -> startup.error
+        startup.empty && channelsEmpty -> "No channels yet. Open Settings and run a library sync."
+        else -> null
+    }
+    if (message != null) {
+        Box(Modifier.fillMaxSize().background(Retro.GuideBlue), contentAlignment = Alignment.Center) {
+            BasicText(message, style = Retro.Title)
+        }
     }
 }
 

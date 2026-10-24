@@ -78,6 +78,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val density by controller.guideDensity.collectAsState()
     val revision by schedule.guideRevision.collectAsState()
     val update by controller.lineupUpdate.collectAsState()
+    val startup by controller.startup.collectAsState()
     val focus = remember { FocusRequester() }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -88,7 +89,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
     var loading by remember { mutableStateOf(true) }
-    val updating = loading || update.busy
+    val updating = loading || update.busy || startup.loading
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
@@ -117,8 +118,8 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     LaunchedEffect(updating) {
         if (updating) focusRow = -1
     }
-    LaunchedEffect(windowStart, rows, revision, attempt, update.busy) {
-        if (update.busy) return@LaunchedEffect
+    LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading) {
+        if (update.busy || startup.loading) return@LaunchedEffect
         loading = true
         loadError = null
         now = System.currentTimeMillis()

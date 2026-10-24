@@ -240,7 +240,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             BasicText(
                 "Level programs and ads using Plex audio transcoding. Requires Plex Pass, a recent server, and " +
                     "Analyze audio tracks for loudness in Plex Server > Library for both libraries. " +
-                    "Unavailable tracks, video conversion, Dolby Vision, and subtitle burn-in play at original volume. " +
+                    "Unavailable tracks, video conversion, Dolby Vision, and selected subtitles play at original volume. " +
                     "Does not normalize music stations.",
                 style = Retro.Caption,
             )

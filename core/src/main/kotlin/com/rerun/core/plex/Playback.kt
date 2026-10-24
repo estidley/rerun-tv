@@ -20,11 +20,13 @@ object Playback {
     private val trackContainers = setOf("mp3", "m4a", "mp4", "aac", "flac", "ogg", "opus", "wav")
 
     fun canDirectPlay(item: MediaItem): Boolean =
+        canCopyVideo(item) && item.audioCodec?.lowercase() in audio
+
+    private fun canCopyVideo(item: MediaItem): Boolean =
         item.kind != MediaKind.TRACK &&
             ServerUri.isLibraryPath(item.partKey) &&
             item.container?.lowercase() in containers &&
-            item.videoCodec?.lowercase() in video &&
-            item.audioCodec?.lowercase() in audio
+            item.videoCodec?.lowercase() in video
 
     /** Audio files the player can stream without the video transcoder. */
     fun canPlayTrack(item: MediaItem): Boolean =
@@ -62,7 +64,8 @@ object Playback {
             "&fastSeek=1&directPlay=0&directStream=${if (forceSdr || forceVideoTranscode) 0 else 1}&directStreamAudio=0" +
             (if (forceSdr) "&videoCodec=h264&videoProfile=high&videoBitDepth=8" else "") +
             (if (normalizeLoudness) "&normalizeLoudness=1&audioCodec=aac" else "") +
-            (if (normalizeLoudness && !forceSdr && !forceVideoTranscode) "" else "&videoResolution=1920x1080&maxVideoBitrate=20000") +
+            (if (!forceSdr && !forceVideoTranscode && !subtitles && canCopyVideo(item)) ""
+                else "&videoResolution=1920x1080&maxVideoBitrate=20000") +
             "&subtitles=$subs" +
             (if (subtitles && subtitleStreamId != null) "&subtitleStreamID=$subtitleStreamId" else "") +
             (audioStreamId?.let { "&audioStreamID=$it" } ?: "") +

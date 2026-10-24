@@ -19,14 +19,13 @@ import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvStage
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 
 @Composable
 fun LibrarySettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) {
-    val scope = rememberCoroutineScope()
+    val update by controller.lineupUpdate.collectAsState()
     var libraries by remember { mutableStateOf<List<Section>?>(null) }
     var selected by remember { mutableStateOf(emptySet<String>()) }
-    var busy by remember { mutableStateOf(false) }
+    val busy = update.busy
     var status by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     val first = remember { FocusRequester() }
@@ -71,24 +70,13 @@ fun LibrarySettingsScreen(controller: TvController, app: RerunApp = RerunApp.ins
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TvButton("Save and sync", {
                         if (!busy) {
-                            busy = true
-                            scope.launch {
-                                try {
-                                    app.sync.sync(selected).collect { p -> status = "${p.stage} ${p.done}/${p.total}" }
-                                    controller.engine.stop()
-                                    controller.startWatching()
-                                } catch (e: Exception) {
-                                    if (e is CancellationException) throw e
-                                    status = "Sync failed: ${e.message}"
-                                } finally {
-                                    busy = false
-                                }
-                            }
+                            controller.saveLibraries(selected)
                         }
                     }, enabled = !busy && selected.isNotEmpty())
                     TvButton("Cancel", { controller.go(Screen.Settings) }, enabled = !busy)
                 }
                 status?.let { BasicText(it, style = Retro.Caption) }
+                (update.error ?: update.message)?.let { BasicText(it, style = Retro.Caption) }
             }
         }
     }

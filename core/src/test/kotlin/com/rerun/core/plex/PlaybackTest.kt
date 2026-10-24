@@ -12,6 +12,26 @@ class PlaybackTest {
     private val base = "https://192-168-1-20.abc.plex.direct:32400"
 
     @Test
+    fun audioSelectionPreservesSourceVideoWhileVideoConversionKeepsLimits() {
+        for (codec in listOf("hevc", "h264")) {
+            for (audio in listOf("aac", "dca")) {
+                val item = movie("1").copy(videoCodec = codec, audioCodec = audio)
+                val plan = planPlayback(item, base, "c", "s", 0, audioStreamId = 9)
+                assertTrue(plan is PlaybackPlan.Transcoded)
+                val url = (plan as PlaybackPlan.Transcoded).url
+                assertTrue("&directStream=1&" in url)
+                assertTrue("&audioStreamID=9&" in url)
+                assertFalse("videoResolution=" in url)
+                assertFalse("maxVideoBitrate=" in url)
+                val sdr = planPlayback(item, base, "c", "s", 0, audioStreamId = 9, forceSdr = true)
+                assertTrue(sdr is PlaybackPlan.Transcoded && "videoResolution=1920x1080" in sdr.url)
+            }
+        }
+        val incompatible = planPlayback(movie("1").copy(videoCodec = "mpeg4"), base, "c", "s", 0, audioStreamId = 9)
+        assertTrue(incompatible is PlaybackPlan.Transcoded && "maxVideoBitrate=20000" in incompatible.url)
+    }
+
+    @Test
     fun normalizationRequestsAudioTranscodeWithoutVideoLimits() {
         val plan = planPlayback(movie("1"), base, "c", "s", 30_000, normalizeLoudness = true, audioStreamId = 8)
         assertTrue(plan is PlaybackPlan.Transcoded)
