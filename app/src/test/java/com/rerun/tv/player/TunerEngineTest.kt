@@ -153,6 +153,34 @@ class TunerEngineTest {
         assertEquals("7", uri.getQueryParameter("subtitleStreamID"))
     }
 
+    @Test
+    fun applySubtitlesPrefersRealTextTrackOverCea608() = runBlocking {
+        val ceaGroup = androidx.media3.common.TrackGroup(
+            "cea",
+            androidx.media3.common.Format.Builder().setSampleMimeType("application/cea-608").build(),
+        )
+        val srtGroup = androidx.media3.common.TrackGroup(
+            "srt",
+            androidx.media3.common.Format.Builder()
+                .setSampleMimeType("application/x-subrip")
+                .setSelectionFlags(androidx.media3.common.C.SELECTION_FLAG_DEFAULT)
+                .build(),
+        )
+        val tracks = Tracks(
+            listOf(
+                Tracks.Group(ceaGroup, false, intArrayOf(androidx.media3.common.C.FORMAT_HANDLED), booleanArrayOf(false)),
+                Tracks.Group(srtGroup, false, intArrayOf(androidx.media3.common.C.FORMAT_HANDLED), booleanArrayOf(false)),
+            ),
+        )
+        `when`(player.currentTracks).thenReturn(tracks)
+        var applied: TrackSelectionParameters? = null
+        doAnswer { applied = it.getArgument(0); null }.`when`(player).trackSelectionParameters = any(TrackSelectionParameters::class.java)
+        engine.setSubtitles(true)
+        assertNotNull(applied)
+        assertTrue(applied!!.overrides.containsKey(srtGroup))
+        assertFalse(applied!!.overrides.containsKey(ceaGroup))
+    }
+
     private fun videoWithSubtitle(codec: String): String =
         """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Video","duration":1800000,
           "Media":[{"container":"mp4","videoCodec":"h264","audioCodec":"aac","Part":[

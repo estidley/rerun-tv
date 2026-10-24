@@ -66,4 +66,31 @@ class TvControllerTest {
         controller.lastChannel()
         assertEquals("other", controller.currentChannelId())
     }
+
+    @Test
+    fun steppingAndEffectiveChannelFromRestartUseOriginChannel() = runBlocking {
+        val ch1 = com.rerun.tv.data.ChannelRow.of(com.rerun.core.model.ChannelDef("one", 101, "One", com.rerun.core.model.ChannelKind.CUSTOM, com.rerun.core.model.Rules()), false, false)
+        val ch2 = com.rerun.tv.data.ChannelRow.of(com.rerun.core.model.ChannelDef("two", 102, "Two", com.rerun.core.model.ChannelKind.CUSTOM, com.rerun.core.model.Rules()), false, false)
+        val ch3 = com.rerun.tv.data.ChannelRow.of(com.rerun.core.model.ChannelDef("three", 103, "Three", com.rerun.core.model.ChannelKind.CUSTOM, com.rerun.core.model.Rules()), false, false)
+        val app = mock(RerunApp::class.java)
+        val repo = mock(ScheduleRepo::class.java)
+        val settings = mock(Settings::class.java)
+        `when`(app.settings).thenReturn(settings)
+        `when`(app.schedule).thenReturn(repo)
+        `when`(repo.activeChannels()).thenReturn(flowOf(listOf(ch1, ch2, ch3)))
+        `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
+        `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
+        val ctrl = TvController(app, engine)
+        try {
+            ctrl.tuneTo("two", sound = false)
+            ctrl.tuneTo(Lineup.RESTART_ID, sound = false)
+            assertEquals("two", ctrl.effectiveChannelId())
+            ctrl.channelUp()
+            assertEquals("three", ctrl.currentChannelId())
+            ctrl.lastChannel()
+            assertEquals("two", ctrl.currentChannelId())
+        } finally {
+            ctrl.dispose()
+        }
+    }
 }

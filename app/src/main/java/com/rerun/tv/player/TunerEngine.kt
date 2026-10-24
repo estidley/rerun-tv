@@ -271,9 +271,22 @@ class TunerEngine(
         builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
         if (subtitlesOn && !transcoded) {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
-            val index = group?.let { g -> (0 until g.length).firstOrNull { g.isTrackSupported(it) } }
-            if (group != null && index != null) builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+            val candidates = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT && it.isSupported }
+                .flatMap { g -> (0 until g.length).filter { g.isTrackSupported(it) }.map { g to it } }
+            val best = candidates.minByOrNull { (g, idx) ->
+                val fmt = g.getTrackFormat(idx)
+                val isClosedCaption = fmt.sampleMimeType == "application/cea-608" || fmt.sampleMimeType == "application/cea-708"
+                val isDefault = (fmt.selectionFlags and C.SELECTION_FLAG_DEFAULT) != 0
+                when {
+                    !isClosedCaption && isDefault -> 0
+                    !isClosedCaption -> 1
+                    isDefault -> 2
+                    else -> 3
+                }
+            }
+            if (best != null) {
+                builder.setOverrideForType(TrackSelectionOverride(best.first.mediaTrackGroup, best.second))
+            }
         } else {
             // Off, or already burned into a transcode.
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)

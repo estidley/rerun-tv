@@ -120,9 +120,10 @@ object Catalog {
      * Name to store for [id]. Stock names (the current parody, an old brand name, or either
      * one with an E/W suffix) take [catalogName]. Anything else is a rename and is kept.
      */
-    fun chooseName(id: String, stored: String?, catalogName: String): String {
+    fun chooseName(id: String, stored: String?, catalogName: String, userRenamed: Boolean = false): String {
         if (stored.isNullOrBlank()) return catalogName
         val stripped = stripFeed(stored)
+        if (userRenamed) return stripped
         return if (stripped == catalogName || stripped in retiredNames(id)) catalogName else stripped
     }
 

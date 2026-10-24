@@ -28,6 +28,16 @@ class EditingTest {
     }
 
     @Test
+    fun facetsSeparateVideoAndMusicTracks() {
+        val lib = listOf(
+            movie("m1", genres = setOf("Sci-Fi")),
+            com.rerun.core.track("t1", genre = "Synthwave"),
+        )
+        assertEquals(listOf("Sci-Fi"), Facets.from(lib, ChannelKind.CUSTOM).genres)
+        assertEquals(listOf("Synthwave"), Facets.from(lib, ChannelKind.MUSIC).genres)
+    }
+
+    @Test
     fun draftRejectsDuplicateNumberAndBlankName() {
         val others = listOf(ChannelDef("horror", 301, "Horror", ChannelKind.THEME, Rules()))
         val dup = ChannelDef("custom:x", 301, "Fright", ChannelKind.CUSTOM, Rules(genres = setOf("Horror")))

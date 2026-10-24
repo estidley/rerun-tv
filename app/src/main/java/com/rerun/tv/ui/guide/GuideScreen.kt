@@ -80,7 +80,7 @@ fun GuideScreen(controller: TvController) {
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
 
     LaunchedEffect(rows) {
-        val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
+        val idx = rows.indexOfFirst { it.id == controller.effectiveChannelId() }
         if (idx >= 0) focusRow = idx
     }
     LaunchedEffect(windowStart, rows) {

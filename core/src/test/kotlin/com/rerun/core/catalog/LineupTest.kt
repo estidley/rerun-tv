@@ -56,6 +56,19 @@ class LineupTest {
         assertEquals("Laughing Stock", Catalog.chooseName("comedy", "The Chuckle", "Laughing Stock"))
         assertEquals("True-ish", Catalog.chooseName("opt:docs", "The Reel", "True-ish"))
         assertEquals("Fright Night", Catalog.chooseName("horror", "Horror", "Fright Night"))
+        assertEquals("Disney Channel", Catalog.chooseName("disney", "Disney Channel", "Wonderland", userRenamed = true))
+    }
+
+    @Test
+    fun userRenamedRealNetworkNameSurvivesRefresh() {
+        val shows = List(8) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
+        val renamed = StoredChannel(
+            Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel", userRenamed = true),
+            builtIn = true,
+        )
+        val plan = Lineup.plan(shows, listOf(renamed), eastWest = true, music = false)
+        assertEquals("Disney Channel", plan.channels.first { it.def.id == "disney" }.def.name)
+        assertEquals("Disney Channel-W", plan.channels.first { it.def.id == "disney:w" }.def.name)
     }
 
     @Test
@@ -89,6 +102,15 @@ class LineupTest {
         val a = scheduler.extend(first, pool, ChannelState(first.id.hashCode().toLong()), null, now).entries.map { it.itemKey }
         val b = scheduler.extend(second, pool, ChannelState(second.id.hashCode().toLong()), null, now).entries.map { it.itemKey }
         assertNotEquals(a, b)
+    }
+
+    @Test
+    fun movieChannelsBucketDisjointlyWhenPoolIsLarge() {
+        val movies = (1..24).map { movie("m$it", title = "Movie $it", durationMs = 2 * HOUR) }
+        val active = Lineup.channels(movies, music = false).filter { it.id.startsWith("movies:") }
+        assertEquals(3, active.size)
+        assertEquals(listOf(0, 1, 2), active.map { it.rules.bucket })
+        assertEquals(listOf(3, 3, 3), active.map { it.rules.bucketCount })
     }
 
     @Test

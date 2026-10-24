@@ -48,15 +48,25 @@ object Lineup {
 
     /** Built-ins plus every extra that currently has enough content. No West twins. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
-        val movieMs = moviePoolMs(library)
         val extras = optionalThemes().filter { qualified(it, library) }
-        val features = movieChannels().filter { movieMs >= movieThreshold(it.id) }
+        val features = movieTemplates(library)
         val stations = if (music) musicTemplates(library).filter { qualified(it, library) } else emptyList()
         return Catalog.builtInChannels() + extras + features + stations
     }
 
     fun optionalThemes(): List<ChannelDef> = optional
     fun movieChannels(): List<ChannelDef> = movies
+
+    private fun movieTemplates(library: List<MediaItem>): List<ChannelDef> {
+        val movieMs = moviePoolMs(library)
+        val active = movies.filter { movieMs >= movieThreshold(it.id) }
+        if (active.size <= 1) return active
+        val count = active.size
+        val sliced = active.mapIndexed { idx, def ->
+            def.copy(rules = def.rules.copy(bucket = idx, bucketCount = count))
+        }
+        return if (sliced.all { qualified(it, library) }) sliced else active
+    }
 
     /** Copies [entries] onto [channelId], moving each slot forward by [lagMs]. */
     fun shift(entries: List<ScheduleEntry>, channelId: String, lagMs: Long): List<ScheduleEntry> =
@@ -70,8 +80,9 @@ object Lineup {
      */
     fun plan(library: List<MediaItem>, existing: List<StoredChannel>, eastWest: Boolean, music: Boolean): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
+        val activeMovies = movieTemplates(library).associateBy { it.id }
         val qualified = channels(library, music).map { it.id }.toSet()
-        val templates = Catalog.builtInChannels() + optional + movies + musicTemplates(library)
+        val templates = Catalog.builtInChannels() + optional + movies.map { activeMovies[it.id] ?: it } + musicTemplates(library)
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
@@ -79,7 +90,7 @@ object Lineup {
             if (isGenerated(template.id) && template.id !in qualified) {
                 val prev = existingById[template.id] ?: continue
                 if (looksStock(prev.def, template)) continue
-                val kept = prev.def.copy(name = Catalog.chooseName(template.id, prev.def.name, template.name))
+                val kept = prev.def.copy(name = Catalog.chooseName(template.id, prev.def.name, template.name, prev.def.userRenamed))
                 val pool = poolMs(kept, library)
                 val dormant = (kept.kind == ChannelKind.MUSIC && !music) || pool < Resolver.DORMANT_MS
                 upserts += PlannedChannel(kept, prev.builtIn, dormant, pool)
@@ -88,8 +99,12 @@ object Lineup {
                 continue
             }
             val prev = existingById[template.id]
-            val base = prev?.def ?: template
-            val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
+            val base = prev?.def?.let { stored ->
+                if (template.id.startsWith("movies:") && stored.rules.copy(bucket = 0, bucketCount = 1) == template.rules.copy(bucket = 0, bucketCount = 1)) {
+                    stored.copy(rules = template.rules)
+                } else stored
+            } ?: template
+            val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name, prev?.def?.userRenamed ?: false)
             val pool = poolMs(base, library)
             val dormant = Resolver.isDormant(Resolver.pool(base, library))
             val showFeed = feedsOn(eastWest, base, dormant)
@@ -174,12 +189,18 @@ object Lineup {
     }
 
     private fun looksStock(stored: ChannelDef, template: ChannelDef): Boolean {
+        if (stored.userRenamed) return false
         val name = Catalog.stripFeed(stored.name)
         val nameOk = name == template.name || name in Catalog.retiredNames(template.id)
+        val rulesOk = if (template.id.startsWith("movies:")) {
+            stored.rules.copy(bucket = 0, bucketCount = 1) == template.rules.copy(bucket = 0, bucketCount = 1)
+        } else {
+            stored.rules == template.rules
+        }
         return nameOk &&
             stored.number == template.number &&
             stored.kind == template.kind &&
-            stored.rules == template.rules &&
+            rulesOk &&
             stored.order == template.order &&
             stored.blocks == template.blocks &&
             stored.hidden == template.hidden &&
