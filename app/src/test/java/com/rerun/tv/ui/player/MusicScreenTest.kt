@@ -3,6 +3,9 @@ package com.rerun.tv.ui.player
 import android.app.Application
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Recomposer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -53,6 +56,27 @@ class MusicScreenTest {
             assertTrue(card.right < screen.right && card.bottom < screen.bottom)
             assertNotEquals(initial.left, card.left)
             assertNotEquals(initial.top, card.top)
+        }
+    }
+
+    @Test
+    fun musicHasNoDecorativeTicksBelowTheArtwork() {
+        val track = PlexParse.tracks(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"t","title":"Night Drive","duration":240000}]}}""",
+        ).single()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { MusicScreen(track, "Rock", null, 0) }
+        compose.mainClock.advanceTimeByFrame()
+        val card = compose.onNodeWithTag("music-card")
+        val cardBounds = card.fetchSemanticsNode().boundsInRoot
+        val artworkBounds = compose.onNodeWithTag("music-artwork").fetchSemanticsNode().boundsInRoot
+        val pixels = card.captureToImage().toPixelMap()
+        val belowArtwork = (artworkBounds.bottom - cardBounds.top).toInt() + 8
+        assertTrue(belowArtwork < pixels.height)
+        for (y in belowArtwork until pixels.height) {
+            for (x in 0 until pixels.width) {
+                assertEquals("Unexpected decoration at ($x, $y)", Color.Black, pixels[x, y])
+            }
         }
     }
 

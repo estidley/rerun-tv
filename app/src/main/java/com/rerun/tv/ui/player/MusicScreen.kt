@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -90,7 +89,7 @@ private fun MusicProgress(item: MediaItem, positionMs: Long, position: (() -> Lo
     }
 }
 
-/** All artwork, text, and decoration drift together; nothing bright stays fixed on the CRT. */
+/** Artwork and text drift together; nothing bright stays fixed on the CRT. */
 @Composable
 internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, positionMs: Long, position: (() -> Long)? = null) {
     val genre = channelName ?: item.genres.firstOrNull() ?: "Music"
@@ -129,7 +128,7 @@ internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, po
             )
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(artSize).border(2.dp, accent).padding(6.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(artSize).testTag("music-artwork").border(2.dp, accent).padding(6.dp), contentAlignment = Alignment.Center) {
                     Canvas(Modifier.fillMaxSize()) {
                         val radius = size.minDimension * 0.46f
                         drawCircle(secondary.copy(alpha = 0.35f), radius)
@@ -165,30 +164,6 @@ internal fun MusicScreen(item: MediaItem, channelName: String?, art: String?, po
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
                     MusicProgress(item, positionMs, position, accent, secondary)
-                }
-            }
-            Spacer(Modifier.height(16.dp))
-            Canvas(Modifier.fillMaxWidth().height(20.dp)) {
-                val count = when (cue) {
-                    MusicCue.GROOVE -> 12
-                    MusicCue.AMPLIFIED -> 24
-                    MusicCue.LOUNGE -> 6
-                    MusicCue.ELECTRONIC -> 32
-                    MusicCue.CLASSICAL -> 4
-                    MusicCue.MIX -> 16
-                }
-                for (i in 0 until count) {
-                    val px = size.width * (i + 0.5f) / count
-                    if (decade != null && decade < 1980 || cue == MusicCue.GROOVE || cue == MusicCue.LOUNGE) {
-                        drawCircle(secondary.copy(alpha = 0.5f), size.height * 0.2f, Offset(px, size.height / 2))
-                        if (decade == 1960) {
-                            drawCircle(secondary.copy(alpha = 0.35f), size.height * 0.4f, Offset(px, size.height / 2),
-                                style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                        }
-                    } else {
-                        val slant = if (decade == 1980) size.height * 0.4f else 0f
-                        drawLine(secondary.copy(alpha = 0.5f), Offset(px, size.height), Offset(px + slant, size.height * (i % 3) / 3f), 2.dp.toPx())
-                    }
                 }
             }
         }
