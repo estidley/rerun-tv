@@ -4,13 +4,13 @@ Old-school cable TV, built from your own Plex library. For Fire TV and Android T
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
-- **Network channels:** Wonderland, Action Club, Kid Castle, Toon Tower, The Attic, Midnight Block, Story Yard, Warp Nine, Coast to Coast, The Premium, and more. The names on screen are parodies. Shows still land by the network and studio stored in Plex.
+- **Network channels:** Dinky Channel, Dinky XD, Slimelodeon, Cartoon Notwork, Kaboomerang, Toonuki, PBJ Kids, Sigh-Fi Channel, USB Network, HMO, and more. The names on screen are parodies. Shows still land by the network and studio stored in Plex.
 - **Streaming originals follow the studio and the audience:**
-  - Disney+ kids shows go to Wonderland.
+  - Disney+ kids shows go to Dinky Channel.
   - Marvel and live-action Star Wars go to **The Backlot**.
-  - Paramount+ kids shows go to Kid Castle.
-  - Max originals go to The Premium.
-  - Hulu originals go to The Edge.
+  - Paramount+ kids shows go to Slimelodeon.
+  - Max originals go to HMO.
+  - Hulu originals go to SFX.
   - Netflix, Prime Video and Apple TV+ originals are spread by genre.
 - **Theme channels:** Fright Night, The Void, Laughing Stock, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes show up only when that genre has at least 4 hours: True-ish (documentaries), Canned Laughter (sitcoms), Sob Story (dramedies), Cold Read (psychic and paranormal), This Just In (news), and others such as The Matinee and Case File.
 - **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.

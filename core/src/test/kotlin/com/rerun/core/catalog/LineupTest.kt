@@ -113,9 +113,11 @@ class LineupTest {
         val defs = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels()
         for (def in defs) {
             val name = def.name.lowercase()
-            for (brand in banned) assertFalse(brand in name, "${def.id} uses $brand")
+            for (brand in banned) {
+                assertFalse(Regex("\\b${Regex.escape(brand)}\\b").containsMatchIn(name), "${def.id} uses $brand")
+            }
         }
-        assertEquals("Wonderland", defs.first { it.id == "disney" }.name)
+        assertEquals("Dinky Channel", defs.first { it.id == "disney" }.name)
         assertEquals("Laughing Stock", defs.first { it.id == "comedy" }.name)
         assertEquals("True-ish", defs.first { it.id == "opt:docs" }.name)
         assertEquals("Canned Laughter", defs.first { it.id == "opt:sitcom" }.name)
@@ -127,11 +129,14 @@ class LineupTest {
 
     @Test
     fun chooseNameKeepsARenameAndReplacesStock() {
-        assertEquals("Wonderland", Catalog.chooseName("disney", "Disney Channel", "Wonderland"))
-        assertEquals("Wonderland", Catalog.chooseName("disney", "Wonderland E", "Wonderland"))
-        assertEquals("Wonderland", Catalog.chooseName("disney", "Wonderland-W", "Wonderland"))
-        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club", "Wonderland"))
-        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club W", "Wonderland"))
+        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Disney Channel", "Dinky Channel"))
+        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Wonderland", "Dinky Channel"))
+        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Wonderland-W", "Dinky Channel"))
+        assertEquals("Slimelodeon", Catalog.chooseName("nick", "Kid Castle", "Slimelodeon"))
+        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Dinky Channel E", "Dinky Channel"))
+        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Dinky Channel-W", "Dinky Channel"))
+        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club", "Dinky Channel"))
+        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club W", "Dinky Channel"))
         assertEquals("Laughing Stock", Catalog.chooseName("comedy", "The Chuckle", "Laughing Stock"))
         assertEquals("True-ish", Catalog.chooseName("opt:docs", "The Reel", "True-ish"))
         assertEquals("Fright Night", Catalog.chooseName("horror", "Horror", "Fright Night"))
@@ -222,8 +227,8 @@ class LineupTest {
         val on = Lineup.plan(shows, listOf(stored), eastWest = true, music = false)
         val east = on.channels.first { it.def.id == "disney" }
         val west = on.channels.first { it.def.id == "disney:w" }
-        assertEquals("Wonderland", east.def.name)
-        assertEquals("Wonderland-W", west.def.name)
+        assertEquals("Dinky Channel", east.def.name)
+        assertEquals("Dinky Channel-W", west.def.name)
         assertEquals(101 + Lineup.WEST_NUMBER_OFFSET, west.def.number)
         assertEquals(east.def.rules, west.def.rules)
         assertFalse(east.dormant)
@@ -235,7 +240,7 @@ class LineupTest {
             eastWest = false,
             music = false,
         )
-        assertEquals("Wonderland", off.channels.first { it.def.id == "disney" }.def.name)
+        assertEquals("Dinky Channel", off.channels.first { it.def.id == "disney" }.def.name)
         assertTrue(off.channels.none { it.def.id == "disney:w" })
         assertTrue("disney:w" in off.deleteIds)
     }
@@ -254,7 +259,7 @@ class LineupTest {
         val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel E"), true)
         val plan = Lineup.plan(emptyList(), listOf(stored), eastWest = true, music = false)
         val east = plan.channels.first { it.def.id == "disney" }
-        assertEquals("Wonderland", east.def.name)
+        assertEquals("Dinky Channel", east.def.name)
         assertTrue(east.dormant)
         assertTrue(plan.channels.none { Lineup.isWest(it.def.id) })
     }

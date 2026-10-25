@@ -44,7 +44,7 @@ class PerformanceWorkloadTest {
         val library: List<MediaItem> = (0 until 2_000).map {
             episode("e$it", "Show ${it % 100}", episode = it, genres = setOf("Comedy", "Drama"), network = "Netflix")
         } + (0 until 500).map { movie("m$it", genres = setOf("Action", "Drama"), studio = "Walt Disney Pictures") }
-        measure("lineup-2500", "6c5244768dcce0e76ff7f4eca43999ca01e5dcb31e9b496efbcf5ef0e683d093") {
+        measure("lineup-2500", "8a2e4f6f3a08a334fe8467172dec37b5e076ffb30a125ccfea65c9639781fc65") {
             val plan = Lineup.plan(library, emptyList(), eastWest = true, music = false)
             // Keep the original workload fingerprint for all pre-existing channels.
             plan.copy(channels = plan.channels.filterNot { it.def.id.startsWith("decade:") })

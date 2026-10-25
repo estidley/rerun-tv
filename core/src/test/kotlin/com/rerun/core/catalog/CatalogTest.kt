@@ -38,7 +38,7 @@ class CatalogTest {
         assertEquals(emptyList(), Catalog.validateNumbers(defs))
         assertEquals(defs.size, defs.map { it.id }.toSet().size)
         assertTrue(defs.any { it.name == "The Backlot" && it.number == 109 })
-        assertTrue(defs.any { it.name == "Action Club" && it.number == 108 })
+        assertTrue(defs.any { it.name == "Dinky XD" && it.number == 108 })
     }
 
     @Test
