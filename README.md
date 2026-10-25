@@ -110,6 +110,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
 
 Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design reference](docs/superpowers/specs/2026-10-23-rerun-design.md). Delivered scope and outstanding device checks: [PR readiness](docs/superpowers/plans/2026-10-23-rerun-phase1-core-tv.md).
 
+### Continuous integration
+
+[CI](.github/workflows/ci.yml) runs on pull requests to `main`, pushes to `main`, and manual dispatch.
+Windows runners execute the Gradle checks above using JDK 21 and Android platform 37.
+A parallel job runs PSScriptAnalyzer (errors fail; warnings remain visible) and the isolated
+keystore property-encoding regression. The final `CI` check requires both jobs to pass.
+Test/lint reports and successful Android verification debug APKs are available as workflow artifacts for 14 days.
+Debug APKs use debug signing and cannot update installations signed with your private release key.
+CI does not require release credentials or replace live TV/Plex testing.
+
 HDHomeRun/live TV, TMDb enrichment, automatic commercial splitting, ad content/age filtering, and an idle timeout are not implemented. Review all clips in your chosen ad library yourself; Rerun does not screen ads for children. No device CPU/RAM/frame-rate gains or live Plex loudness measurements are claimed by the JVM benchmarks.
 
 ## Credits

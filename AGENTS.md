@@ -19,6 +19,11 @@ For a narrow app test, use `:app:testDebugUnitTest --tests 'fully.qualified.Test
 Run the full checks above before marking a behavior change ready. Debug builds do not need release signing.
 Analyze changed PowerShell scripts with PSScriptAnalyzer; check `$LASTEXITCODE` after native commands.
 
+GitHub Actions runs these explicit Gradle tasks on Windows with JDK 21 and Android platform 37,
+plus PSScriptAnalyzer 1.24.0 and the isolated `scripts/test-keystore.ps1` check. The aggregate
+`CI` status requires both verification jobs. Reports/debug APKs are retained for 14 days.
+Keep PR workflows read-only and secret-free; release signing is not part of CI.
+
 ## Behavioral invariants
 
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
