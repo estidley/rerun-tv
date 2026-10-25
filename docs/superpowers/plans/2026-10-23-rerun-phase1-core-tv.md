@@ -10,6 +10,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
 - East/West feeds, genre music stations, Off Air and Up Next states, hidden episode start-over.
+- Content-driven TV/music decade stations at 24/12 hours respectively, using a single qualification
+  aggregation pass and no genre/decade cross-product.
 - Persistent ad library, deterministic gap-filling playback, and program guide cells that include breaks.
 - Buy Me Maybe commercials-only station while an enabled ad catalog contains clips; back-to-back playback without a minimum library size and hourly guide blocks instead of individual ad listings.
 - TV remote navigation, adaptive guide, display themes/density, CRT/effects and margined Settings.
@@ -34,6 +36,8 @@ The suite includes regression coverage for:
 - Same-station fades, cancellation during fade, menu mute and wall-clock offsets.
 - Ad station lifecycle, short-clip playback and hourly guide grouping without changing clip boundaries.
 - Current-program guide focus, music conversion fallback and readable/display typography roles across themes.
+- Decade eligibility boundaries, media/year isolation, Music/East-West switches, edits, number collisions,
+  persisted schedule retention/removal, and a 40,000-item workload checking bounded library passes.
 
 Local JVM benchmark medians from the first optimization pass:
 
@@ -53,6 +57,8 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 - [ ] Tune near program end, observe ads at the break, and confirm the next program starts on schedule.
 - [ ] Enable/sync ads and tune Buy Me Maybe; confirm hourly guide blocks, short clips playing back-to-back, regular sync preserving the station, and disabling ads returning to another station without unmuting menus.
 - [ ] Check RR launcher artwork and readable guide/menu typography at normal TV viewing distance.
+- [ ] Sync a library with qualifying TV/music decades; verify the resulting lineup, hourly music
+  guide blocks, West feeds, refresh duration and guide responsiveness on the largest target library.
 - [ ] Confirm fades composite correctly over the real video surface, including program/ad transitions and station changes during fades.
 - [ ] Check audio and subtitle selection with multi-track 4K/HDR media on a live server; audio-only changes should not impose video downscaling limits.
 - [ ] Verify HDR color rendering, tone mapping, fallback errors and Dolby Vision limitations on affected TVs.

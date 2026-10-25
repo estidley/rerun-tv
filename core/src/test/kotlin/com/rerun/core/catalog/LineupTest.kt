@@ -22,6 +22,56 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class LineupTest {
+    @Test
+    fun decadesQualifyIndependentlyByMediaTypeAndEligibleDuration() {
+        val library = listOf(
+            episode("tv", "Show", durationMs = 24 * HOUR, year = 1985),
+            episode("short", "Other", durationMs = 24 * HOUR - 1, year = 1975),
+            track("music", durationMs = 12 * HOUR).copy(year = 1995),
+            track("short-music", durationMs = 12 * HOUR - 1).copy(year = 2005),
+            movie("movie", durationMs = 100 * HOUR, year = 1965),
+            episode("unknown", "Unknown", durationMs = 100 * HOUR, year = null),
+            track("invalid", durationMs = 100 * HOUR).copy(year = 0),
+            track("tiny", durationMs = 59_999).copy(year = 2005),
+        )
+        val enabled = Lineup.channels(library, music = true).filter { it.id.startsWith("decade:") }
+        assertEquals(setOf("decade:tv:1980", "decade:music:1990"), enabled.map { it.id }.toSet())
+        assertEquals(listOf("decade:tv:1980"), Lineup.channels(library, music = false)
+            .filter { it.id.startsWith("decade:") }.map { it.id })
+        val plan = Lineup.plan(library, emptyList(), eastWest = false, music = true)
+        assertEquals(enabled.toSet(), plan.channels.filter { it.def.id.startsWith("decade:") }.map { it.def }.toSet())
+        assertTrue(plan.channels.filter { it.def.id.startsWith("decade:") }.all { !it.dormant })
+    }
+
+    @Test
+    fun decadeRefreshPreservesEditsAndRemovesUnqualifiedStockAndWest() {
+        val library = listOf(
+            episode("tv", "Show", durationMs = 24 * HOUR, year = 1985),
+            track("music", durationMs = 12 * HOUR).copy(year = 1985),
+        )
+        val initial = Lineup.plan(library, emptyList(), eastWest = true, music = true)
+        val decades = initial.channels.filter { it.def.id.startsWith("decade:") }
+        assertEquals(4, decades.size)
+        val existing = decades.map { StoredChannel(it.def, true) }
+        val refreshed = Lineup.plan(library, existing, eastWest = true, music = true)
+        assertEquals(decades, refreshed.channels.filter { it.def.id.startsWith("decade:") })
+        val removed = Lineup.plan(emptyList(), existing, eastWest = true, music = true)
+        assertTrue(removed.deleteIds.containsAll(decades.map { it.def.id }))
+        val musicOff = Lineup.plan(library, existing, eastWest = true, music = false)
+        assertTrue(musicOff.channels.none { it.def.id.startsWith("decade:music:") })
+        val tv = decades.first { it.def.id == "decade:tv:1980" }.def
+        val edited = tv.copy(name = "My Eighties", rules = Rules(kinds = setOf(MediaKind.TRACK)))
+        val kept = Lineup.plan(library, listOf(StoredChannel(edited, true)), eastWest = false, music = true)
+        assertEquals(edited, kept.channels.first { it.def.id == tv.id }.def)
+        assertEquals(12 * HOUR, kept.channels.first { it.def.id == tv.id }.poolMs)
+        val dormant = Lineup.plan(emptyList(), listOf(StoredChannel(edited, true)), false, true)
+        assertTrue(dormant.channels.first { it.def.id == tv.id }.dormant)
+        val collision = Lineup.plan(library, listOf(StoredChannel(
+            ChannelDef("custom:reserved", tv.number, "Mine", ChannelKind.CUSTOM, Rules()), false,
+        )), true, true)
+        assertEquals(collision.channels.size, collision.channels.map { it.def.number }.toSet().size)
+    }
+
     private val banned = listOf(
         "disney", "nickelodeon", "hbo", "cnn", "cartoon network", "boomerang", "toonami",
         "syfy", "pbs", "mtv", "hgtv", "paramount", "comedy central", "adult swim",

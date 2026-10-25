@@ -24,6 +24,7 @@ Analyze changed PowerShell scripts with PSScriptAnalyzer; check `$LASTEXITCODE` 
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
 - Preserve explicit Room migrations and existing preferences; do not add destructive database fallback. Keep keystores, `keystore.properties`, and local SDK configuration out of version control.
 - Routine scheduling appends locked entries. Library inclusion changes intentionally invalidate schedules; channel edits preserve the currently airing entry and rebuild the future.
+- Stock decade stations require 24 hours of episodes or 12 hours of music; keep qualification a single metadata aggregation pass, preserve edited stations, and honor Music/East-West settings. Do not generate genre-by-decade combinations.
 - Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception, on a hidden one-shot channel.
 - Ads come from a separately persisted catalog and fit inside scheduled filler; they must never delay the next program. Guide cells include the following break without listing individual ads.
 - Buy Me Maybe is generated from a nonempty enabled ad catalog only. Keep its clips separate from regular library pools, back-to-back without padding/tail skipping, and omit West feeds. Show hourly station blocks in the guide without changing clip-level playback schedules.
