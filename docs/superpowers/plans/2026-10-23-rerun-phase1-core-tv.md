@@ -1,12 +1,13 @@
 # Core TV delivery and PR readiness
 
-Updated 2026-10-24. The original implementation scaffold and unchecked task recipes have been
+Updated 2026-10-25. The original implementation scaffold and unchecked task recipes have been
 retired; this file tracks delivered scope and real acceptance gaps, not instructions to recreate the app.
 See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 [current design reference](../specs/2026-10-23-rerun-design.md).
 
 ## Delivered
 
+- Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
 - East/West feeds, genre music stations, Off Air and Up Next states, hidden episode start-over.
@@ -52,6 +53,7 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 
 ## Physical TV and live Plex acceptance still open
 
+- [ ] Refresh TMDB lists with a real token, inspect network/company coverage, rebuild, and verify multi-network memberships and preserved user channel names on TV.
 - [ ] Update an installed signed build with saved channels: loading/updating appears until restore settles; genuinely empty and failed states remain distinct.
 - [ ] Enable Music or save library changes, leave the screen, and confirm final lineup and muted menu playback. Press Home mid-scan; no playback starts until resume.
 - [ ] Tune near program end, observe ads at the break, and confirm the next program starts on schedule.
@@ -66,5 +68,5 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 - [ ] Measure target-TV frame rate, CPU, memory, channel-change latency and long-running playback.
 - [ ] Check music stations with MP3/MPEG, FLAC, M4A and non-DRM WMA requiring Plex HTTP/MP3 conversion; songs should play instead of cycling silent countdowns, including after a failed direct decoder attempt. General multi-device testing has improved performance and exposed regressions; the latest WMA correction still needs a device retest.
 
-Unimplemented roadmap ideas (HDHomeRun/live TV, TMDb enrichment, automatic clip splitting,
+Unimplemented roadmap ideas (HDHomeRun/live TV, general TMDb metadata enrichment, automatic clip splitting,
 ad age/content filtering and idle timeout) are not acceptance requirements for this PR.

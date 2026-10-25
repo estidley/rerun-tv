@@ -1,6 +1,6 @@
 # Rerun architecture and behavior
 
-Current implementation reference, updated 2026-10-24. This replaces the original speculative design.
+Current implementation reference, updated 2026-10-25. This replaces the original speculative design.
 Installation, features, remote controls, and Plex prerequisites live in [README](../../../README.md);
 contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.md).
 
@@ -12,7 +12,7 @@ Basic playback does not itself require Plex Pass; optional Plex HDR tone mapping
 There is no separate Rerun server and no watch-history reporting.
 
 Implemented sources are Plex movies, episodes, music tracks, and a separately selected ad library.
-HDHomeRun/live TV, TMDb enrichment, commercial content filtering, archive streaming, and idle timeout
+HDHomeRun/live TV, general TMDb metadata enrichment, commercial content filtering, archive streaming, and idle timeout
 are not implemented. The local commercial helper downloads files and queues upscaling; it does not
 automatically split compilations or classify ads. Users must review their own ad content.
 
@@ -34,6 +34,18 @@ for body, caption and guide-cell text. Both are bundled OFL fonts; readable text
 Room stores media, channels, schedules, scheduler state, ad clips and settings.
 Explicit migrations preserve prior data. Credentials are kept out of play URLs and redacted from
 diagnostics; HTTP token attachment follows the trusted Plex host policy.
+
+## Network reference lists
+
+Built-in network channels use parody display names while retaining real network aliases and stable IDs.
+Refresh replaces retired built-in names and preserves names edited by the user.
+The optional `:tmdb:run` build-time tool downloads network/company references using `TMDB_TOKEN`.
+It writes gitignored `local/tmdb/rerun/tmdb-networks.json`; subsequent builds bundle that resource.
+The app receives the lists, never the token, and makes no TMDB requests.
+Episodes match their show TMDB ID; movies match the listed production companies, not broadcast history.
+Matching combines reference memberships with the network Plex reports, then falls back to owner-family
+routing only if neither matches. Missing lists retain Plex-based routing. Tests disable local lists.
+Live refresh coverage and installed-TV behavior still need validation.
 
 ## Scheduling and ads
 
