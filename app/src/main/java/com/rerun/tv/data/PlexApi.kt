@@ -19,7 +19,7 @@ class PlexApi(private val clientId: () -> String, private val http: OkHttpClient
         header("Accept", "application/json")
         header("X-Plex-Client-Identifier", clientId())
         header("X-Plex-Product", "Rerun")
-        header("X-Plex-Version", "0.1.0")
+        header("X-Plex-Version", "1.0.0")
         header("X-Plex-Platform", "Android")
         header("X-Plex-Device", "Fire TV")
         header("X-Plex-Device-Name", "Rerun TV")
