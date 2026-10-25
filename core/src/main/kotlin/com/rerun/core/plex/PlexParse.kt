@@ -18,6 +18,24 @@ data class Pin(val id: Long, val code: String, val authToken: String?)
 data class PlexConnection(val uri: String, val local: Boolean, val relay: Boolean)
 data class PlexServer(val name: String, val clientId: String, val accessToken: String?, val connections: List<PlexConnection>)
 data class Section(val key: String, val type: String, val title: String)
+data class MusicMetadata(val key: String, val title: String?, val year: Int?, val genres: Set<String>, val thumb: String?)
+
+data class SubtitleStream(
+    val id: Int,
+    val codec: String?,
+    val key: String?,
+    val language: String?,
+    val selected: Boolean,
+) {
+    val mimeType: String? get() = when (codec?.lowercase()) {
+        "srt" -> "application/x-subrip"
+        "ass", "ssa" -> "text/x-ssa"
+        "vtt", "webvtt" -> "text/vtt"
+        "ttml" -> "application/ttml+xml"
+        "mov_text", "tx3g" -> "application/x-quicktime-tx3g"
+        else -> null
+    }
+}
 
 /** Turns Plex JSON responses into core models. Missing fields become null/empty, never errors. */
 object PlexParse {
@@ -59,6 +77,48 @@ object PlexParse {
 
     fun totalSize(text: String): Int = container(text).let { it.int("totalSize") ?: it.int("size") ?: 0 }
 
+    fun videoDetails(text: String): VideoDetails {
+        val media = container(text).arr("Metadata").firstOrNull()?.arr("Media")?.firstOrNull()
+        val streams = media?.arr("Part")?.firstOrNull()?.arr("Stream").orEmpty()
+        val video = streams.firstOrNull { it.int("streamType") == 1 }
+        val profile = video?.int("DOVIProfile")
+        val transfer = video?.str("colorTrc")?.lowercase()
+        val range = (media?.str("videoDynamicRange") ?: video?.str("displayTitle"))?.lowercase().orEmpty()
+        val hdr10 = transfer in setOf("smpte2084", "smpte-st-2084") || "hdr10" in range
+        return VideoDetails(
+            range = when {
+                profile != null || video?.int("DOVIPresent") == 1 || video?.bool("DOVIPresent") == true ||
+                    "dolby" in range || "dovi" in range -> DynamicRange.DOLBY_VISION
+                transfer == "arib-std-b67" || "hlg" in range -> DynamicRange.HLG
+                hdr10 || range == "hdr" -> DynamicRange.HDR10
+                else -> DynamicRange.SDR
+            },
+            codec = video?.str("codec") ?: media?.str("videoCodec"),
+            dolbyVisionProfile = profile,
+            hdr10Compatible = if (profile != null) profile in setOf(7, 8) && video?.int("DOVIBLCompatID") == 1
+                else hdr10,
+            audio = streams.filter { it.int("streamType") == 2 }.mapNotNull { audio ->
+                val id = audio.int("id") ?: return@mapNotNull null
+                AudioStream(
+                    id, audio.str("languageCode") ?: audio.str("language"),
+                    audio.str("displayTitle") ?: audio.str("title") ?: audio.str("language") ?: "Audio $id",
+                    audio.str("codec"), audio.int("channels"), audio.bool("selected") || audio.int("selected") == 1,
+                    audio.bool("canNormalizeLoudness") || audio.int("canNormalizeLoudness") == 1,
+                )
+            },
+        )
+    }
+
+    /** Streams for the same first media/part that playback uses. */
+    fun subtitles(text: String): List<SubtitleStream> =
+        container(text).arr("Metadata").firstOrNull()?.arr("Media")?.firstOrNull()
+            ?.arr("Part")?.firstOrNull()?.arr("Stream").orEmpty()
+            .filter { it.int("streamType") == 3 }
+            .mapNotNull { s ->
+                val id = s.int("id") ?: return@mapNotNull null
+                SubtitleStream(id, s.str("codec"), s.str("key"), s.str("languageCode"), s.bool("selected") || s.int("selected") == 1)
+            }
+
     fun movies(text: String): List<MediaItem> = container(text).arr("Metadata").map { m ->
         val media = m.arr("Media").firstOrNull()
         MediaItem(
@@ -95,6 +155,45 @@ object PlexParse {
             partKey = media?.arr("Part")?.firstOrNull()?.str("key"), container = media?.str("container"),
             videoCodec = media?.str("videoCodec"), audioCodec = media?.str("audioCodec"),
             thumb = e.str("thumb") ?: e.str("grandparentThumb"),
+        )
+    }
+
+    fun musicMetadata(text: String): List<MusicMetadata> = container(text).arr("Metadata").map { t ->
+        MusicMetadata(t.str("ratingKey").orEmpty(), t.str("title"), t.int("year"), t.tags("Genre"), t.str("thumb"))
+    }
+
+    /** Audio tracks (`type=10`), inheriting the genre and album details Plex stores on their parents. */
+    fun tracks(
+        text: String,
+        artists: Map<String, MusicMetadata> = emptyMap(),
+        albums: Map<String, MusicMetadata> = emptyMap(),
+    ): List<MediaItem> = container(text).arr("Metadata").map { t ->
+        val artist = artists[t.str("grandparentRatingKey")]
+        val album = albums[t.str("parentRatingKey")]
+        val genres = t.tags("Genre").ifEmpty { album?.genres.orEmpty() }.ifEmpty { artist?.genres.orEmpty() }
+        val media = t.arr("Media").firstOrNull()
+        MediaItem(
+            key = t.str("ratingKey").orEmpty(),
+            kind = MediaKind.TRACK,
+            title = t.str("title").orEmpty(),
+            year = t.int("year") ?: album?.year,
+            durationMs = t.long("duration") ?: media?.long("duration") ?: 0,
+            genres = genres.ifEmpty { setOf("Unclassified") },
+            network = null,
+            studio = t.str("originalTitle") ?: t.str("grandparentTitle") ?: artist?.title,
+            contentRating = null,
+            showKey = t.str("parentRatingKey"),
+            showTitle = t.str("parentTitle") ?: album?.title,
+            season = t.int("parentIndex"),
+            episode = t.int("index"),
+            tmdbId = null,
+            labels = emptySet(),
+            collections = emptySet(),
+            partKey = media?.arr("Part")?.firstOrNull()?.str("key"),
+            container = media?.str("container"),
+            videoCodec = null,
+            audioCodec = media?.str("audioCodec"),
+            thumb = t.str("parentThumb") ?: album?.thumb ?: t.str("thumb") ?: t.str("grandparentThumb") ?: artist?.thumb,
         )
     }
 }

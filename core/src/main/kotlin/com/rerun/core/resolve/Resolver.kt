@@ -17,18 +17,21 @@ object Resolver {
             ?: Router.route(item)
 
     /** True when the item belongs on the channel outside of any time block. */
-    fun inBase(def: ChannelDef, item: MediaItem): Boolean = def.rules.matches(item, networkOf(item))
+    fun inBase(def: ChannelDef, item: MediaItem): Boolean =
+        def.rules.matches(item, if (def.rules.networks.isEmpty()) null else networkOf(item))
 
     /**
      * Everything the channel may ever play: its base rules plus anything its time blocks pull in
      * (e.g. Toonami shows during Cartoon Network's afternoon block).
      */
-    fun pool(def: ChannelDef, library: List<MediaItem>): List<MediaItem> =
-        library.filter { item ->
+    fun pool(def: ChannelDef, library: List<MediaItem>): List<MediaItem> {
+        val needsNetwork = def.rules.networks.isNotEmpty() || def.blocks.any { it.rules.networks.isNotEmpty() }
+        return library.filter { item ->
             if (item.durationMs < MIN_ITEM_MS) return@filter false
-            val nid = networkOf(item)
+            val nid = if (needsNetwork) networkOf(item) else null
             def.rules.matches(item, nid) || def.blocks.any { it.rules.matches(item, nid) }
         }
+    }
 
     fun isDormant(pool: List<MediaItem>): Boolean = pool.sumOf { it.durationMs } < DORMANT_MS
 }

@@ -44,9 +44,11 @@ class EditingTest {
     }
 
     @Test
-    fun numberMustBePositiveAndThreeDigitsMax() {
+    fun numberMustBeInChannelRange() {
         val d = ChannelDef("custom:x", 0, "X", ChannelKind.CUSTOM, Rules())
         assertTrue(validateDraft(d, emptyList()).isNotEmpty())
-        assertTrue(validateDraft(d.copy(number = 1000), emptyList()).isNotEmpty())
+        assertEquals(emptyList(), validateDraft(d.copy(number = 1400), emptyList()))
+        assertTrue(validateDraft(d.copy(number = 10_000), emptyList()).isNotEmpty())
+        assertTrue(validateDraft(d.copy(number = Lineup.RESTART_NUMBER), emptyList()).isNotEmpty())
     }
 }

@@ -11,6 +11,7 @@ import com.rerun.core.model.MediaKind
 import com.rerun.core.model.Rules
 import com.rerun.core.model.TimeBlock
 import com.rerun.core.movie
+import com.rerun.core.track
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalTime
@@ -161,6 +162,20 @@ class SchedulerTest {
         val pool = listOf(movie("c", year = 2001), movie("a", year = 1985), movie("b", year = 1992))
         val keys = programs(scheduler.extend(def, pool, ChannelState(seed = 1), null, now).entries).map { it.itemKey }.take(6)
         assertEquals(listOf("a", "b", "c", "a", "b", "c"), keys)
+    }
+
+    @Test
+    fun musicIsBackToBack() {
+        val def = ChannelDef(
+            "music:jazz", 2000, "Jazz", ChannelKind.MUSIC,
+            Rules(genres = setOf("Jazz"), kinds = setOf(MediaKind.TRACK)),
+        )
+        val tracks = (1..4).map { track("t$it", genre = "Jazz", album = "Night", index = it, durationMs = 3 * MIN) }
+        val ext = scheduler.extend(def, tracks, ChannelState(seed = 2), null, now, horizonMs = 20 * MIN)
+        assertTrue(ext.entries.isNotEmpty())
+        assertTrue(ext.entries.none { it.kind == EntryKind.FILLER })
+        ext.entries.zipWithNext().forEach { (a, b) -> assertEquals(a.endMs, b.startMs) }
+        assertTrue(ext.entries.all { it.endMs - it.startMs == 3 * MIN })
     }
 
     @Test

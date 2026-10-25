@@ -1,0 +1,44 @@
+# Contributor and agent guidance
+
+## Layout and commands
+
+- `core`: pure Kotlin/JVM models, Plex parsing and playback policy, catalog/routing, scheduling, and filler planning.
+- `app`: Android Compose UI, Room persistence, HTTP, and one Media3 player per activity.
+- `scripts`: Windows PowerShell build/install/key helpers. `tools/commercials` is a separate local media-preparation utility.
+- Use the Gradle wrapper and versions in `gradle/libs.versions.toml`; Android SDK settings are in `app/build.gradle.kts`.
+- Windows requires JDK 17+ and Android SDK platform 37. Initialize the JDK in each fresh shell:
+
+```powershell
+. .\scripts\jdk.ps1
+Set-RerunJdk
+.\gradlew.bat :core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain --quiet
+if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
+```
+
+For a narrow app test, use `:app:testDebugUnitTest --tests 'fully.qualified.TestClass'`.
+Run the full checks above before marking a behavior change ready. Debug builds do not need release signing.
+Analyze changed PowerShell scripts with PSScriptAnalyzer; check `$LASTEXITCODE` after native commands.
+
+## Behavioral invariants
+
+- Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
+- Preserve explicit Room migrations and existing preferences; do not add destructive database fallback. Keep keystores, `keystore.properties`, and local SDK configuration out of version control.
+- Routine scheduling appends locked entries. Library inclusion changes intentionally invalidate schedules; channel edits preserve the currently airing entry and rebuild the future.
+- Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception, on a hidden one-shot channel.
+- Ads come from a separately persisted catalog and fit inside scheduled filler; they must never delay the next program. Guide cells include the following break without listing individual ads.
+- Buy Me Maybe is generated from a nonempty enabled ad catalog only. Keep its clips separate from regular library pools, back-to-back without padding/tail skipping, and omit West feeds. Show hourly station blocks in the guide without changing clip-level playback schedules.
+- Keep audio muted in menus across retunes and rollovers. Activity stop cancels playback, not scans; scan completion must not start background playback.
+- Own navigation-safe library/lineup updates in `TvController`, not a composable coroutine. Sign-out cancels and joins controller jobs before clearing connection data.
+- Do not infer an empty lineup from a flow's initial empty value. Await startup refresh and a successful channel query; keep loading, failure, and confirmed empty states distinct.
+- Keep expensive parsing/snapshot loads and pool calculations off Main. The shared library snapshot must reject invalidated in-flight loads; metadata caching stays bounded and credential/revision scoped.
+- Apply audio/subtitle selections after cached metadata lookup. Recheck display/decoder HDR capability for each tune. Audio-only conversion must not add video downscaling caps.
+- Normalization is opt-in and capability-gated, not client volume control. Explain skipped normalization and errors; do not claim live-server support or measured output without device evidence.
+
+## Tests and documentation
+
+- Core tests use `kotlin.test`; app tests use JUnit, Mockito, Robolectric, and Compose test APIs.
+- Stub newly read suspend settings values explicitly in Mockito fixtures, especially Boolean returns.
+- Compose tests with a manual clock need recomposition and animation frames before asserting output. Keep rollover time and wall-clock time controlled independently.
+- Keep deterministic scheduling fingerprints unchanged for pure performance edits. `PerformanceWorkloadTest` reports local JVM timings, not TV CPU, memory, or frame rate.
+- Update README and the current design/readiness references for behavioral changes. Remove obsolete scaffolding instructions rather than presenting planned features as shipped.
+- Physical TV rendering, HDR/tone mapping, Plex track negotiation/normalization, and resource measurements require live validation; automated checks are not substitutes.

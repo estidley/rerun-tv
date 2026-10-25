@@ -16,6 +16,19 @@ class GuideBlocksTest {
     }
 
     @Test
+    fun windowStartingDuringAdsStillLabelsTheBreakAsThePrecedingProgram() {
+        val blocks = guideBlocks(
+            listOf(p(-30, -8, "previous"), f(-8, 0), p(0, 22, "current"), f(22, 30), p(30, 52, "next")),
+            t0 - 5 * MIN, t0 + 40 * MIN,
+        )
+        assertEquals(listOf(
+            GuideBlock(t0 - 5 * MIN, t0, "previous"),
+            GuideBlock(t0, t0 + 30 * MIN, "current"),
+            GuideBlock(t0 + 30 * MIN, t0 + 40 * MIN, "next"),
+        ), blocks)
+    }
+
+    @Test
     fun clipsToWindow() {
         val blocks = guideBlocks(listOf(p(-60, 47, "movie"), f(47, 60), p(60, 82, "ep")), t0, t0 + 70 * MIN)
         assertEquals(listOf(GuideBlock(t0, t0 + 60 * MIN, "movie"), GuideBlock(t0 + 60 * MIN, t0 + 70 * MIN, "ep")), blocks)
@@ -28,5 +41,70 @@ class GuideBlocksTest {
     }
 
     @Test
-    fun emptyIsEmpty() = assertEquals(emptyList(), guideBlocks(emptyList(), t0, t0 + 30 * MIN))
+    fun emptyWindowIsOffAir() {
+        assertEquals(listOf(GuideBlock(t0, t0 + 30 * MIN, null, offAir = true)), guideBlocks(emptyList(), t0, t0 + 30 * MIN))
+    }
+
+    @Test
+    fun holeBetweenProgramsIsOffAir() {
+        val blocks = guideBlocks(listOf(p(0, 20, "a"), p(40, 60, "b")), t0, t0 + 60 * MIN)
+        assertEquals(
+            listOf(
+                GuideBlock(t0, t0 + 20 * MIN, "a"),
+                GuideBlock(t0 + 20 * MIN, t0 + 40 * MIN, null, offAir = true),
+                GuideBlock(t0 + 40 * MIN, t0 + 60 * MIN, "b"),
+            ),
+            blocks,
+        )
+    }
+
+    @Test
+    fun musicCombinesSongsIntoHourlyBlocksWithoutChangingTheSchedule() {
+        val start = Math.floorDiv(t0, 60 * MIN) * 60 * MIN
+        val entries = (0 until 60).map {
+            ScheduleEntry("music:blues", start + it * 3 * MIN, start + (it + 1) * 3 * MIN, EntryKind.PROGRAM, "song:$it")
+        }
+        val blocks = hourlyGuideBlocks(entries, start, start + 180 * MIN, "Blues Music")
+        assertEquals((0 until 3).map {
+            GuideBlock(start + it * 60 * MIN, start + (it + 1) * 60 * MIN, null, title = "Blues Music")
+        }, blocks)
+        assertEquals(60, entries.size)
+        assertEquals("song:0", entries.first().itemKey)
+    }
+
+    @Test
+    fun hourlyMusicClipsAtWindowEdgesAndPreservesOffAirGaps() {
+        val start = Math.floorDiv(t0, 60 * MIN) * 60 * MIN
+        val entries = listOf(
+            ScheduleEntry("music", start, start + 65 * MIN, EntryKind.PROGRAM, "a"),
+            ScheduleEntry("music", start + 75 * MIN, start + 120 * MIN, EntryKind.PROGRAM, "b"),
+        )
+        assertEquals(listOf(
+            GuideBlock(start + 30 * MIN, start + 60 * MIN, null, title = "Classic Country Music"),
+            GuideBlock(start + 60 * MIN, start + 65 * MIN, null, title = "Classic Country Music"),
+            GuideBlock(start + 65 * MIN, start + 75 * MIN, null, offAir = true),
+            GuideBlock(start + 75 * MIN, start + 90 * MIN, null, title = "Classic Country Music"),
+        ), hourlyGuideBlocks(entries, start + 30 * MIN, start + 90 * MIN, "Classic Country Music"))
+        assertEquals(
+            listOf(GuideBlock(start, start + 60 * MIN, null, offAir = true)),
+            hourlyGuideBlocks(emptyList(), start, start + 60 * MIN, "Blues Music"),
+        )
+        assertEquals(emptyList(), hourlyGuideBlocks(entries, start, start, "Blues Music"))
+    }
+
+    @Test
+    fun shortAdsBecomeHourlyStationBlocksWithoutChangingClipBoundaries() {
+        val start = Math.floorDiv(t0, 60 * MIN) * 60 * MIN
+        val entries = (0 until 360).map {
+            ScheduleEntry("ads:only", start + it * 30_000L, start + (it + 1) * 30_000L, EntryKind.PROGRAM, "ad:$it")
+        }
+        assertEquals(listOf(
+            GuideBlock(start + 30 * MIN, start + 60 * MIN, null, title = "Buy Me Maybe"),
+            GuideBlock(start + 60 * MIN, start + 120 * MIN, null, title = "Buy Me Maybe"),
+            GuideBlock(start + 120 * MIN, start + 150 * MIN, null, title = "Buy Me Maybe"),
+        ), hourlyGuideBlocks(entries, start + 30 * MIN, start + 150 * MIN, "Buy Me Maybe"))
+        assertEquals(360, entries.size)
+        assertEquals(start + 30_000L, entries.first().endMs)
+        assertEquals("ad:1", entries[1].itemKey)
+    }
 }

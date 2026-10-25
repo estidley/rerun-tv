@@ -43,3 +43,21 @@ fun episode(
     partKey = "/library/parts/$key/file.mkv", container = "mkv", videoCodec = "h264",
     audioCodec = "aac", thumb = null,
 )
+
+fun track(
+    key: String,
+    title: String = key,
+    genre: String = "Jazz",
+    album: String = "Album",
+    artist: String = "Artist",
+    durationMs: Long = 3 * MIN,
+    disc: Int = 1,
+    index: Int = 1,
+) = MediaItem(
+    key = key, kind = MediaKind.TRACK, title = title, year = 1994, durationMs = durationMs,
+    genres = if (genre.isEmpty()) emptySet() else setOf(genre), network = null, studio = artist,
+    contentRating = null, showKey = "album:$album", showTitle = album, season = disc, episode = index,
+    tmdbId = null, labels = emptySet(), collections = emptySet(),
+    partKey = "/library/parts/$key/file.mp3", container = "mp3", videoCodec = null,
+    audioCodec = "mp3", thumb = "/library/metadata/$key/thumb/1",
+)

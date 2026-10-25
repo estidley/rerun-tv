@@ -9,7 +9,7 @@ const val TAIL_SKIP_MS = 5_000L
 private const val TOP_UP_BELOW_MS = 24 * 3_600_000L
 
 /** Finds the entry covering [nowMs] in start-sorted [entries]; null if none does. */
-fun locate(entries: List<ScheduleEntry>, nowMs: Long): Located? {
+fun locate(entries: List<ScheduleEntry>, nowMs: Long, skipTail: Boolean = true): Located? {
     var lo = 0
     var hi = entries.size - 1
     var found = -1
@@ -25,7 +25,7 @@ fun locate(entries: List<ScheduleEntry>, nowMs: Long): Located? {
     if (found < 0) return null
     val e = entries[found]
     val next = entries.getOrNull(found + 1)
-    if (e.kind == EntryKind.PROGRAM && e.endMs - nowMs < TAIL_SKIP_MS && next != null) {
+    if (skipTail && e.kind == EntryKind.PROGRAM && e.endMs - nowMs < TAIL_SKIP_MS && next != null) {
         return Located(next, 0, entries.getOrNull(found + 2))
     }
     return Located(e, nowMs - e.startMs, next)

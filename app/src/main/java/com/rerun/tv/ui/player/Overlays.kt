@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.tv.data.ChannelRow
@@ -47,6 +47,7 @@ fun describe(item: MediaItem?): String = when {
         val se = if (item.season != null && item.episode != null) "  S${item.season}E${item.episode}" else ""
         "${item.showTitle ?: item.title}$se"
     }
+    item.kind == MediaKind.TRACK -> listOfNotNull(item.studio, item.title).joinToString(" — ")
     else -> item.title + (item.year?.let { " ($it)" } ?: "")
 }
 
@@ -70,8 +71,8 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
         modifier
             .fillMaxWidth()
             .padding(horizontal = 56.dp, vertical = 40.dp)
-            .background(Brush.verticalGradient(listOf(Color(0xFF26304F), Retro.BannerBg), startY = 0f, endY = 18f))
-            .border(1.dp, Color(0x5539FF14))
+            .background(Brush.verticalGradient(listOf(Retro.GuideBlueLight, Retro.BannerBg), startY = 0f, endY = 18f))
+            .border(1.dp, Retro.Vcr.copy(alpha = 0.35f))
             .padding(horizontal = 28.dp, vertical = 18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -84,6 +85,7 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
                 BasicText(describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val bits = listOfNotNull(
                     item?.takeIf { it.kind == MediaKind.EPISODE }?.title,
+                    item?.takeIf { it.kind == MediaKind.TRACK }?.showTitle,
                     item?.contentRating,
                     endsMs?.let { "ends ${clockTime(it)}" },
                 )
@@ -117,6 +119,23 @@ fun UpNextCard(channel: ChannelRow?, next: MediaItem?, untilMs: Long, posterUrl:
                 BasicText(describe(next), style = Retro.Title, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(720.dp))
                 Spacer(Modifier.height(24.dp))
                 BasicText("%d:%02d".format(left / 60, left % 60), style = Retro.Osd)
+            }
+        }
+    }
+}
+
+/** Empty schedule. The next stored program starts at [untilMs]. */
+@Composable
+fun OffAirCard(channel: ChannelRow?, next: MediaItem?, untilMs: Long, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Retro.GuideBlueDeep, Retro.Black))), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BasicText(channel?.name?.uppercase() ?: "", style = Retro.GuideNumber)
+            Spacer(Modifier.height(16.dp))
+            BasicText("OFF AIR", style = Retro.Osd.copy(color = Retro.Yellow))
+            if (next != null) {
+                Spacer(Modifier.height(20.dp))
+                BasicText("Next  ${describe(next)}", style = Retro.Title, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(900.dp))
+                BasicText("at ${clockTime(untilMs)}", style = Retro.Body.copy(color = Retro.Cyan))
             }
         }
     }

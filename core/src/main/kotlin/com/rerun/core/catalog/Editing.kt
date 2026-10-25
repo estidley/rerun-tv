@@ -36,7 +36,10 @@ data class Facets(
 fun validateDraft(draft: ChannelDef, others: List<ChannelDef>): List<String> {
     val errors = ArrayList<String>()
     if (draft.name.isBlank()) errors += "Give the channel a name"
-    if (draft.number !in 1..999) errors += "Channel number must be 1–999"
+    if (draft.number !in 1..9999) errors += "Channel number must be 1–9999"
+    if (draft.number == Lineup.RESTART_NUMBER && draft.id != Lineup.RESTART_ID) {
+        errors += "Channel 999 is reserved for From the Top"
+    }
     errors += Catalog.validateNumbers(others.filter { it.id != draft.id } + draft)
     return errors
 }

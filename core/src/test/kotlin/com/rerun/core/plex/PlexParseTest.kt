@@ -94,8 +94,83 @@ class PlexParseTest {
     }
 
     @Test
+    fun tracksKeepAlbumAndIncludeUntagged() {
+        val parsed = PlexParse.tracks(
+            """
+            {"MediaContainer":{"Metadata":[
+              {"ratingKey":"9","title":"Night Drive","year":1994,"duration":180000,
+               "parentRatingKey":"8","parentTitle":"Midnight","grandparentTitle":"The Jets",
+               "parentIndex":1,"index":3,"parentThumb":"/library/metadata/8/thumb/1",
+               "Genre":[{"tag":"Jazz"},{"tag":"Soul"}],
+               "Media":[{"container":"mp3","audioCodec":"mp3","Part":[{"key":"/library/parts/9/file.mp3"}]}]},
+              {"ratingKey":"10","title":"No Genre","duration":180000,"Genre":[]}
+            ]}}
+            """.trimIndent(),
+        )
+        assertEquals(2, parsed.size)
+        assertEquals(setOf("Unclassified"), parsed.last().genres)
+        val track = parsed.first()
+        assertEquals(MediaKind.TRACK, track.kind)
+        assertEquals("Night Drive", track.title)
+        assertEquals(180_000L, track.durationMs)
+        assertEquals(setOf("Jazz", "Soul"), track.genres)
+        assertEquals("8", track.showKey)
+        assertEquals("Midnight", track.showTitle)
+        assertEquals("The Jets", track.studio)
+        assertEquals(1, track.season)
+        assertEquals(3, track.episode)
+        assertEquals("/library/parts/9/file.mp3", track.partKey)
+        assertEquals("mp3", track.container)
+        assertEquals("/library/metadata/8/thumb/1", track.thumb)
+    }
+
+    @Test
+    fun audioTracksInheritArtistGenresAndAlbumDetailsWithoutVideoMetadata() {
+        val artists = PlexParse.musicMetadata(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"a","title":"The Artist","Genre":[{"tag":"Soul"}]}]}}""",
+        ).associateBy { it.key }
+        val albums = PlexParse.musicMetadata(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"b","title":"The Album","year":1974,"thumb":"/library/metadata/b/thumb"}]}}""",
+        ).associateBy { it.key }
+        val json = """{"MediaContainer":{"Metadata":[{"ratingKey":"t","title":"Song","grandparentRatingKey":"a","parentRatingKey":"b",
+          "Media":[{"container":"flac","audioCodec":"flac","duration":240000,"Part":[{"key":"/library/parts/t/file.flac"}]}]}]}}"""
+        val track = PlexParse.tracks(json, artists, albums).single()
+        assertEquals(MediaKind.TRACK, track.kind)
+        assertEquals(setOf("Soul"), track.genres)
+        assertEquals("The Artist", track.studio)
+        assertEquals("The Album", track.showTitle)
+        assertEquals(1974, track.year)
+        assertEquals(240_000L, track.durationMs)
+        assertEquals("/library/metadata/b/thumb", track.thumb)
+        assertEquals("/library/parts/t/file.flac", track.partKey)
+        assertNull(track.videoCodec)
+        val albumWithGenre = albums.mapValues { (_, album) -> album.copy(genres = setOf("Jazz")) }
+        assertEquals(setOf("Jazz"), PlexParse.tracks(json, artists, albumWithGenre).single().genres)
+        val compilation = json.replace("\"title\":\"Song\"", "\"title\":\"Song\",\"originalTitle\":\"Guest vocalist\"")
+        assertEquals("Guest vocalist", PlexParse.tracks(compilation, artists, albums).single().studio)
+    }
+
+    @Test
     fun totalSizeReadsContainer() {
         assertEquals(412, PlexParse.totalSize(fixture("movies.json")))
         assertEquals(3, PlexParse.totalSize(fixture("sections.json")))
+    }
+
+    @Test
+    fun subtitlesUseTheFirstPartAndKeepExternalKeys() {
+        val streams = PlexParse.subtitles(
+            """{"MediaContainer":{"Metadata":[{"Media":[{"Part":[{"Stream":[
+              {"id":1,"streamType":1,"codec":"h264"},
+              {"id":2,"streamType":3,"codec":"srt","key":"/library/streams/2","languageCode":"eng","selected":1},
+              {"id":3,"streamType":3,"codec":"pgs"}
+            ]},{"Stream":[{"id":4,"streamType":3,"codec":"srt"}]}]}]}]}}""",
+        )
+        assertEquals(listOf(2, 3), streams.map { it.id })
+        assertEquals("/library/streams/2", streams.first().key)
+        assertEquals("eng", streams.first().language)
+        assertEquals(true, streams.first().selected)
+        assertEquals("application/x-subrip", streams.first().mimeType)
+        assertNull(streams[1].mimeType)
+        assertEquals(emptyList(), PlexParse.subtitles("""{"MediaContainer":{}}"""))
     }
 }

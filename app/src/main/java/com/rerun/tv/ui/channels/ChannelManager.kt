@@ -16,6 +16,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
+import com.rerun.core.catalog.Lineup
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -31,7 +32,7 @@ fun ChannelManager(controller: TvController) {
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
 
     val active = all.filter { !it.dormant && !it.hidden }
-    val hidden = all.filter { it.hidden }
+    val hidden = all.filter { it.hidden && it.id != Lineup.RESTART_ID }
     val dormant = all.filter { it.dormant && !it.hidden }
 
     TvFrame("Channels", "OK edit   BACK guide") {

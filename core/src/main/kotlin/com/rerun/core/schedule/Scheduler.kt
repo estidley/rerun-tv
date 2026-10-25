@@ -1,6 +1,7 @@
 package com.rerun.core.schedule
 
 import com.rerun.core.model.ChannelDef
+import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.core.model.PlayOrder
@@ -17,7 +18,7 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
  *
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
  * shuffle (random show, weighted by episode count, episodes in order). Every program is
- * padded to the next :00/:30 with a FILLER entry.
+ * padded to the next :00/:30 with a FILLER entry. Music stations play back to back.
  */
 class Scheduler(private val zone: ZoneId) {
 
@@ -28,11 +29,15 @@ class Scheduler(private val zone: ZoneId) {
         lastEndMs: Long?,
         nowMs: Long,
         horizonMs: Long = 48 * 3_600_000L,
+        backToBack: Boolean = def.kind == ChannelKind.MUSIC,
     ): Extension {
         if (pool.isEmpty()) return Extension(emptyList(), state)
         val items = pool.sortedBy { it.key } // input order must not change the schedule
-        val base = items.filter { Resolver.inBase(def, it) }.ifEmpty { items }
-        val blockSets = def.blocks.map { b -> items.filter { b.rules.matches(it, Resolver.networkOf(it)) } }
+        val music = def.kind == ChannelKind.MUSIC
+        val base = Candidates(items.filter { Resolver.inBase(def, it) }.ifEmpty { items }, music)
+        val blockSets = def.blocks.map { b ->
+            Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) null else Resolver.networkOf(it)) }, music)
+        }
 
         val floor = gridFloor(nowMs)
         var cursor = if (lastEndMs == null || lastEndMs < floor) floor else lastEndMs
@@ -43,19 +48,38 @@ class Scheduler(private val zone: ZoneId) {
         while (cursor < end) {
             val local = Instant.ofEpochMilli(cursor).atZone(zone)
             val bi = def.blocks.indexOfFirst { it.activeAt(local) }
-            val candidates = if (bi >= 0 && blockSets[bi].isNotEmpty()) blockSets[bi] else base
+            val candidates = if (bi >= 0 && blockSets[bi].items.isNotEmpty()) blockSets[bi] else base
             val item = run.pick(def, candidates)
 
-            val progEnd = cursor + item.durationMs
-            val slotEnd = gridCeil(progEnd)
+            val length = item.durationMs.coerceAtLeast(1L)
+            val progEnd = cursor + length
+            val slotEnd = if (backToBack) progEnd else gridCeil(progEnd)
             out += ScheduleEntry(def.id, cursor, progEnd, EntryKind.PROGRAM, item.key)
-            if (slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
+            if (!backToBack && slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
 
             run.recent = (run.recent + item.key).takeLast(RECENT_CAP)
-            run.msSinceMovie = if (item.kind == MediaKind.MOVIE) slotEnd - cursor else run.msSinceMovie + (slotEnd - cursor)
+            if (!backToBack) {
+                run.msSinceMovie = if (item.kind == MediaKind.MOVIE) slotEnd - cursor else run.msSinceMovie + (slotEnd - cursor)
+            }
             cursor = slotEnd
         }
         return Extension(out, run.toState())
+    }
+
+    /** Pools stay fixed throughout an extension; prepare lookup/order data once, not per airing. */
+    private class Candidates(val items: List<MediaItem>, music: Boolean) {
+        val movies = items.filter { it.kind == MediaKind.MOVIE }
+        val episodes = if (music) items else items.filter { it.kind == MediaKind.EPISODE }
+        val moviesByKey by lazy { movies.associateBy { it.key } }
+        val shows by lazy {
+            episodes.groupBy { it.showKey ?: it.key }.toSortedMap().mapValues { (_, eps) ->
+                eps.sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.key }))
+            }
+        }
+        val showOrder by lazy {
+            episodes.groupBy { it.showKey ?: it.key }.toSortedMap().entries
+                .sortedBy { (key, eps) -> eps.first().showTitle ?: key }.map { it.key }
+        }
     }
 
     /** Mutable working copy of [ChannelState] for one extend() call. */
@@ -71,22 +95,23 @@ class Scheduler(private val zone: ZoneId) {
 
         private fun rng(): Random = Random(seed + rngCalls).also { rngCalls++ }
 
-        fun pick(def: ChannelDef, candidates: List<MediaItem>): MediaItem {
-            val movies = candidates.filter { it.kind == MediaKind.MOVIE }
-            val episodes = candidates.filter { it.kind == MediaKind.EPISODE }
+        fun pick(def: ChannelDef, candidates: Candidates): MediaItem {
+            if (def.kind == ChannelKind.MUSIC) return pickEpisode(def, candidates)
+            val movies = candidates.movies
+            val episodes = candidates.episodes
             val wantMovie = when {
                 movies.isEmpty() -> false
                 episodes.isEmpty() -> true
                 else -> msSinceMovie >= def.movieEveryMs
             }
-            return if (wantMovie) pickMovie(def, movies) else pickEpisode(def, episodes)
+            return if (wantMovie) pickMovie(def, candidates) else pickEpisode(def, candidates)
         }
 
-        private fun pickMovie(def: ChannelDef, movies: List<MediaItem>): MediaItem {
-            val byKey = movies.associateBy { it.key }
+        private fun pickMovie(def: ChannelDef, candidates: Candidates): MediaItem {
+            val byKey = candidates.moviesByKey
             var idx = deck.indexOfFirst { it in byKey }
             if (idx < 0) {
-                deck.addAll(freshDeck(def, movies))
+                deck.addAll(freshDeck(def, candidates.movies))
                 idx = deck.indexOfFirst { it in byKey }
             }
             return byKey.getValue(deck.removeAt(idx))
@@ -97,28 +122,28 @@ class Scheduler(private val zone: ZoneId) {
                 return movies.sortedWith(compareBy({ it.year ?: 0 }, { it.title }, { it.key })).map { it.key }
             }
             val keys = movies.map { it.key }
+            val keySet = keys.toHashSet()
             val holdBackCount = maxOf(1, keys.size / 5)
-            val holdBack = recent.asReversed().filter { it in keys }.distinct().take(holdBackCount).toSet()
+            val holdBack = recent.asReversed().filter { it in keySet }.distinct().take(holdBackCount).toSet()
             val rest = keys.filter { it !in holdBack }
             if (rest.isEmpty()) return keys.shuffled(rng())
             // Recently played titles go to the back of the new deck instead of being dropped.
             return rest.shuffled(rng()) + holdBack.toList().sorted().shuffled(rng())
         }
 
-        private fun pickEpisode(def: ChannelDef, episodes: List<MediaItem>): MediaItem {
-            val shows = episodes.groupBy { it.showKey ?: it.key }.toSortedMap()
+        private fun pickEpisode(def: ChannelDef, candidates: Candidates): MediaItem {
+            val shows = candidates.shows
             val showKey = if (def.order == PlayOrder.IN_ORDER) {
-                val ordered = shows.entries.sortedBy { (k, eps) -> eps.first().showTitle ?: k }.map { it.key }
+                val ordered = candidates.showOrder
                 val rr = pointers[RR_KEY] ?: 0
                 pointers[RR_KEY] = rr + 1
                 ordered[rr % ordered.size]
             } else {
-                val total = episodes.size
+                val total = candidates.episodes.size
                 var r = rng().nextInt(total)
                 shows.entries.first { (_, eps) -> (r < eps.size).also { if (!it) r -= eps.size } }.key
             }
             val eps = shows.getValue(showKey)
-                .sortedWith(compareBy({ it.season ?: 0 }, { it.episode ?: 0 }, { it.key }))
             val ptr = pointers[showKey] ?: 0
             pointers[showKey] = ptr + 1
             return eps[ptr % eps.size]

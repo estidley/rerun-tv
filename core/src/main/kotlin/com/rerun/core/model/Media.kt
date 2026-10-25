@@ -1,8 +1,8 @@
 package com.rerun.core.model
 
-enum class MediaKind { MOVIE, EPISODE }
+enum class MediaKind { MOVIE, EPISODE, TRACK }
 
-/** One playable thing from the Plex library: a movie or a single episode. */
+/** One playable thing from the Plex library: a movie, a single episode, or a music track. */
 data class MediaItem(
     val key: String,
     val kind: MediaKind,

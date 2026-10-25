@@ -37,8 +37,8 @@ class CatalogTest {
         val defs = Catalog.builtInChannels()
         assertEquals(emptyList(), Catalog.validateNumbers(defs))
         assertEquals(defs.size, defs.map { it.id }.toSet().size)
-        assertTrue(defs.any { it.name == "Touchstone" && it.number == 109 })
-        assertTrue(defs.any { it.name == "Disney XD" && it.number == 108 })
+        assertTrue(defs.any { it.name == "The Backlot" && it.number == 109 })
+        assertTrue(defs.any { it.name == "Action Club" && it.number == 108 })
     }
 
     @Test

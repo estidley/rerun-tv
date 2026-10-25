@@ -31,31 +31,36 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.rerun.core.catalog.Catalog
 import com.rerun.core.catalog.Facets
+import com.rerun.core.catalog.Lineup
 import com.rerun.core.catalog.validateDraft
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
+import com.rerun.core.model.MediaItem
 import com.rerun.core.model.PlayOrder
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ChannelRow
+import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvFrame
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Build or change a channel: what feeds it, filters, play order. */
 @Composable
-fun ChannelEditor(controller: TvController, channelId: String?) {
-    val app = RerunApp.instance
+fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = RerunApp.instance) {
     val scope = rememberCoroutineScope()
     var existing by remember { mutableStateOf<ChannelRow?>(null) }
     var draft by remember { mutableStateOf<ChannelDef?>(null) }
     var facets by remember { mutableStateOf<Facets?>(null) }
+    var library by remember { mutableStateOf<List<MediaItem>?>(null) }
     var numberText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var poolHours by remember { mutableStateOf("") }
@@ -70,19 +75,23 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
         val d = row?.def ?: run {
             val used = rows.map { it.number }.toSet()
             ChannelDef(
-                id = "custom:" + UUID.randomUUID().toString().take(8), number = (401..999).first { it !in used },
+                id = "custom:" + UUID.randomUUID().toString().take(8),
+                number = (401..9999).first { it !in used && it != Lineup.RESTART_NUMBER },
                 name = "", kind = ChannelKind.CUSTOM, rules = Rules(genres = emptySet()),
             )
         }
+        val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
+        facets = withContext(Dispatchers.Default) { Facets.from(contents) }
+        library = contents
         draft = d
         numberText = d.number.toString()
-        facets = Facets.from(app.schedule.libraryItems())
         runCatching { first.requestFocus() }
     }
-    LaunchedEffect(draft) {
+    LaunchedEffect(draft?.rules, draft?.blocks, library) {
         val d = draft ?: return@LaunchedEffect
-        val ms = Resolver.pool(d, app.schedule.libraryItems()).sumOf { it.durationMs }
-        poolHours = "%.1f hours of content".format(ms / 3_600_000.0) + if (Resolver.isDormant(Resolver.pool(d, app.schedule.libraryItems()))) "  (needs 4 to go on the air)" else ""
+        val contents = library ?: return@LaunchedEffect
+        val ms = withContext(Dispatchers.Default) { Resolver.pool(d, contents).sumOf { it.durationMs } }
+        poolHours = "%.1f hours of content".format(ms / 3_600_000.0) + if (ms < Resolver.DORMANT_MS) "  (needs 4 to go on the air)" else ""
     }
 
     val d = draft
@@ -98,7 +107,7 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Field("Name", d.name, Modifier.width(520.dp).focusRequester(first)) { draft = d.copy(name = it) }
                     Field("Number", numberText, Modifier.width(160.dp), numeric = true) { t ->
-                        numberText = t.filter(Char::isDigit).take(3)
+                        numberText = t.filter(Char::isDigit).take(4)
                         numberText.toIntOrNull()?.let { draft = d.copy(number = it) }
                     }
                     BasicText(poolHours, style = Retro.Caption.copy(color = Retro.Cyan))
@@ -107,7 +116,11 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
             item {
                 Section("Plays") {
                     chipRow(listOf("Movies + shows", "Movies only", "Shows only")) { label ->
-                        val kinds = when (label) { "Movies only" -> setOf(MediaKind.MOVIE); "Shows only" -> setOf(MediaKind.EPISODE); else -> MediaKind.entries.toSet() }
+                        val kinds = when (label) {
+                            "Movies only" -> setOf(MediaKind.MOVIE)
+                            "Shows only" -> setOf(MediaKind.EPISODE)
+                            else -> setOf(MediaKind.MOVIE, MediaKind.EPISODE)
+                        }
                         TvButton(label, { update(d.rules.copy(kinds = kinds)) }, selected = d.rules.kinds == kinds)
                     }
                     chipRow(listOf(PlayOrder.SHUFFLE, PlayOrder.IN_ORDER)) { o ->
@@ -147,18 +160,27 @@ fun ChannelEditor(controller: TvController, channelId: String?) {
                                 val toSave = draft ?: return@launch
                                 val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
                                 if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
-                                val pool = Resolver.pool(toSave, app.schedule.libraryItems())
+                                val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
+                                val ms = withContext(Dispatchers.Default) { Resolver.pool(toSave, contents).sumOf { it.durationMs } }
                                 app.schedule.saveChannel(
-                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = Resolver.isDormant(pool), poolMs = pool.sumOf { it.durationMs }),
+                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = ms < Resolver.DORMANT_MS, poolMs = ms),
                                 )
+                                if (!Lineup.isWest(toSave.id) && app.settings.isOn(Settings.EAST_WEST)) {
+                                    app.sync.refreshChannels()
+                                }
                                 app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
+                                controller.reconcileChannels()
                                 controller.go(Screen.Channels)
                             }
                         })
                         TvButton("Cancel", { controller.go(Screen.Channels) })
                         if (existing != null && existing?.builtIn == false) {
                             TvButton("Delete channel", {
-                                scope.launch { app.schedule.deleteChannel(d.id); controller.go(Screen.Channels) }
+                                scope.launch {
+                                    app.schedule.deleteChannel(d.id)
+                                    controller.reconcileChannels()
+                                    controller.go(Screen.Channels)
+                                }
                             })
                         }
                     }
@@ -196,7 +218,7 @@ private fun Field(label: String, value: String, modifier: Modifier, numeric: Boo
             modifier = Modifier
                 .onFocusChanged { focused = it.isFocused }
                 .background(if (focused) Retro.GuideBlueLight else Color(0x66071341))
-                .border(2.dp, if (focused) Retro.Yellow else Color(0x334A6BC8))
+                .border(2.dp, if (focused) Retro.Yellow else Retro.Border.copy(alpha = 0.4f))
                 .padding(horizontal = 14.dp, vertical = 8.dp),
         )
     }
