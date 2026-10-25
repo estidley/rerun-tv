@@ -4,7 +4,7 @@
 
 - `core`: pure Kotlin/JVM models, Plex parsing and playback policy, catalog/routing, scheduling, and filler planning.
 - `app`: Android Compose UI, Room persistence, HTTP, and one Media3 player per activity.
-- `tools/tmdb`: build-time TMDB refresh (`:tmdb:run`) that writes the gitignored `local/tmdb/rerun/tmdb-networks.json`, which `core` bundles as a resource.
+- `tools/tmdb`: build-time TMDB refresh (`:tmdb:run`) writes gitignored `local/tmdb/rerun/tmdb-networks.json`; `:tmdb:publishSnapshot` validates and promotes it to tracked `data/tmdb/rerun/tmdb-networks.json`. Core bundles local lists when present, otherwise the shared snapshot. `:tmdb:check` tests publishing and validates the tracked data without credentials.
 - `scripts`: Windows PowerShell build/install/key helpers. `tools/commercials` is a separate local media-preparation utility.
 - Use the Gradle wrapper and versions in `gradle/libs.versions.toml`; Android SDK settings are in `app/build.gradle.kts`.
 - Windows requires JDK 17+ and Android SDK platform 37. Initialize the JDK in each fresh shell:
@@ -32,7 +32,7 @@ Keep PR workflows read-only and secret-free; release signing is not part of CI.
 
 - Toonuki uses only the Anime genre for movies/episodes; it has no network/title or age-rating restriction. Upgrade only its legacy stock rules and preserve user-edited pools.
 - Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only.
-- The TMDB token is build-time only: read from `TMDB_TOKEN` (or `install.ps1 -TmdbToken`), sent only in the Authorization header, never written to disk, the repo, the APK, logs or URLs. Generated lists stay in gitignored `local/`; tests run with `rerun.tmdb=off`.
+- The TMDB token is build-time only: read from `TMDB_TOKEN` (or `install.ps1 -TmdbToken`), sent only in the Authorization header, never written to disk, the repo, the APK, logs or URLs. Local refreshes stay in gitignored `local/`; only validated public network/company metadata and TMDB IDs are published to `data/tmdb/`. Tests run with `rerun.tmdb=off`.
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
 - Preserve explicit Room migrations and existing preferences; do not add destructive database fallback. Keep keystores, `keystore.properties`, and local SDK configuration out of version control.
 - Routine scheduling appends locked entries. Library inclusion changes intentionally invalidate schedules; channel edits preserve the currently airing entry and rebuild the future.

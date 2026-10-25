@@ -36,6 +36,18 @@ fun main(args: Array<String>) {
     } catch (e: IllegalArgumentException) {
         fail(e.message ?: "Bad arguments")
     }
+    if (opts.publishFrom != null) {
+        val input = File(opts.publishFrom)
+        require(input.isFile) { "Run :tmdb:run to create the local snapshot before publishing." }
+        val sanitized = SnapshotPublisher.validate(input.readText()).toJson()
+        val target = File(opts.out)
+        target.parentFile.mkdirs()
+        val temporary = File(target.path + ".tmp")
+        temporary.writeText(sanitized)
+        Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        log("Published ${target.path}. Review and commit this data file; no token is required by consumers.")
+        return
+    }
     val token = System.getenv("TMDB_TOKEN")?.trim().orEmpty()
     if (token.isEmpty()) {
         fail(
@@ -86,6 +98,7 @@ private class Options(
     val maxPages: Int,
     val apiBase: String,
     val filesBase: String,
+    val publishFrom: String?,
 ) {
     companion object {
         fun parse(args: Array<String>): Options {
@@ -105,6 +118,7 @@ private class Options(
                 maxPages = map["max-pages"]?.toIntOrNull()?.coerceIn(1, 500) ?: 500,
                 apiBase = (map["api-base"] ?: "https://api.themoviedb.org").trimEnd('/'),
                 filesBase = (map["files-base"] ?: "https://files.tmdb.org").trimEnd('/'),
+                publishFrom = map["publish-from"],
             )
         }
     }

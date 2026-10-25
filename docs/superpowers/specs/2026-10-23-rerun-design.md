@@ -6,6 +6,8 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
+The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
+
 Rerun is a native Android/Fire TV player for a personal Plex library, not a virtual tuner server.
 The minimum Android API is 26; compile/target SDKs and dependency versions are defined by the build files.
 Basic playback does not itself require Plex Pass; optional Plex HDR tone mapping and loudness normalization do.

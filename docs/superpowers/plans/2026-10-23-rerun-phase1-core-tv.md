@@ -7,6 +7,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 ## Delivered
 
+- Shared TMDB network snapshot bundled by token-free builds; local refresh override, validated `:tmdb:publishSnapshot` promotion and credential-free `:tmdb:check` CI verification.
+
 - Marvelous TV, Marvelous Movies, Marvelous Timeline, Detective Club TV and Detective Pictures; persisted mixed-media universe ordering, season positions and explicit franchise metadata/tag matching.
 
 - Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged. Stale future schedules are repaired without replacing the current airing; West remirrors East.

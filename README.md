@@ -64,11 +64,13 @@ The first build creates a private release key (`rerun-release.jks` and `keystore
 
 To remove it: `.\scripts\restore.ps1 -TvIp 192.168.1.50`
 
-## Real network lists from TMDB (optional)
+## Shared network lists from TMDB
 
 Plex stores one network per show, and nothing at all about which network aired a movie. To fill channels with what each network really aired, the build can download lists from [TMDB](https://www.themoviedb.org/): every show each network aired, plus made-for-TV movies from that network's own studios (Disney Channel Original Movies, HBO Films, and so on). Shows that aired on several networks appear on each of those channels.
 
-You need your own free TMDB token. It's only used while building and is never saved in the repo or the app.
+The repository includes a shared snapshot at [`data/tmdb/rerun/tmdb-networks.json`](data/tmdb/rerun/tmdb-networks.json). A normal build bundles it into the APK automatically, with no TMDB account or token required. The TV reads these lists locally; it never calls TMDB. A fresh local refresh overrides the shared snapshot on that computer.
+
+Only maintainers refreshing the data need their own free TMDB token. It is used for the download and never saved in the JSON, repository or app.
 
 1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup) and verify your email.
 2. Go to **Settings > API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)) and request an API key. Choose **Developer**, accept the terms, and fill in the short form (personal or non-commercial use is fine).
@@ -86,7 +88,17 @@ You need your own free TMDB token. It's only used while building and is never sa
    .\scripts\install.ps1 -TvIp 192.168.1.50
    ```
 
-The refresh writes `local\tmdb\rerun\tmdb-networks.json`. Git ignores it, and later builds reuse it until you pass the token again. Failed, malformed or incomplete discovery responses stop the refresh and preserve the previous lists. To refresh without installing, set `TMDB_TOKEN` and run `.\gradlew.bat :tmdb:run`. The refresh prints each channel's real network, the TMDB networks it matched, and how many shows and movies it found. It also warns about any network it couldn't find.
+The refresh writes `local\tmdb\rerun\tmdb-networks.json`. Git ignores that local file, and later builds on your computer reuse it until you refresh again. Failed, malformed or incomplete discovery responses stop the refresh and preserve the previous lists. To refresh without installing, set `TMDB_TOKEN` and run `.\gradlew.bat :tmdb:run`. The refresh prints each channel's real network, the TMDB networks it matched, and how many shows and movies it found. It also warns about any network it couldn't find.
+
+To share a successful refresh with everyone:
+
+```powershell
+# Run after :tmdb:run; publishing itself does not need a token or internet access.
+.\gradlew.bat :tmdb:publishSnapshot :tmdb:check
+git diff -- data/tmdb/rerun/tmdb-networks.json
+```
+
+Commit the reviewed `data/tmdb/rerun/tmdb-networks.json` through a pull request. Publishing rejects empty, unreadable, incomplete or duplicate-network snapshots and serializes only the public reference fields. CI validates this shared snapshot and runs the publisher tests without credentials. Once the update is merged, other users pull the repo and rebuild/install normally to receive the newer lists. Already-installed TVs keep their existing snapshot until the app is updated.
 
 TMDB doesn't track which theatrical movies a channel showed. Movies outside a network's own studios still use the studio-owner rules.
 

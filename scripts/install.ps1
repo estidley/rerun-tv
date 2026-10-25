@@ -53,6 +53,9 @@ if (-not $SkipBuild) {
     elseif (Test-Path $tmdbList) {
         Write-Information 'Using the TMDB network lists from the last refresh.' -InformationAction Continue
     }
+    elseif (Test-Path (Join-Path $root 'data\tmdb\rerun\tmdb-networks.json')) {
+        Write-Information 'Using the shared TMDB network snapshot from the repository; no token needed.' -InformationAction Continue
+    }
     else {
         Write-Warning 'No TMDB token, so channels use the network Plex reports. See README: Real network lists from TMDB.'
     }

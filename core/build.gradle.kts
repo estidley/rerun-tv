@@ -13,10 +13,14 @@ kotlin {
     }
 }
 
-// Network lists written by `:tmdb:run` (gitignored). Without them channels use Plex's network field.
+// Fresh local lists override the public snapshot. Fresh clones bundle the snapshot without a token.
 sourceSets {
     main {
-        resources.srcDir(rootProject.file("local/tmdb"))
+        resources.srcDir(providers.provider {
+            val local = rootProject.file("local/tmdb")
+            if (local.resolve("rerun/tmdb-networks.json").isFile) local
+            else rootProject.file("data/tmdb")
+        })
     }
 }
 

@@ -19,7 +19,10 @@ kotlin {
 
 dependencies {
     implementation(project(":core"))
+    testImplementation(kotlin("test"))
 }
+
+tasks.test { useJUnitPlatform() }
 
 application {
     mainClass.set("com.rerun.tmdb.MainKt")
@@ -28,3 +31,23 @@ application {
 tasks.named<JavaExec>("run") {
     environment("RERUN_TMDB_OUT", rootProject.file("local/tmdb/rerun/tmdb-networks.json").absolutePath)
 }
+
+tasks.register<JavaExec>("publishSnapshot") {
+    group = "application"
+    description = "Validate and publish the last local TMDB refresh as the shared, token-free snapshot."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set(application.mainClass)
+    args("--publish-from", rootProject.file("local/tmdb/rerun/tmdb-networks.json").absolutePath,
+        "--out", rootProject.file("data/tmdb/rerun/tmdb-networks.json").absolutePath)
+}
+
+val verifySnapshot by tasks.registering(JavaExec::class) {
+    group = "verification"
+    description = "Check the shared TMDB snapshot without credentials or network access."
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set(application.mainClass)
+    args("--publish-from", rootProject.file("data/tmdb/rerun/tmdb-networks.json").absolutePath,
+        "--out", layout.buildDirectory.file("verified-snapshot.json").get().asFile.absolutePath)
+}
+
+tasks.check { dependsOn(verifySnapshot) }

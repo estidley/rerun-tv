@@ -67,7 +67,7 @@ jobs:
 
       - name: Run JVM tests
         run: |
-          .\gradlew.bat :core:test :app:testDebugUnitTest :tmdb:assemble --console=plain --stacktrace
+          .\gradlew.bat :core:test :app:testDebugUnitTest :tmdb:assemble :tmdb:check --console=plain --stacktrace
           if ($LASTEXITCODE -ne 0) { throw 'JVM tests failed' }
 
       - name: Run Android lint
@@ -92,6 +92,8 @@ jobs:
           path: |
             core/build/test-results/test/
             core/build/reports/tests/test/
+            tools/tmdb/build/test-results/test/
+            tools/tmdb/build/reports/tests/test/
             app/build/test-results/testDebugUnitTest/
             app/build/reports/tests/testDebugUnitTest/
             app/build/reports/lint-results-debug.*
