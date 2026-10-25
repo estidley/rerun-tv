@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  android:
+    name: Android verification
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check patch whitespace
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ($env:PR_BASE) {
+            git diff --check "$($env:PR_BASE)...$($env:PR_HEAD)"
+          } else {
+            git show --format= --check HEAD
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Patch whitespace check failed' }
+
+      - name: Set up Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+
+      - name: Install Android platform
+        run: |
+          sdkmanager 'platforms;android-37'
+          if ($LASTEXITCODE -ne 0) { throw 'Android platform installation failed' }
+          # AGP installs its required build-tools revision from the licensed SDK.
+
+      - name: Set up Gradle and validate wrapper
+        id: gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
+
+      - name: Run JVM tests
+        run: |
+          .\gradlew.bat :core:test :app:testDebugUnitTest --console=plain --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'JVM tests failed' }
+
+      - name: Run Android lint
+        if: ${{ !cancelled() && steps.gradle.outcome == 'success' }}
+        run: |
+          .\gradlew.bat :app:lintDebug --console=plain --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'Android lint failed' }
+
+      - name: Build debug APK
+        if: ${{ !cancelled() && steps.gradle.outcome == 'success' }}
+        run: |
+          .\gradlew.bat :app:assembleDebug --console=plain --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'Debug build failed' }
+
+      - name: Upload verification reports
+        if: ${{ !cancelled() && steps.gradle.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verification-reports-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            core/build/test-results/test/
+            core/build/reports/tests/test/
+            app/build/test-results/testDebugUnitTest/
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/reports/lint-results-debug.*
+            build/reports/problems/
+
+      - name: Upload debug APK
+        if: ${{ success() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: debug-apk-${{ github.sha }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/output-metadata.json
+
+  powershell:
+    name: PowerShell verification
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Analyze PowerShell scripts
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Install-Module PSScriptAnalyzer -RequiredVersion '1.24.0' -Scope CurrentUser -Force -Repository PSGallery
+          Import-Module PSScriptAnalyzer -RequiredVersion '1.24.0'
+          $results = @(Invoke-ScriptAnalyzer -Path '.\scripts' -Recurse)
+          $results | Format-Table RuleName, Severity, ScriptName, Line, Message -Wrap
+          $results | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath 'powershell-analysis.json'
+          if (@($results | Where-Object Severity -eq 'Error').Count -gt 0) {
+            throw 'PowerShell analysis reported errors'
+          }
+
+      - name: Check keystore property encoding
+        if: ${{ !cancelled() }}
+        run: |
+          .\scripts\test-keystore.ps1
+          if (-not $?) { throw 'Keystore property encoding checks failed' }
+
+      - name: Upload PowerShell report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: powershell-report-${{ github.sha }}
+          path: powershell-analysis.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  ci:
+    name: CI
+    if: ${{ always() }}
+    needs: [android, powershell]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require successful verification
+        env:
+          ANDROID_RESULT: ${{ needs.android.result }}
+          POWERSHELL_RESULT: ${{ needs.powershell.result }}
+        run: |
+          if ($env:ANDROID_RESULT -ne 'success' -or $env:POWERSHELL_RESULT -ne 'success') {
+            throw "Verification failed: Android=$($env:ANDROID_RESULT), PowerShell=$($env:POWERSHELL_RESULT)"
+          }
