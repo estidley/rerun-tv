@@ -6,6 +6,8 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
+Channel identities use stable IDs, independent of user-renamed display text. `ChannelIcon` loads bundled lossless WebP artwork in guide rows, channel management and playback OSD/info. The 102 SVG masters/wordmarks live under `design/channel-icons`; a pinned Sharp generator produces 256 px transparent Android drawables and a static resource map. Managed West IDs resolve to East; unknown music/custom channels use explicit fallback art.
+
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
 Rerun is a native Android/Fire TV player for a personal Plex library, not a virtual tuner server.

@@ -62,6 +62,7 @@ import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.RerunWordmark
+import com.rerun.tv.ui.common.ChannelIcon
 import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.player.describe
 import com.rerun.tv.ui.theme.Retro
@@ -254,7 +255,9 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                                     .padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                BasicText(ch.number.toString(), style = Retro.GuideNumber, modifier = Modifier.width(70.dp))
+                                BasicText(ch.number.toString(), style = Retro.GuideNumber, modifier = Modifier.width(58.dp))
+                                ChannelIcon(ch.id, size = 30.dp)
+                                Spacer(Modifier.width(8.dp))
                                 BasicText(
                                     ch.name, style = Retro.GuideCell.copy(lineHeight = 28.sp),
                                     maxLines = layout.channelNameLines, overflow = TextOverflow.Ellipsis,

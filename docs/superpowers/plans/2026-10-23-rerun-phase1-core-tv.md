@@ -7,6 +7,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 ## Delivered
 
+- Approved 1990s channel artwork: 102 icon/wordmark pairs, locally bundled Android renders, stable-ID/West-feed lookup and dynamic fallbacks in guide, channel manager and playback overlays.
+
 - Shared TMDB network snapshot bundled by token-free builds; local refresh override, validated `:tmdb:publishSnapshot` promotion and credential-free `:tmdb:check` CI verification.
 
 - Marvelous TV, Marvelous Movies, Marvelous Timeline, Detective Club TV and Detective Pictures; persisted mixed-media universe ordering, season positions and explicit franchise metadata/tag matching.

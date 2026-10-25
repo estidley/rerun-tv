@@ -14,3 +14,4 @@ captures/
 .superpowers/
 # TMDB network lists from :tmdb:run (built locally with your own token)
 local/
+node_modules/

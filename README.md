@@ -43,6 +43,8 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 
 ## Install on a Fire TV
 
+The guide, channel manager and playback info display the bundled 1990s channel artwork. The library covers 60 named channels and all 40 TV/music decade templates, with shared East/West artwork and fallbacks for custom channels and arbitrary music genres. Editable SVGs and wordmarks, a preview, stable-ID mapping and regeneration instructions are in [`design/channel-icons`](design/channel-icons). Lossless WebP renders are committed for Android, so ordinary builds do not need Node or an SVG decoder.
+
 Requirements:
 - JDK 17 or newer (Gradle 9 will not run on JDK 11)
 - Android SDK (platform 37)

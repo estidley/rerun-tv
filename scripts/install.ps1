@@ -12,9 +12,9 @@
   saved Plex tokens will not carry over.
 
   Optional: -TmdbToken refreshes the lists of what really aired on each network
-  (see README, "Real network lists from TMDB"). Use the TMDB "API Read Access Token".
+  (see README, "Shared network lists from TMDB"). Use the TMDB "API Read Access Token".
   It is only passed to the refresh step and is never saved; you can set TMDB_TOKEN
-  in your shell instead. Without either, the last refresh is reused if there is one.
+  in your shell instead. Without either, the last local refresh or shared repo snapshot is used.
 
   Usage:  .\scripts\install.ps1 -TvIp 192.168.1.50
           .\scripts\install.ps1 -TvIp 192.168.1.50 -TmdbToken 'eyJhbGciOi...'

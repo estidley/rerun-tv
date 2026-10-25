@@ -1,6 +1,7 @@
 package com.rerun.tv.ui.player
 
 import androidx.compose.foundation.Canvas
+import com.rerun.tv.ui.common.ChannelIcon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +60,7 @@ fun clockTime(ms: Long): String = clock.format(Date(ms))
 fun ChannelOsd(channel: ChannelRow?, modifier: Modifier = Modifier) {
     if (channel == null) return
     Column(modifier.padding(top = 36.dp, end = 56.dp), horizontalAlignment = Alignment.End) {
+        ChannelIcon(channel.id, size = 56.dp)
         RetroText(channel.number.toString(), style = Retro.Osd)
         RetroText(channel.name.uppercase(), style = Retro.OsdSmall)
     }
@@ -77,6 +79,7 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(150.dp)) {
+                if (channel != null) ChannelIcon(channel.id, size = 40.dp)
                 BasicText(channel?.number?.toString() ?: "", style = Retro.Osd)
                 BasicText(channel?.name ?: "", style = Retro.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
