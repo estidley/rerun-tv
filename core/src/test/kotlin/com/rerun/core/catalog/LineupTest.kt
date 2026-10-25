@@ -23,6 +23,25 @@ import kotlin.test.assertTrue
 
 class LineupTest {
     @Test
+    fun stockToonukiUpgradesToAnimeWhilePreservingUserPresentationAndEditedPools() {
+        val template = Catalog.builtInChannels().single { it.id == "toonami" }
+        val legacy = template.copy(name = "My Anime", number = 777, kidsSafe = true,
+            rules = Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()))
+        val library = listOf(episode("anime", "New Anime", genres = setOf("Anime"), durationMs = 4 * HOUR))
+        val plan = Lineup.plan(library, listOf(StoredChannel(legacy, true)), eastWest = true, music = false)
+        val east = plan.channels.single { it.def.id == "toonami" }
+        assertEquals(legacy.copy(rules = template.rules, kidsSafe = false), east.def)
+        assertFalse(east.dormant)
+        assertEquals(4 * HOUR, east.poolMs)
+        assertEquals(template.rules, plan.channels.single { it.def.id == "toonami:w" }.def.rules)
+        val refreshed = Lineup.plan(library, plan.channels.map { StoredChannel(it.def, it.builtIn) }, true, false)
+        assertEquals(east, refreshed.channels.single { it.def.id == "toonami" })
+        val edited = legacy.copy(rules = Rules(genres = setOf("Comedy")))
+        assertEquals(edited, Lineup.plan(library, listOf(StoredChannel(edited, true)), false, false)
+            .channels.single { it.def.id == "toonami" }.def)
+    }
+
+    @Test
     fun decadesQualifyIndependentlyByMediaTypeAndEligibleDuration() {
         val library = listOf(
             episode("tv", "Show", durationMs = 24 * HOUR, year = 1985),

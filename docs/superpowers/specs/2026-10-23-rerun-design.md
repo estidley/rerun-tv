@@ -35,6 +35,10 @@ Room stores media, channels, schedules, scheduler state, ad clips and settings.
 Explicit migrations preserve prior data. Credentials are kept out of play URLs and redacted from
 diagnostics; HTTP token attachment follows the trusted Plex host policy.
 
+Toonuki (channel 105, stable ID `toonami`) uses only the Anime genre for episodes and movies,
+without network/title or rating restrictions. Animation alone does not match. Stock legacy rules
+upgrade on lineup refresh while preserving channel names/numbers/order and explicitly edited pools.
+
 ## Network reference lists
 
 Built-in network channels use parody display names while retaining real network aliases and stable IDs.

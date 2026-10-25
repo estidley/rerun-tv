@@ -22,16 +22,20 @@ class ResolverTest {
         assertEquals("touchstone", Resolver.networkOf(movie("m", studio = "Marvel Studios", rating = "PG-13")))
 
     @Test
-    fun toonamiFindsDbzByTitle() {
-        val dbz = episode("e1", "Dragon Ball Z", network = "Fuji TV")
-        val other = episode("e2", "Some Sitcom", network = "NBC")
-        assertEquals(listOf(dbz), Resolver.pool(def("toonami"), listOf(dbz, other)))
+    fun toonukiIncludesAllAnimeVideoRegardlessOfNetworkTitleOrRating() {
+        val show = episode("e1", "Unlisted Anime", network = "Netflix", genres = setOf(" anime "), rating = "TV-MA")
+        val film = movie("m1", genres = setOf("Anime", "Drama"), rating = "R")
+        val untagged = episode("e2", "Dragon Ball Z", network = "Toonami", genres = setOf("Animation"))
+        val cartoon = episode("e3", "Other Cartoon", genres = setOf("Animation"))
+        val music = com.rerun.core.track("t1", genre = "Anime")
+        assertEquals(listOf(show, film), Resolver.pool(def("toonami"), listOf(show, film, untagged, cartoon, music)))
     }
 
     @Test
     fun titleMatchIgnoresPunctuation() {
         val tenchi = episode("e1", "Tenchi Muyo", network = "AIC")
-        assertEquals(listOf(tenchi), Resolver.pool(def("toonami"), listOf(tenchi)))
+        val titleChannel = def("toonami").copy(rules = com.rerun.core.model.Rules(titles = setOf("Tenchi Muyo!")))
+        assertEquals(listOf(tenchi), Resolver.pool(titleChannel, listOf(tenchi)))
     }
 
     @Test

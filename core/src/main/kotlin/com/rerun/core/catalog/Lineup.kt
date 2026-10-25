@@ -114,7 +114,13 @@ object Lineup {
                 continue
             }
             val prev = existingById[template.id]
-            val base = prev?.def ?: template
+            val stored = prev?.def
+            // Upgrade the old stock Toonami pool, retaining names, numbers and play order.
+            // Explicitly edited rules or time blocks remain owned by the user.
+            val base = if (template.id == "toonami" && prev?.builtIn == true &&
+                stored?.rules == Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()) &&
+                stored.blocks.isEmpty()
+            ) stored.copy(rules = template.rules, kidsSafe = template.kidsSafe) else stored ?: template
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
             val pool = duration(base)
             val dormant = pool < Resolver.DORMANT_MS

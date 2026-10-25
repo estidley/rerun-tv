@@ -54,9 +54,10 @@ class CatalogTest {
     @Test
     fun kidsSafeNetworksAreMarked() {
         val byId = Catalog.builtInChannels().associateBy { it.id }
-        for (id in listOf("disney", "disneyxd", "disneyjr", "nick", "nickjr", "cn", "boomerang", "toonami", "pbskids")) {
+        for (id in listOf("disney", "disneyxd", "disneyjr", "nick", "nickjr", "cn", "boomerang", "pbskids")) {
             assertTrue(byId.getValue(id).kidsSafe, "$id should be kids-safe")
         }
         assertTrue(!byId.getValue("touchstone").kidsSafe)
+        assertTrue(!byId.getValue("toonami").kidsSafe)
     }
 }

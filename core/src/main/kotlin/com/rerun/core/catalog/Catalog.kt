@@ -42,7 +42,7 @@ object Catalog {
         NetworkDef("boomerang", "Kaboomerang", 104, listOf("Boomerang"), true,
             realName = "Boomerang",
         ),
-        NetworkDef("toonami", "Toonuki", 105, listOf("Toonami"), true,
+        NetworkDef("toonami", "Toonuki", 105, listOf("Toonami"), false,
             realName = "Toonami",
         ),
         NetworkDef("pbs", "PBJ", 106, listOf("PBS"), false,
@@ -141,7 +141,7 @@ object Catalog {
                 )
                 "toonami" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.CURATED,
-                    Rules(networks = setOf(n.id), titles = Curated.toonamiShows.toSet()), kidsSafe = true,
+                    Rules(genres = setOf("Anime")),
                 )
                 "cn" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.NETWORK, Rules(networks = setOf(n.id)),

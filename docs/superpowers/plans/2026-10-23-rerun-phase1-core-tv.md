@@ -7,6 +7,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 ## Delivered
 
+- Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged.
+
 - Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
@@ -52,6 +54,8 @@ These are synthetic local measurements with preserved output fingerprints, not T
 Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timings vary by machine.
 
 ## Physical TV and live Plex acceptance still open
+
+- [ ] Confirm Toonuki activates with four hours of Anime-tagged Plex content and excludes Animation-only items after refresh.
 
 - [ ] Refresh TMDB lists with a real token, inspect network/company coverage, rebuild, and verify multi-network memberships and preserved user channel names on TV.
 - [ ] Update an installed signed build with saved channels: loading/updating appears until restore settles; genuinely empty and failed states remain distinct.

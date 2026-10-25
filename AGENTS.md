@@ -27,6 +27,7 @@ Keep PR workflows read-only and secret-free; release signing is not part of CI.
 
 ## Behavioral invariants
 
+- Toonuki uses only the Anime genre for movies/episodes; it has no network/title or age-rating restriction. Upgrade only its legacy stock rules and preserve user-edited pools.
 - Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only.
 - The TMDB token is build-time only: read from `TMDB_TOKEN` (or `install.ps1 -TmdbToken`), sent only in the Authorization header, never written to disk, the repo, the APK, logs or URLs. Generated lists stay in gitignored `local/`; tests run with `rerun.tmdb=off`.
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
