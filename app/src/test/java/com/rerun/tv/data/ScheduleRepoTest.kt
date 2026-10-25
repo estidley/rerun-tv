@@ -41,6 +41,39 @@ class ScheduleRepoTest {
     fun tearDown() = db.close()
 
     @Test
+    fun toonukiRuleUpgradeKeepsCurrentProgramAndRebuildsFutureAndWest() = runBlocking {
+        for (alreadyUpgraded in listOf(false, true)) {
+            db.settings().clearConnection()
+            val at = System.currentTimeMillis()
+            val template = com.rerun.core.catalog.Catalog.builtInChannels().single { it.id == "toonami" }
+            val old = template.copy(rules = com.rerun.core.model.Rules(networks = setOf("toonami"),
+                titles = com.rerun.core.catalog.Curated.toonamiShows.toSet()), kidsSafe = true)
+            val anime = movie("anime").copy(genres = setOf("Anime"))
+            val oldShow = movie("old-show")
+            db.items().replaceAll(listOf(anime, oldShow).map(ItemRow::of))
+            db.channels().upsert(ChannelRow.of(if (alreadyUpgraded) template else old, true, false))
+            val current = com.rerun.core.schedule.ScheduleEntry("toonami", at - 60_000, at + 60_000,
+                com.rerun.core.schedule.EntryKind.PROGRAM, oldShow.key)
+            val future = current.copy(startMs = current.endMs, endMs = at + DAY)
+            db.entries().insertAll(listOf(current, future).map(EntryRow::of))
+            val westId = Lineup.westId("toonami")
+            db.channels().upsert(ChannelRow.of(old.copy(id = westId, number = 605), true, false))
+            db.entries().insertAll(Lineup.shift(listOf(current, future), westId, Lineup.WEST_LAG_MS).map(EntryRow::of))
+            repo.refreshChannels(true, false)
+            assertEquals(listOf(current), repo.entries("toonami", at, at + DAY))
+            repo.ensure("toonami", at)
+            repo.ensure(westId, at)
+            val rebuilt = repo.entries("toonami", at, at + DAY)
+            assertEquals(current, rebuilt.first())
+            assertTrue(rebuilt.drop(1).filter { it.itemKey != null }.all { it.itemKey == anime.key })
+            assertEquals(Lineup.shift(rebuilt, westId, Lineup.WEST_LAG_MS),
+                repo.entries(westId, at + Lineup.WEST_LAG_MS, at + DAY + Lineup.WEST_LAG_MS))
+            repo.refreshChannels(true, false)
+            assertEquals(rebuilt, repo.entries("toonami", at, at + DAY))
+        }
+    }
+
+    @Test
     fun decadeStationsPersistScheduleAndDisappearWhenTheirPoolNoLongerQualifies() = runBlocking {
         val library = PlexParse.episodes(
             """{"MediaContainer":{"Metadata":[${

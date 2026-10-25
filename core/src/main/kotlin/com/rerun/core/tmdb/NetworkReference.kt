@@ -99,7 +99,7 @@ class NetworkReference(val channels: List<ChannelReference>, val generated: Stri
 
         /** Reads [toJson] output. A newer or unreadable file gives [EMPTY] rather than an error. */
         fun parse(text: String): NetworkReference {
-            val root = json.parseToJsonElement(text) as? JsonObject ?: return EMPTY
+            val root = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return EMPTY
             val version = (root["version"] as? JsonPrimitive)?.longOrNull ?: return EMPTY
             if (version != VERSION.toLong()) return EMPTY
             val channels = (root["channels"] as? JsonArray).orEmpty().mapNotNull { e ->

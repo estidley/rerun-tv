@@ -49,7 +49,8 @@ class NetworkReferenceTest {
     fun unknownVersionOrGarbageIsEmpty() {
         assertTrue(NetworkReference.parse("""{"version":99,"channels":[]}""").isEmpty)
         assertTrue(NetworkReference.parse("""{"channels":[]}""").isEmpty)
-        assertTrue(runCatching { NetworkReference.parse("not json") }.getOrDefault(NetworkReference.EMPTY).isEmpty)
+        assertTrue(NetworkReference.parse("not json").isEmpty)
+        assertTrue(NetworkReference.parse("{\"version\":1,").isEmpty)
     }
 
     @Test

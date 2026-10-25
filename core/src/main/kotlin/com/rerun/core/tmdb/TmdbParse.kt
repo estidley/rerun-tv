@@ -11,7 +11,7 @@ import kotlinx.serialization.json.longOrNull
 /** A page of `/discover/tv` or `/discover/movie` results. */
 data class DiscoverPage(val ids: List<Long>, val page: Int, val totalPages: Int)
 
-/** Parses the TMDB responses the refresh tool needs. Bad input gives empty results, not errors. */
+/** Parses TMDB exports and responses. Invalid discovery pages fail rather than truncate a refresh. */
 object TmdbParse {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -41,8 +41,17 @@ object TmdbParse {
     fun originCountry(text: String): String? = obj(text)?.str("origin_country")?.trim()?.takeIf { it.isNotEmpty() }
 
     fun discoverPage(text: String): DiscoverPage {
-        val o = obj(text) ?: return DiscoverPage(emptyList(), 1, 0)
-        val ids = (o["results"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.long("id") }
-        return DiscoverPage(ids, o.int("page") ?: 1, o.int("total_pages") ?: 0)
+        val o = requireNotNull(obj(text)) { "Invalid discovery response" }
+        val results = requireNotNull(o["results"] as? JsonArray) { "Missing discovery results" }
+        val page = requireNotNull(o.int("page")) { "Missing discovery page" }
+        val total = requireNotNull(o.int("total_pages")) { "Missing discovery page count" }
+        require(page >= 1 && total >= 0 && (total == 0 || page <= total)) { "Invalid discovery pagination" }
+        val ids = results.map { result ->
+            val id = requireNotNull((result as? JsonObject)?.long("id")) { "Missing discovery item ID" }
+            require(id > 0) { "Invalid discovery item ID" }
+            id
+        }
+        require(total != 0 || ids.isEmpty()) { "Invalid empty discovery page count" }
+        return DiscoverPage(ids, page, total)
     }
 }

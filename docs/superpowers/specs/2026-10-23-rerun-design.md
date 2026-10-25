@@ -38,6 +38,8 @@ diagnostics; HTTP token attachment follows the trusted Plex host policy.
 Toonuki (channel 105, stable ID `toonami`) uses only the Anime genre for episodes and movies,
 without network/title or rating restrictions. Animation alone does not match. Stock legacy rules
 upgrade on lineup refresh while preserving channel names/numbers/order and explicitly edited pools.
+Rule upgrades and stale non-anime Toonuki queues discard future entries after the current airing;
+West is remirrored from East. Ordinary refreshes preserve valid locked schedules.
 
 ## Network reference lists
 
@@ -48,7 +50,7 @@ It writes gitignored `local/tmdb/rerun/tmdb-networks.json`; subsequent builds bu
 The app receives the lists, never the token, and makes no TMDB requests.
 Episodes match their show TMDB ID; movies match the listed production companies, not broadcast history.
 Matching combines reference memberships with the network Plex reports, then falls back to owner-family
-routing only if neither matches. Missing lists retain Plex-based routing. Tests disable local lists.
+routing only if neither matches. Missing or malformed bundled lists retain Plex-based routing. Invalid, missing or inconsistent TMDB discovery pages abort refresh before replacing the previous lists. Tests disable local lists.
 Live refresh coverage and installed-TV behavior still need validation.
 
 ## Scheduling and ads

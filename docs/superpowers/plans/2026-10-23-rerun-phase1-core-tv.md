@@ -7,7 +7,7 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 ## Delivered
 
-- Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged.
+- Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged. Stale future schedules are repaired without replacing the current airing; West remirrors East.
 
 - Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
@@ -30,6 +30,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 Run the full command in AGENTS.md, covering core tests, Android JVM tests, debug APK assembly and lint.
 The suite includes regression coverage for:
+
+- Malformed bundled TMDB references, rejected invalid discovery pages, and stock Toonuki schedule upgrades with current-airing and West-feed preservation.
 
 - Fixed scheduling output fingerprints, large pools, episode order, time blocks and filler boundaries.
 - Room persistence/migrations, transactional library selections and stale snapshot invalidation.

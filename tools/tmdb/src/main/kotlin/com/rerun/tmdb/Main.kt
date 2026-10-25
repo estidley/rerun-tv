@@ -148,8 +148,16 @@ private class Tmdb(private val token: String, private val apiBase: String, priva
         val extra = if (kind == "tv") "&include_null_first_air_dates=true" else ""
         var page = 1
         while (true) {
-            val text = api("/3/discover/$kind?$param=$id&include_adult=false&sort_by=popularity.desc&page=$page$extra") ?: break
-            val p = TmdbParse.discoverPage(text)
+            val text = api("/3/discover/$kind?$param=$id&include_adult=false&sort_by=popularity.desc&page=$page$extra")
+                ?: fail("TMDB discovery was unavailable. Previous network lists were kept; try again later.")
+            val p = try {
+                TmdbParse.discoverPage(text)
+            } catch (_: IllegalArgumentException) {
+                fail("TMDB sent an invalid discovery response. Previous network lists were kept; try again later.")
+            }
+            if (p.page != page || (p.ids.isEmpty() && p.totalPages > page)) {
+                fail("TMDB sent incomplete discovery pages. Previous network lists were kept; try again later.")
+            }
             ids += p.ids
             if (p.ids.isEmpty() || page >= minOf(p.totalPages, maxPages)) break
             page++

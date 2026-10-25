@@ -3,6 +3,7 @@ package com.rerun.core.tmdb
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertFailsWith
 
 class TmdbParseTest {
     @Test
@@ -32,6 +33,14 @@ class TmdbParseTest {
     fun readsDiscoverPages() {
         val page = TmdbParse.discoverPage("""{"page":2,"results":[{"id":5,"name":"A"},{"id":6}],"total_pages":7,"total_results":130}""")
         assertEquals(DiscoverPage(listOf(5, 6), 2, 7), page)
-        assertEquals(DiscoverPage(emptyList(), 1, 0), TmdbParse.discoverPage("{}"))
+        assertEquals(DiscoverPage(emptyList(), 1, 0), TmdbParse.discoverPage("""{"page":1,"results":[],"total_pages":0}"""))
+    }
+
+    @Test
+    fun invalidDiscoverResponsesMustNotMasqueradeAsAnEmptyCatalog() {
+        for (text in listOf("not json", "{}", """{"page":1,"results":{},"total_pages":1}""",
+            """{"page":1,"results":[{}],"total_pages":1}""")) {
+            assertFailsWith<IllegalArgumentException> { TmdbParse.discoverPage(text) }
+        }
     }
 }
