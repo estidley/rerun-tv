@@ -38,6 +38,14 @@ diagnostics; HTTP token attachment follows the trusted Plex host policy.
 ## Scheduling and ads
 
 - Active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.
+- Additional stock decade stations require 24 hours of TV episodes or 12 hours of music tracks
+  in the decade, alongside existing genre stations. Music decades honor the Music switch.
+  Decades span 1900s-2090s; unknown years and items under one minute do not qualify.
+  Episode/track year uses the existing Plex show/album fallback. Movies do not count toward TV decades.
+  IDs and preferred numbers are stable (`decade:tv:<year>`, 1100+; `decade:music:<year>`, 3000+).
+  Ordinary collision resolution, East/West mirroring, editing and schedule preservation apply.
+  Unedited stations below their threshold are removed; edited definitions retain the existing
+  four-hour activation policy, or remain dormant with their settings intact.
 - Schedules extend approximately 48 hours and top up below 24 hours. Epoch times are UTC; time blocks use the device zone.
 - Movies use a shuffled deck; shows preserve episode pointers. Music plays back to back.
 - Video padding ends at the next half-hour boundary and becomes a filler entry.
@@ -72,8 +80,10 @@ resume starts the appropriate current/replacement station. Sign-out cancels and 
 
 Direct playback is preferred for the supported container/video/audio policy in `Playback`.
 Music formats outside the direct-play policy (or missing format metadata) use the Plex audio
-universal transcoder with AAC/HLS output. A failed direct music stream retries through audio
-conversion once per airing; conversion failures show an error instead of a silent Up Next loop.
+music universal transcoder with HTTP/MP3 output, explicitly loaded as progressive audio despite
+the endpoint's `.m3u8` suffix. A failed direct music stream retries through audio
+conversion once per airing; conversion failures show a player error code and available HTTP status
+instead of a silent Up Next loop. Diagnostics omit raw exception messages, URLs and credentials.
 Multi-audio selection uses an explicit Plex stream ID. Audio-only conversion allows video copy without
 1080p/bitrate caps; required video conversion retains its compatibility limits.
 Subtitles can use external or embedded text, otherwise Plex burn-in.
@@ -92,6 +102,11 @@ Start-over alone begins at zero and returns to the prior station when the one-sh
 ## Performance contracts and validation limits
 
 Scheduler candidate indexes and reused lineup calculations preserve deterministic output.
+Stock decade qualification aggregates duration by media kind/decade in one metadata pass and
+reuses totals for unchanged rules, including renamed/renumbered stations. Edited rules/time blocks
+fall back to normal resolution. It retains no per-decade item lists and generates no genre/decade
+cross-product. Forty bounded candidates limit growth; qualifying stations still incur normal
+schedule generation/storage costs, and optional West feeds mirror rather than shuffle independently.
 Library list/map readers share a coalesced off-Main snapshot; invalidation prevents stale publication.
 Parsed playback metadata is cached in memory for at most 16 items and 60 seconds, scoped to server,
 credentials and guide revision. Display capability is checked live; remote track defaults can take

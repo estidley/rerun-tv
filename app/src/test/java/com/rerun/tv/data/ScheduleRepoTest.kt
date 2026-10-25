@@ -41,6 +41,33 @@ class ScheduleRepoTest {
     fun tearDown() = db.close()
 
     @Test
+    fun decadeStationsPersistScheduleAndDisappearWhenTheirPoolNoLongerQualifies() = runBlocking {
+        val library = PlexParse.episodes(
+            """{"MediaContainer":{"Metadata":[${
+                (0 until 48).joinToString(",") {
+                    """{"ratingKey":"e$it","title":"Episode $it","grandparentRatingKey":"show",
+                    "grandparentTitle":"Eighties","index":${it + 1},"year":1985,"duration":1800000}"""
+                }
+            }]}}""", emptyMap(),
+        )
+        repo.refreshChannels(eastWest = true, music = false, items = library)
+        val id = "decade:tv:1980"
+        assertEquals("1980s TV", repo.channel(id)?.name)
+        assertNotNull(repo.channel(Lineup.westId(id)))
+        repo.ensure(id, now)
+        val entries = repo.entries(id, now, now + DAY)
+        assertTrue(entries.isNotEmpty())
+        assertTrue(entries.filter { it.itemKey != null }.all { it.itemKey!!.startsWith("e") })
+        repo.refreshChannels(eastWest = true, music = false)
+        assertEquals(entries, repo.entries(id, now, now + DAY))
+        repo.refreshChannels(eastWest = true, music = false, items = library.dropLast(1))
+        assertNull(repo.channel(id))
+        assertNull(repo.channel(Lineup.westId(id)))
+        assertTrue(repo.entries(id, 0, Long.MAX_VALUE).isEmpty())
+        assertNull(db.states().get(id))
+    }
+
+    @Test
     fun adsStationUsesOnlyTheAdCatalogAndSurvivesRegularLibraryRefreshes() = runBlocking {
         val clip = movie("ad").copy(durationMs = 15_000, partKey = "/library/parts/ad/file.mp4")
         repo.replaceAds("commercials", listOf(AdRow.of(clip)))

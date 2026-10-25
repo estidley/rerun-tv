@@ -14,6 +14,7 @@ Turn it on and something's already playing. Flip channels and you land in the mi
   - Netflix, Prime Video and Apple TV+ originals are spread by genre.
 - **Theme channels:** Fright Night, The Void, Laughing Stock, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. More themes show up only when that genre has at least 4 hours: True-ish (documentaries), Canned Laughter (sitcoms), Sob Story (dramedies), Cold Read (psychic and paranormal), This Just In (news), and others such as The Matinee and Case File.
 - **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.
+- **Decade stations:** your included libraries automatically add TV decade channels with at least **24 hours of episodes** and, when Music is enabled, music decade channels with at least **12 hours of tracks**. For example, "1980s TV" and "1990s Music" appear alongside genre stations. TV decade numbers start at 1100; music decades at 3000, with collisions moved to a free number. Years come from Plex episode/track metadata (falling back to show/album year); missing years and clips shorter than a minute do not count. Supported decades are 1900s through 2090s. Movies keep their existing decade/theme channels. Sync or startup refresh reconciles eligibility; unedited stations disappear when their pool falls below the threshold, while edited stations are preserved under the normal four-hour activation rule. Music decades follow the Music switch, and East/West applies as usual.
 - **Custom channels:** pick genres, shows, collections, decades and ratings right on the TV.
 - **East and West:** Settings can add a West feed of the same schedule, 3 hours later. East keeps its name. West adds `-W` and appears immediately after East in the guide and channel surfing, without changing channel numbers. A new West feed is off air until East has three hours of schedule. Editing either feed edits East and updates its West twin. Disabling the feed currently tuned returns to East, or another active channel, without closing Settings.
 - **Off air:** a time with nothing scheduled says Off Air in the guide and on the screen, then the next program starts. A short break already on the schedule still says Up Next.
@@ -84,9 +85,12 @@ Vintage commercials are generally still under copyright. Keep downloaded copies 
 ## Music playback troubleshooting
 
 Common audio formats play directly, including Plex's `mpeg` container label for MP3.
-Other or unknown formats request audio-only AAC transcoding from Plex instead of silently
+Other or unknown formats, including non-DRM WMA, request audio-only MP3 transcoding from Plex instead of silently
 counting down through unplayed songs. A failed direct audio stream retries once through that
 audio transcoder; if conversion also fails, the player displays a connection/transcoder error.
+The music HTTP endpoint returns a progressive audio stream even though its URL ends in `.m3u8`;
+Rerun handles it as MP3 rather than an HLS playlist. Errors show a player error code and HTTP
+status when available, without request URLs or credentials.
 The song remains aligned to its scheduled position, and menus stay muted.
 Plex must be able to read and transcode the source file; this fallback still needs live-server validation.
 
@@ -98,6 +102,7 @@ Plex must be able to read and transcode the source file; this fallback still nee
 - Large-library scheduling and lineup workloads: `.\gradlew.bat :core:test --tests com.rerun.core.PerformanceWorkloadTest --rerun-tasks`. Timings and baseline-output fingerprints are in `core/build/test-results/test/TEST-com.rerun.core.PerformanceWorkloadTest.xml`; these are local JVM measurements, not TV frame-rate benchmarks.
 - Playback timers are local to visible overlays/music progress instead of polling the whole player UI. Library readers share a list/map snapshot loaded off the UI thread; concurrent cold loads are coalesced and invalidated loads cannot republish stale data.
 - Playback metadata is cached only in memory, up to 16 items for 60 seconds, scoped to the Plex server, credentials, and guide revision. Syncs and sign-out invalidate it; remote Plex track-selection changes may take up to a minute to appear on a subsequent tune. Display/decoder HDR support is still checked on each tune.
+- Decade qualification adds one linear pass through library metadata, storing only duration totals, not copies of every channel pool. Renames reuse those totals; custom rules use the existing resolver. Higher decade thresholds reduce repetitive stations, and no genre-by-decade combinations are generated. At most 40 stock decade stations can qualify (plus optional mirrored West feeds); each active East station still has schedule/persistence costs.
 
 From the repository root on Windows:
 

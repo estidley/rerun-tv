@@ -38,6 +38,8 @@ object Lineup {
     const val WEST_NUMBER_OFFSET = 500
     const val MUSIC_BASE = 2000
     const val ADS_ID = "ads:only"
+    const val TV_DECADE_MIN_MS = 24 * 3_600_000L
+    const val MUSIC_DECADE_MIN_MS = 12 * 3_600_000L
     val adsChannel = ChannelDef(ADS_ID, 998, "Buy Me Maybe", ChannelKind.CUSTOM, Rules(kinds = setOf(MediaKind.MOVIE)))
 
     fun isWest(id: String): Boolean = id.endsWith(":w")
@@ -46,7 +48,7 @@ object Lineup {
 
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =
-        id == ADS_ID || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:") || isWest(id)
+        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:") || isWest(id)
 
     /** Built-ins plus every extra that currently has enough content. No West twins. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
@@ -54,7 +56,11 @@ object Lineup {
         val extras = optionalThemes().filter { qualified(it, library) }
         val features = movieChannels().filter { movieMs >= movieThreshold(it.id) }
         val stations = if (music) musicTemplates(library).filter { qualified(it, library) } else emptyList()
-        return Catalog.builtInChannels() + extras + features + stations
+        val totals = decadeTotals(library)
+        val decades = decadeTemplates.filter {
+            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= decadeMinimum(it)
+        }
+        return Catalog.builtInChannels() + extras + features + stations + decades
     }
 
     fun optionalThemes(): List<ChannelDef> = optional
@@ -76,14 +82,22 @@ object Lineup {
     ): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
         val durations = HashMap<ChannelDef, Long>()
-        fun duration(def: ChannelDef): Long = durations.getOrPut(def) { poolMs(def, library) }
+        val decadeTotals = decadeTotals(library)
+        val decadeDurations = decadeTemplates.associate { it.rules to decadeTotals.getOrDefault(it.id, 0L) }
+        fun duration(def: ChannelDef): Long = durations.getOrPut(def) {
+            if (def.blocks.isEmpty()) decadeDurations[def.rules] ?: poolMs(def, library)
+            else poolMs(def, library)
+        }
         val builtIn = Catalog.builtInChannels()
         val stations = musicTemplates(library)
         val movieMs = moviePoolMs(library)
         val qualified = (builtIn + optional.filter { duration(it) >= Resolver.DORMANT_MS } +
             movies.filter { movieMs >= movieThreshold(it.id) } +
-            if (music) stations.filter { duration(it) >= Resolver.DORMANT_MS } else emptyList()).map { it.id }.toSet()
-        val templates = builtIn + optional + movies + stations
+            (if (music) stations.filter { duration(it) >= Resolver.DORMANT_MS } else emptyList()) +
+            decadeTemplates.filter {
+                (it.kind != ChannelKind.MUSIC || music) && duration(it) >= decadeMinimum(it)
+            }).map { it.id }.toSet()
+        val templates = builtIn + optional + movies + stations + decadeTemplates
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
@@ -189,6 +203,40 @@ object Lineup {
         else -> Long.MAX_VALUE
     }
 
+    private fun decadeMinimum(def: ChannelDef): Long =
+        if (def.kind == ChannelKind.MUSIC) MUSIC_DECADE_MIN_MS else TV_DECADE_MIN_MS
+
+    /** Stock decade qualification is one pass, without retaining a pool per candidate channel. */
+    private fun decadeTotals(library: List<MediaItem>): Map<String, Long> {
+        val totals = HashMap<String, Long>()
+        for (item in library) {
+            if (item.durationMs < Resolver.MIN_ITEM_MS) continue
+            val year = item.year?.takeIf { it in 1900..2099 } ?: continue
+            val type = when (item.kind) {
+                MediaKind.EPISODE -> "tv"
+                MediaKind.TRACK -> "music"
+                else -> continue
+            }
+            val id = "decade:$type:${year / 10 * 10}"
+            totals[id] = totals.getOrDefault(id, 0L) + item.durationMs
+        }
+        return totals
+    }
+
+    private val decadeTemplates: List<ChannelDef> = (1900..2090 step 10).flatMap { decade ->
+        val index = (decade - 1900) / 10
+        listOf(
+            ChannelDef(
+                "decade:tv:$decade", 1100 + index, "${decade}s TV", ChannelKind.THEME,
+                Rules(decades = setOf(decade), kinds = setOf(MediaKind.EPISODE)),
+            ),
+            ChannelDef(
+                "decade:music:$decade", 3000 + index, "${decade}s Music", ChannelKind.MUSIC,
+                Rules(decades = setOf(decade), kinds = setOf(MediaKind.TRACK)),
+            ),
+        )
+    }
+
     private fun looksStock(stored: ChannelDef, template: ChannelDef): Boolean {
         val name = Catalog.stripFeed(stored.name)
         val nameOk = name == template.name || name in Catalog.retiredNames(template.id)
@@ -250,7 +298,7 @@ object Lineup {
     }
 
     private fun reservedNumbers(): Set<Int> {
-        val east = (Catalog.builtInChannels() + optional + movies).map { it.number }
+        val east = (Catalog.builtInChannels() + optional + movies + decadeTemplates).map { it.number }
         return (east + east.map { it + WEST_NUMBER_OFFSET } + RESTART_NUMBER).toSet()
     }
 

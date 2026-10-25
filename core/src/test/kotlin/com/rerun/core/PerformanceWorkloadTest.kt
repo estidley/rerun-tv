@@ -13,6 +13,7 @@ import java.time.ZoneId
 import kotlin.system.measureNanoTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** Fixed synthetic libraries exercise large-library paths without a Plex server or timing thresholds. */
 class PerformanceWorkloadTest {
@@ -44,8 +45,53 @@ class PerformanceWorkloadTest {
             episode("e$it", "Show ${it % 100}", episode = it, genres = setOf("Comedy", "Drama"), network = "Netflix")
         } + (0 until 500).map { movie("m$it", genres = setOf("Action", "Drama"), studio = "Walt Disney Pictures") }
         measure("lineup-2500", "6c5244768dcce0e76ff7f4eca43999ca01e5dcb31e9b496efbcf5ef0e683d093") {
-            Lineup.plan(library, emptyList(), eastWest = true, music = false)
+            val plan = Lineup.plan(library, emptyList(), eastWest = true, music = false)
+            // Keep the original workload fingerprint for all pre-existing channels.
+            plan.copy(channels = plan.channels.filterNot { it.def.id.startsWith("decade:") })
         }
+    }
+
+    @Test
+    fun largeDecadeLineupUsesOneAdditionalLibraryPass() {
+        val items = (0 until 20_000).map {
+            episode("e$it", "Show ${it % 100}", episode = it, year = 1900 + it % 200)
+        } + (0 until 20_000).map { track("t$it").copy(year = 1900 + it % 200) }
+        var reads = 0
+        val counted = object : AbstractList<MediaItem>() {
+            override val size: Int get() = items.size
+            override fun get(index: Int): MediaItem {
+                reads++
+                return items[index]
+            }
+        }
+        var plan = Lineup.plan(counted, emptyList(), eastWest = false, music = true)
+        val withDecades = reads
+        reads = 0
+        val unknownYears = counted.map { it.copy(year = null) }
+        reads = 0
+        val unknownCounted = object : AbstractList<MediaItem>() {
+            override val size: Int get() = unknownYears.size
+            override fun get(index: Int): MediaItem {
+                reads++
+                return unknownYears[index]
+            }
+        }
+        Lineup.plan(unknownCounted, emptyList(), eastWest = false, music = true)
+        assertEquals(reads, withDecades, "Qualifying decades must not add per-channel library scans")
+        assertEquals(40, plan.channels.count { it.def.id.startsWith("decade:") })
+        reads = 0
+        val renamed = plan.channels.filter { it.def.id.startsWith("decade:") }.map {
+            com.rerun.core.catalog.StoredChannel(it.def.copy(name = "My ${it.def.name}"), true)
+        }
+        Lineup.plan(counted, renamed, eastWest = false, music = true)
+        assertEquals(withDecades, reads, "Renames must reuse decade totals rather than scan each pool")
+        val expected = fingerprint(plan)
+        val elapsed = measureNanoTime {
+            plan = Lineup.plan(items, emptyList(), eastWest = false, music = true)
+        }
+        assertEquals(expected, fingerprint(plan))
+        assertTrue(plan.channels.map { it.def.number }.distinct().size == plan.channels.size)
+        println("PERF decade-lineup-40000 elapsedMs=${elapsed / 1_000_000.0} fingerprint=$expected")
     }
 
     private fun measure(name: String, expected: String, operation: () -> Any) {
