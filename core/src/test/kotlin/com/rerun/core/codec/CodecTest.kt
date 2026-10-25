@@ -30,6 +30,7 @@ class CodecTest {
                 ratings = setOf("R"), kinds = setOf(MediaKind.MOVIE), labels = setOf("Halloween"),
                 collections = setOf("Friday the 13th"), tmdbIds = setOf("948"), titles = setOf("Halloween"),
                 networks = setOf("syfy"), bucket = 1, bucketCount = 3,
+                franchises = setOf("marvel", "dc"),
             ),
             order = PlayOrder.IN_ORDER,
             blocks = listOf(TimeBlock(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), LocalTime.of(21, 0), LocalTime.of(3, 0), Rules(ratings = setOf("R"), bucket = 2, bucketCount = 4))),
@@ -50,6 +51,8 @@ class CodecTest {
         val encoded = ChannelCodec.encode(ChannelDef("x", 1, "X", ChannelKind.CUSTOM, Rules()))
         val stripped = encoded.replace(""","kinds":["MOVIE","EPISODE"]""", "")
         assertEquals(setOf(MediaKind.MOVIE, MediaKind.EPISODE), ChannelCodec.decode(stripped).rules.kinds)
+        val withoutFranchises = encoded.replace(""","franchises":[]""", "")
+        assertEquals(emptySet(), ChannelCodec.decode(withoutFranchises).rules.franchises)
     }
 
     @Test

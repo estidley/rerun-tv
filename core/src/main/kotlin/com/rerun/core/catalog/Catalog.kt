@@ -170,7 +170,7 @@ object Catalog {
                 kidsSafe = true,
             ),
         )
-        return net + themes
+        return net + themes + ComicCatalog.channels
     }
 
     /** Previous on-screen names. A refresh may replace these; a name the user typed stays. */

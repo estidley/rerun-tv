@@ -44,8 +44,8 @@ class PerformanceWorkloadTest {
         val library: List<MediaItem> = (0 until 2_000).map {
             episode("e$it", "Show ${it % 100}", episode = it, genres = setOf("Comedy", "Drama"), network = "Netflix")
         } + (0 until 500).map { movie("m$it", genres = setOf("Action", "Drama"), studio = "Walt Disney Pictures") }
-        // Baseline includes Toonuki's intentional change to Anime-only rules.
-        measure("lineup-2500", "c984927b1a743d426ed33843158220e2eb0978c93b500626ebcc0624a1ff28c8") {
+        // Baseline includes the five comic channels and the serialized franchise-rule field.
+        measure("lineup-2500", "f8e12e71b49879d7e571d0f8730431e00685c919a02dbd9ded137a48268f8663") {
             val plan = Lineup.plan(library, emptyList(), eastWest = true, music = false)
             // Keep the original workload fingerprint for all pre-existing channels.
             plan.copy(channels = plan.channels.filterNot { it.def.id.startsWith("decade:") })

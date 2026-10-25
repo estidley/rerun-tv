@@ -19,6 +19,7 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
  * shuffle (random show, weighted by episode count, episodes in order). Every program is
  * padded to the next :00/:30 with a FILLER entry. Music stations play back to back.
+ * Chronology channels use one ordered deck across movies and episodes instead of the movie rotation.
  */
 class Scheduler(private val zone: ZoneId) {
 
@@ -68,6 +69,8 @@ class Scheduler(private val zone: ZoneId) {
 
     /** Pools stay fixed throughout an extension; prepare lookup/order data once, not per airing. */
     private class Candidates(val items: List<MediaItem>, music: Boolean) {
+        val chronology by lazy { com.rerun.core.catalog.ComicCatalog.ordered(items) }
+        val byKey by lazy { items.associateBy { it.key } }
         val movies = items.filter { it.kind == MediaKind.MOVIE }
         val episodes = if (music) items else items.filter { it.kind == MediaKind.EPISODE }
         val moviesByKey by lazy { movies.associateBy { it.key } }
@@ -96,6 +99,8 @@ class Scheduler(private val zone: ZoneId) {
         private fun rng(): Random = Random(seed + rngCalls).also { rngCalls++ }
 
         fun pick(def: ChannelDef, candidates: Candidates): MediaItem {
+            if (def.order == PlayOrder.CHRONOLOGICAL) return pickChronological(candidates)
+            if (pointers.remove(CHRONOLOGY_KEY) != null) deck.clear()
             if (def.kind == ChannelKind.MUSIC) return pickEpisode(def, candidates)
             val movies = candidates.movies
             val episodes = candidates.episodes
@@ -105,6 +110,16 @@ class Scheduler(private val zone: ZoneId) {
                 else -> msSinceMovie >= def.movieEveryMs
             }
             return if (wantMovie) pickMovie(def, candidates) else pickEpisode(def, candidates)
+        }
+
+        private fun pickChronological(candidates: Candidates): MediaItem {
+            if (pointers[CHRONOLOGY_KEY] != 1) {
+                deck.clear()
+                pointers[CHRONOLOGY_KEY] = 1
+            }
+            deck.removeAll { it !in candidates.byKey }
+            if (deck.isEmpty()) deck.addAll(candidates.chronology.map { it.key })
+            return candidates.byKey.getValue(deck.removeAt(0))
         }
 
         private fun pickMovie(def: ChannelDef, candidates: Candidates): MediaItem {
@@ -153,5 +168,6 @@ class Scheduler(private val zone: ZoneId) {
     private companion object {
         const val RECENT_CAP = 200
         const val RR_KEY = "__round_robin"
+        const val CHRONOLOGY_KEY = "__chronology"
     }
 }

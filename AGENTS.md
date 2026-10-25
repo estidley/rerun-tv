@@ -27,6 +27,9 @@ Keep PR workflows read-only and secret-free; release signing is not part of CI.
 
 ## Behavioral invariants
 
+- Comic channels use specific franchise metadata, curated title/year matches or explicit Marvel/DC labels/collections, never generic studio ownership. Marvelous Timeline combines movies/episodes in persisted universe-group order and season positions; normal channels retain their shuffle behavior. New station numbers must avoid custom-channel collisions. Missing franchise JSON fields decode to empty sets.
+- Generate/integrate the full SVG icon library only after the user approves the five sample designs.
+
 - Toonuki uses only the Anime genre for movies/episodes; it has no network/title or age-rating restriction. Upgrade only its legacy stock rules and preserve user-edited pools.
 - Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only.
 - The TMDB token is build-time only: read from `TMDB_TOKEN` (or `install.ps1 -TmdbToken`), sent only in the Authorization header, never written to disk, the repo, the APK, logs or URLs. Generated lists stay in gitignored `local/`; tests run with `rerun.tmdb=off`.

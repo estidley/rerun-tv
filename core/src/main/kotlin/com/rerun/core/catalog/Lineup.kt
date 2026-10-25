@@ -48,7 +48,8 @@ object Lineup {
 
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =
-        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:") || isWest(id)
+        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") ||
+            id.startsWith("music:") || id.startsWith("marvel:") || id.startsWith("dc:") || isWest(id)
 
     /** Built-ins plus every extra that currently has enough content. No West twins. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {

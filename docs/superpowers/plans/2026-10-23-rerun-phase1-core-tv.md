@@ -7,6 +7,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 ## Delivered
 
+- Marvelous TV, Marvelous Movies, Marvelous Timeline, Detective Club TV and Detective Pictures; persisted mixed-media universe ordering, season positions and explicit franchise metadata/tag matching.
+
 - Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged. Stale future schedules are repaired without replacing the current airing; West remirrors East.
 
 - Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
@@ -56,6 +58,9 @@ These are synthetic local measurements with preserved output fingerprints, not T
 Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timings vary by machine.
 
 ## Physical TV and live Plex acceptance still open
+
+- [ ] Inspect Marvel/DC matching on the real Plex library, annotate unrecognized titles with Marvel/DC labels, and verify MCU seasons, legacy-universe transitions, missing files and restart continuation.
+- [ ] Approve the five SVG samples before generating/integrating the full icon library; check TV-distance legibility in all guide themes.
 
 - [ ] Confirm Toonuki activates with four hours of Anime-tagged Plex content and excludes Animation-only items after refresh.
 

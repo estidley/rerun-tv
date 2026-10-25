@@ -53,6 +53,23 @@ Matching combines reference memberships with the network Plex reports, then fall
 routing only if neither matches. Missing or malformed bundled lists retain Plex-based routing. Invalid, missing or inconsistent TMDB discovery pages abort refresh before replacing the previous lists. Tests disable local lists.
 Live refresh coverage and installed-TV behavior still need validation.
 
+## Comic franchise channels
+
+`ComicCatalog` provides Marvelous TV/Movies/Timeline and Detective Club TV/Detective Pictures.
+Franchise inclusion is separate from network ownership: exact production metadata, explicit Plex labels/collections,
+and a curated title/kind/year registry qualify items. Generic distributors and genres alone do not.
+`Rules.franchises` is an additional OR inclusion source, with the existing kind/rating filters still applied.
+Channel JSON missing this field decodes to an empty set; no Room schema migration is needed.
+New station numbers are preferred values and move around existing custom channels. User edits remain preserved.
+
+Marvelous Timeline uses `CHRONOLOGICAL` order: a single persisted deck contains both movies and episodes.
+The MCU group follows the Marvel source verified 2026-10-25 with independent TV-season positions.
+Legacy universes follow as separate groups; time-travel placements are an editorial viewing order.
+Unmapped seasons/items use the documented grouped fallback, and missing library files are skipped.
+A state marker prevents a prior shuffle deck from being reused as chronology. Normal movie/episode and music
+schedulers retain their existing algorithms. The guide, filler, West feeds and locked schedule rules still apply.
+Five SVG icon samples are review artifacts; no icon assets are added to the app before design approval.
+
 ## Scheduling and ads
 
 - Active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.

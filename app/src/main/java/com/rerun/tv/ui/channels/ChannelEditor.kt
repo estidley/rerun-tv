@@ -123,8 +123,13 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                         }
                         TvButton(label, { update(d.rules.copy(kinds = kinds)) }, selected = d.rules.kinds == kinds)
                     }
-                    chipRow(listOf(PlayOrder.SHUFFLE, PlayOrder.IN_ORDER)) { o ->
-                        TvButton(if (o == PlayOrder.SHUFFLE) "Shuffle" else "In order", { draft = d.copy(order = o) }, selected = d.order == o)
+                    chipRow(PlayOrder.entries.toList()) { o ->
+                        val label = when (o) {
+                            PlayOrder.SHUFFLE -> "Shuffle"
+                            PlayOrder.IN_ORDER -> "In order"
+                            PlayOrder.CHRONOLOGICAL -> "Universe timeline"
+                        }
+                        TvButton(label, { draft = d.copy(order = o) }, selected = d.order == o)
                     }
                     chipRow(listOf("Kids-safe", "Hidden")) { label ->
                         if (label == "Kids-safe") TvButton(label, { draft = d.copy(kidsSafe = !d.kidsSafe) }, selected = d.kidsSafe)
@@ -151,6 +156,15 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             }
             item { Section("Decades") { chipRow(f.decades) { y -> TvButton("${y}s", { update(d.rules.copy(decades = d.rules.decades.toggle(y))) }, selected = y in d.rules.decades) } } }
             item { Section("Ratings") { chipRow(f.ratings) { r -> TvButton(r, { update(d.rules.copy(ratings = d.rules.ratings.toggle(r))) }, selected = r in d.rules.ratings) } } }
+            item {
+                Section("Comic universes") {
+                    chipRow(listOf("marvel", "dc")) { franchise ->
+                        TvButton(if (franchise == "marvel") "Marvel" else "DC",
+                            { update(d.rules.copy(franchises = d.rules.franchises.toggle(franchise))) },
+                            selected = franchise in d.rules.franchises)
+                    }
+                }
+            }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     error?.let { BasicText(it, style = Retro.Body.copy(color = Color(0xFFFF6B6B))) }
