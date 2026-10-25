@@ -4,6 +4,7 @@
 
 - `core`: pure Kotlin/JVM models, Plex parsing and playback policy, catalog/routing, scheduling, and filler planning.
 - `app`: Android Compose UI, Room persistence, HTTP, and one Media3 player per activity.
+- `tools/tmdb`: build-time TMDB refresh (`:tmdb:run`) that writes the gitignored `local/tmdb/rerun/tmdb-networks.json`, which `core` bundles as a resource.
 - `scripts`: Windows PowerShell build/install/key helpers. `tools/commercials` is a separate local media-preparation utility.
 - Use the Gradle wrapper and versions in `gradle/libs.versions.toml`; Android SDK settings are in `app/build.gradle.kts`.
 - Windows requires JDK 17+ and Android SDK platform 37. Initialize the JDK in each fresh shell:
@@ -11,7 +12,7 @@
 ```powershell
 . .\scripts\jdk.ps1
 Set-RerunJdk
-.\gradlew.bat :core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain --quiet
+.\gradlew.bat :core:test :app:testDebugUnitTest :tmdb:assemble :app:assembleDebug :app:lintDebug --console=plain --quiet
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
 ```
 
@@ -26,6 +27,8 @@ Keep PR workflows read-only and secret-free; release signing is not part of CI.
 
 ## Behavioral invariants
 
+- Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only.
+- The TMDB token is build-time only: read from `TMDB_TOKEN` (or `install.ps1 -TmdbToken`), sent only in the Authorization header, never written to disk, the repo, the APK, logs or URLs. Generated lists stay in gitignored `local/`; tests run with `rerun.tmdb=off`.
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
 - Preserve explicit Room migrations and existing preferences; do not add destructive database fallback. Keep keystores, `keystore.properties`, and local SDK configuration out of version control.
 - Routine scheduling appends locked entries. Library inclusion changes intentionally invalidate schedules; channel edits preserve the currently airing entry and rebuild the future.

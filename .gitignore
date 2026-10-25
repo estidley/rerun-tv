@@ -12,3 +12,5 @@ captures/
 *.jks
 .kotlin/
 .superpowers/
+# TMDB network lists from :tmdb:run (built locally with your own token)
+local/

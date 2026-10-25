@@ -13,9 +13,20 @@ kotlin {
     }
 }
 
+// Network lists written by `:tmdb:run` (gitignored). Without them channels use Plex's network field.
+sourceSets {
+    main {
+        resources.srcDir(rootProject.file("local/tmdb"))
+    }
+}
+
 dependencies {
     implementation(libs.serialization.json)
     testImplementation(kotlin("test"))
 }
 
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    // Keep tests independent of a locally generated TMDB reference.
+    systemProperty("rerun.tmdb", "off")
+}

@@ -4,7 +4,7 @@ Old-school cable TV, built from your own Plex library. For Fire TV and Android T
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
-- **Network channels:** Dinky Channel, Dinky XD, Slimelodeon, Cartoon Notwork, Kaboomerang, Toonuki, PBJ Kids, Sigh-Fi Channel, USB Network, HMO, and more. The names on screen are parodies. Shows still land by the network and studio stored in Plex.
+- **Network channels:** Dinky Channel, Dinky XD, Slimelodeon, Cartoon Notwork, Kaboomerang, Toonuki, PBJ Kids, Sigh-Fi Channel, USB Network, HMO, and more. The names on screen are parodies; each channel keeps its real network name behind the scenes. With TMDB lists (below), a show lands on every network it really aired on. Without them, shows land by the network and studio stored in Plex.
 - **Streaming originals follow the studio and the audience:**
   - Disney+ kids shows go to Dinky Channel.
   - Marvel and live-action Star Wars go to **The Backlot**.
@@ -60,6 +60,34 @@ The first build creates a private release key (`rerun-release.jks` and `keystore
 5. On the TV, the app shows a code. Enter it at **plex.tv/link**, pick your server, select the libraries to include, and continue to the first sync. Your choices are saved for future syncs; newly added libraries are not included automatically. Music libraries are only synced when Music is enabled in Settings. Existing installations without a saved selection continue syncing all supported libraries.
 
 To remove it: `.\scripts\restore.ps1 -TvIp 192.168.1.50`
+
+## Real network lists from TMDB (optional)
+
+Plex stores one network per show, and nothing at all about which network aired a movie. To fill channels with what each network really aired, the build can download lists from [TMDB](https://www.themoviedb.org/): every show each network aired, plus made-for-TV movies from that network's own studios (Disney Channel Original Movies, HBO Films, and so on). Shows that aired on several networks appear on each of those channels.
+
+You need your own free TMDB token. It's only used while building and is never saved in the repo or the app.
+
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup) and verify your email.
+2. Go to **Settings > API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)) and request an API key. Choose **Developer**, accept the terms, and fill in the short form (personal or non-commercial use is fine).
+3. That page then shows two values. Copy the **API Read Access Token**, the long one that starts with `eyJ`. Rerun doesn't use the shorter **API Key**.
+4. Build and install with the token:
+
+   ```powershell
+   .\scripts\install.ps1 -TvIp 192.168.1.50 -TmdbToken 'eyJhbGciOi...'
+   ```
+
+   Or keep it out of your command history by setting it for the current shell only:
+
+   ```powershell
+   $env:TMDB_TOKEN = 'eyJhbGciOi...'
+   .\scripts\install.ps1 -TvIp 192.168.1.50
+   ```
+
+The refresh writes `local\tmdb\rerun\tmdb-networks.json`. Git ignores it, and later builds reuse it until you pass the token again. To refresh without installing, set `TMDB_TOKEN` and run `.\gradlew.bat :tmdb:run`. The refresh prints each channel's real network, the TMDB networks it matched, and how many shows and movies it found. It also warns about any network it couldn't find.
+
+TMDB doesn't track which theatrical movies a channel showed. Movies outside a network's own studios still use the studio-owner rules.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ## Remote
 

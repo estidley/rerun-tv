@@ -11,11 +11,18 @@
   a later install signed with a different key will not update the app, and
   saved Plex tokens will not carry over.
 
+  Optional: -TmdbToken refreshes the lists of what really aired on each network
+  (see README, "Real network lists from TMDB"). Use the TMDB "API Read Access Token".
+  It is only passed to the refresh step and is never saved; you can set TMDB_TOKEN
+  in your shell instead. Without either, the last refresh is reused if there is one.
+
   Usage:  .\scripts\install.ps1 -TvIp 192.168.1.50
+          .\scripts\install.ps1 -TvIp 192.168.1.50 -TmdbToken 'eyJhbGciOi...'
 #>
 param(
     [Parameter(Mandatory = $true)][string]$TvIp,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [string]$TmdbToken
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -32,6 +39,23 @@ if (-not $env:ANDROID_HOME -and -not (Test-Path "$root\local.properties")) {
 if (-not $SkipBuild) {
     & "$PSScriptRoot\keystore.ps1"
     if (-not $?) { throw 'Keystore setup failed' }
+    $tmdbList = Join-Path $root 'local\tmdb\rerun\tmdb-networks.json'
+    $token = if ($TmdbToken) { $TmdbToken } else { $env:TMDB_TOKEN }
+    if ($token) {
+        $previous = $env:TMDB_TOKEN
+        $env:TMDB_TOKEN = $token
+        try {
+            & "$root\gradlew.bat" ':tmdb:run' --console=plain
+            if ($LASTEXITCODE -ne 0) { throw 'TMDB network refresh failed' }
+        }
+        finally { $env:TMDB_TOKEN = $previous }
+    }
+    elseif (Test-Path $tmdbList) {
+        Write-Information 'Using the TMDB network lists from the last refresh.' -InformationAction Continue
+    }
+    else {
+        Write-Warning 'No TMDB token, so channels use the network Plex reports. See README: Real network lists from TMDB.'
+    }
     & "$root\gradlew.bat" ':app:assembleRelease' --console=plain
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 }

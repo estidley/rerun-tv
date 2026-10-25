@@ -26,7 +26,7 @@ data class Facets(
                 collections = items.flatMap { it.collections }.distinct().sortedWith(ci),
                 decades = items.mapNotNull { it.year?.let { y -> y / 10 * 10 } }.distinct().sorted(),
                 ratings = items.mapNotNull { it.contentRating }.distinct().sortedWith(ci),
-                networks = items.mapNotNull { Resolver.networkOf(it) }.distinct().sortedBy { id -> Catalog.networks.firstOrNull { it.id == id }?.number ?: 999 },
+                networks = items.flatMapTo(LinkedHashSet()) { Resolver.networksOf(it) }.sortedBy { Catalog.numberOf(it) },
             )
         }
     }

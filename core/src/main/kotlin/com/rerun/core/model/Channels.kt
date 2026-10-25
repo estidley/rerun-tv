@@ -59,7 +59,14 @@ data class Rules(
         get() = networks.isNotEmpty() || titles.isNotEmpty() || tmdbIds.isNotEmpty() ||
             labels.isNotEmpty() || collections.isNotEmpty() || genres.isNotEmpty()
 
-    fun matches(item: MediaItem, networkId: String? = item.network): Boolean {
+    fun matches(item: MediaItem, networkId: String? = item.network): Boolean =
+        matchesWith(item) { networkId != null && norm(networkId) in nNetworks }
+
+    /** Like [matches], for an item that belongs to several networks (it aired on each one). */
+    fun matches(item: MediaItem, networkIds: Set<String>): Boolean =
+        matchesWith(item) { networkIds.any { norm(it) in nNetworks } }
+
+    private inline fun matchesWith(item: MediaItem, networkHit: () -> Boolean): Boolean {
         if (item.kind !in kinds) return false
         if (bucketCount > 1 && bucketOf(item, bucketCount) != bucket) return false
         if (nExclude.isNotEmpty() && item.genres.any { norm(it) in nExclude }) return false
@@ -73,7 +80,7 @@ data class Rules(
         }
         if (!hasIncludeSource) return true
 
-        if (networkId != null && norm(networkId) in nNetworks) return true
+        if (nNetworks.isNotEmpty() && networkHit()) return true
         val title = if (item.kind == MediaKind.EPISODE) item.showTitle else item.title
         if (nTitles.isNotEmpty() && title != null && titleKey(title) in nTitles) return true
         if (nTmdb.isNotEmpty() && item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true

@@ -36,7 +36,7 @@ class Scheduler(private val zone: ZoneId) {
         val music = def.kind == ChannelKind.MUSIC
         val base = Candidates(items.filter { Resolver.inBase(def, it) }.ifEmpty { items }, music)
         val blockSets = def.blocks.map { b ->
-            Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) null else Resolver.networkOf(it)) }, music)
+            Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) emptySet() else Resolver.networksOf(it)) }, music)
         }
 
         val floor = gridFloor(nowMs)

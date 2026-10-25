@@ -13,4 +13,5 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "rerun"
-include(":core", ":app")
+include(":core", ":app", ":tmdb")
+project(":tmdb").projectDir = file("tools/tmdb")

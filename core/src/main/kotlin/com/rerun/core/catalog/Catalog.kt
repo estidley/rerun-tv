@@ -8,47 +8,109 @@ import com.rerun.core.model.TimeBlock
 import java.time.DayOfWeek
 import java.time.LocalTime
 
+/**
+ * One built-in network channel.
+ *
+ * [name] is the parody shown on screen. [realName] is the real network it stands for and
+ * never appears on screen. [aliases] are the real network names as Plex and TMDB spell them;
+ * they match Plex metadata and pick the TMDB networks whose show lists feed the channel.
+ * [tmdbCompanies] are TMDB production companies whose movies (made-for-TV films, mostly)
+ * belong on the channel.
+ */
 data class NetworkDef(
     val id: String,
     val name: String,
     val number: Int,
     val aliases: List<String>,
     val kidsSafe: Boolean,
+    val realName: String,
+    val tmdbCompanies: List<String> = emptyList(),
 )
 
-/**
- * Built-in channel lineup. [NetworkDef.name] is the on-screen parody; [NetworkDef.aliases]
- * stay the real Plex network strings so matching still works.
- */
+/** Built-in channel lineup. See [NetworkDef] for which names show on screen. */
 object Catalog {
     val networks: List<NetworkDef> = listOf(
-        NetworkDef("disney", "Dinky Channel", 101, listOf("Disney Channel", "Toon Disney"), true),
-        NetworkDef("nick", "Slimelodeon", 102, listOf("Nickelodeon", "Nicktoons", "Nick", "TeenNick"), true),
-        NetworkDef("cn", "Cartoon Notwork", 103, listOf("Cartoon Network", "CN"), true),
-        NetworkDef("boomerang", "Kaboomerang", 104, listOf("Boomerang"), true),
-        NetworkDef("toonami", "Toonuki", 105, listOf("Toonami"), true),
-        NetworkDef("pbs", "PBJ", 106, listOf("PBS"), false),
-        NetworkDef("pbskids", "PBJ Kids", 107, listOf("PBS Kids"), true),
-        NetworkDef("disneyxd", "Dinky XD", 108, listOf("Disney XD", "Jetix"), true),
-        NetworkDef("touchstone", "The Backlot", 109, emptyList(), false),
-        NetworkDef("syfy", "Sigh-Fi Channel", 110, listOf("Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"), false),
-        NetworkDef("usa", "USB Network", 111, listOf("USA Network", "USA"), false),
-        NetworkDef("tnt", "DNT", 112, listOf("TNT"), false),
-        NetworkDef("tbs", "TBSP", 113, listOf("TBS"), false),
-        NetworkDef("fx", "SFX", 114, listOf("FX", "FXX", "FX Networks"), false),
-        NetworkDef("amc", "PMC", 115, listOf("AMC"), false),
-        NetworkDef("mtv", "Music TV", 116, listOf("MTV"), false),
-        NetworkDef("comedycentral", "Tragedy Central", 117, listOf("Comedy Central"), false),
-        NetworkDef("freeform", "XYZ Family", 118, listOf("ABC Family", "Freeform", "Fox Family"), false),
-        NetworkDef("paramountnet", "Spork TV", 119, listOf("Paramount Network", "Spike", "Spike TV"), false),
-        NetworkDef("discovery", "Recovery Channel", 120, listOf("Discovery", "Discovery Channel"), false),
-        NetworkDef("history", "Hysteria Channel", 121, listOf("History", "History Channel", "The History Channel"), false),
-        NetworkDef("food", "Feud Network", 122, listOf("Food Network"), false),
-        NetworkDef("hgtv", "GGTV", 123, listOf("HGTV"), false),
-        NetworkDef("adultswim", "Adult Whim", 124, listOf("Adult Swim", "[adult swim]"), false),
-        NetworkDef("nickjr", "Slime Jr.", 125, listOf("Nick Jr.", "Nick Jr"), true),
-        NetworkDef("disneyjr", "Playhouse Dinky", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true),
-        NetworkDef("hbo", "HMO", 130, listOf("HBO", "Cinemax"), false),
+        NetworkDef("disney", "Dinky Channel", 101, listOf("Disney Channel", "Toon Disney"), true,
+            realName = "Disney Channel", tmdbCompanies = listOf("Disney Channel"),
+        ),
+        NetworkDef("nick", "Slimelodeon", 102, listOf("Nickelodeon", "Nicktoons", "Nick", "TeenNick"), true,
+            realName = "Nickelodeon", tmdbCompanies = listOf("Nickelodeon Movies", "Nickelodeon Productions"),
+        ),
+        NetworkDef("cn", "Cartoon Notwork", 103, listOf("Cartoon Network", "CN"), true,
+            realName = "Cartoon Network", tmdbCompanies = listOf("Cartoon Network Studios"),
+        ),
+        NetworkDef("boomerang", "Kaboomerang", 104, listOf("Boomerang"), true,
+            realName = "Boomerang",
+        ),
+        NetworkDef("toonami", "Toonuki", 105, listOf("Toonami"), true,
+            realName = "Toonami",
+        ),
+        NetworkDef("pbs", "PBJ", 106, listOf("PBS"), false,
+            realName = "PBS", tmdbCompanies = listOf("PBS"),
+        ),
+        NetworkDef("pbskids", "PBJ Kids", 107, listOf("PBS Kids"), true,
+            realName = "PBS Kids",
+        ),
+        NetworkDef("disneyxd", "Dinky XD", 108, listOf("Disney XD", "Jetix"), true,
+            realName = "Disney XD",
+        ),
+        NetworkDef("touchstone", "The Backlot", 109, emptyList(), false,
+            realName = "Touchstone",
+        ),
+        NetworkDef("syfy", "Sigh-Fi Channel", 110, listOf("Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"), false,
+            realName = "Syfy", tmdbCompanies = listOf("Syfy"),
+        ),
+        NetworkDef("usa", "USB Network", 111, listOf("USA Network", "USA"), false,
+            realName = "USA Network",
+        ),
+        NetworkDef("tnt", "DNT", 112, listOf("TNT"), false,
+            realName = "TNT",
+        ),
+        NetworkDef("tbs", "TBSP", 113, listOf("TBS"), false,
+            realName = "TBS",
+        ),
+        NetworkDef("fx", "SFX", 114, listOf("FX", "FXX", "FX Networks"), false,
+            realName = "FX",
+        ),
+        NetworkDef("amc", "PMC", 115, listOf("AMC"), false,
+            realName = "AMC",
+        ),
+        NetworkDef("mtv", "Music TV", 116, listOf("MTV"), false,
+            realName = "MTV", tmdbCompanies = listOf("MTV Films"),
+        ),
+        NetworkDef("comedycentral", "Tragedy Central", 117, listOf("Comedy Central"), false,
+            realName = "Comedy Central", tmdbCompanies = listOf("Comedy Central Films"),
+        ),
+        NetworkDef("freeform", "XYZ Family", 118, listOf("ABC Family", "Freeform", "Fox Family"), false,
+            realName = "ABC Family", tmdbCompanies = listOf("ABC Family"),
+        ),
+        NetworkDef("paramountnet", "Spork TV", 119, listOf("Paramount Network", "Spike", "Spike TV"), false,
+            realName = "Spike TV",
+        ),
+        NetworkDef("discovery", "Recovery Channel", 120, listOf("Discovery", "Discovery Channel"), false,
+            realName = "Discovery Channel",
+        ),
+        NetworkDef("history", "Hysteria Channel", 121, listOf("History", "History Channel", "The History Channel"), false,
+            realName = "History Channel",
+        ),
+        NetworkDef("food", "Feud Network", 122, listOf("Food Network"), false,
+            realName = "Food Network",
+        ),
+        NetworkDef("hgtv", "GGTV", 123, listOf("HGTV"), false,
+            realName = "HGTV",
+        ),
+        NetworkDef("adultswim", "Adult Whim", 124, listOf("Adult Swim", "[adult swim]"), false,
+            realName = "Adult Swim", tmdbCompanies = listOf("Williams Street"),
+        ),
+        NetworkDef("nickjr", "Slime Jr.", 125, listOf("Nick Jr.", "Nick Jr"), true,
+            realName = "Nick Jr.",
+        ),
+        NetworkDef("disneyjr", "Playhouse Dinky", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true,
+            realName = "Playhouse Disney",
+        ),
+        NetworkDef("hbo", "HMO", 130, listOf("HBO", "Cinemax"), false,
+            realName = "HBO", tmdbCompanies = listOf("HBO Films"),
+        ),
     )
 
     private val aliasIndex: Map<String, String> = buildMap {
@@ -58,6 +120,11 @@ object Catalog {
     private fun aliasKey(s: String) = s.trim().lowercase()
 
     fun canonicalNetwork(raw: String?): String? = raw?.let { aliasIndex[aliasKey(it)] }
+
+    private val numbers: Map<String, Int> = networks.associate { it.id to it.number }
+
+    /** Channel number of a built-in network, or 999 for an unknown id (sorts last). */
+    fun numberOf(id: String): Int = numbers[id] ?: 999
 
     private val weekdays = setOf(
         DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY,
