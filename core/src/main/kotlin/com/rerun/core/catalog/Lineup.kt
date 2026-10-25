@@ -37,6 +37,8 @@ object Lineup {
     const val WEST_LAG_MS = 3 * 3_600_000L
     const val WEST_NUMBER_OFFSET = 500
     const val MUSIC_BASE = 2000
+    const val ADS_ID = "ads:only"
+    val adsChannel = ChannelDef(ADS_ID, 998, "Buy Me Maybe", ChannelKind.CUSTOM, Rules(kinds = setOf(MediaKind.MOVIE)))
 
     fun isWest(id: String): Boolean = id.endsWith(":w")
     fun westId(eastId: String): String = if (isWest(eastId)) eastId else "$eastId:w"
@@ -44,7 +46,7 @@ object Lineup {
 
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =
-        id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:") || isWest(id)
+        id == ADS_ID || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:") || isWest(id)
 
     /** Built-ins plus every extra that currently has enough content. No West twins. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
@@ -68,7 +70,10 @@ object Lineup {
      * A generated row the user edited is kept and marked dormant instead.
      * [RESTART_ID] is left untouched.
      */
-    fun plan(library: List<MediaItem>, existing: List<StoredChannel>, eastWest: Boolean, music: Boolean): LineupPlan {
+    fun plan(
+        library: List<MediaItem>, existing: List<StoredChannel>, eastWest: Boolean, music: Boolean,
+        adsPoolMs: Long = 0,
+    ): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
         val durations = HashMap<ChannelDef, Long>()
         fun duration(def: ChannelDef): Long = durations.getOrPut(def) { poolMs(def, library) }
@@ -125,6 +130,10 @@ object Lineup {
             if (showFeed) upserts += westOf(east, baseName, pool)
         }
 
+        if (adsPoolMs > 0) {
+            val number = existingById[ADS_ID]?.def?.number ?: adsChannel.number
+            upserts += PlannedChannel(adsChannel.copy(number = number), true, false, adsPoolMs)
+        }
         val keep = upserts.map { it.def.id }.toSet()
         val deleteIds = existing.map { it.def.id }
             .filter { it !in keep && it != RESTART_ID && isGenerated(it) }

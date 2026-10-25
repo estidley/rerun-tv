@@ -29,6 +29,7 @@ class Scheduler(private val zone: ZoneId) {
         lastEndMs: Long?,
         nowMs: Long,
         horizonMs: Long = 48 * 3_600_000L,
+        backToBack: Boolean = def.kind == ChannelKind.MUSIC,
     ): Extension {
         if (pool.isEmpty()) return Extension(emptyList(), state)
         val items = pool.sortedBy { it.key } // input order must not change the schedule
@@ -52,7 +53,6 @@ class Scheduler(private val zone: ZoneId) {
 
             val length = item.durationMs.coerceAtLeast(1L)
             val progEnd = cursor + length
-            val backToBack = def.kind == ChannelKind.MUSIC
             val slotEnd = if (backToBack) progEnd else gridCeil(progEnd)
             out += ScheduleEntry(def.id, cursor, progEnd, EntryKind.PROGRAM, item.key)
             if (!backToBack && slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)

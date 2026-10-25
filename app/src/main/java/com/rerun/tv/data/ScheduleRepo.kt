@@ -77,8 +77,11 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
 
     suspend fun adCatalog(): List<AdRow> = db.ads().all()
 
+    suspend fun adItem(key: String?): MediaItem? = key?.let { db.ads().byKey(it)?.toItem() }
+
     suspend fun replaceAds(source: String?, ads: List<AdRow>) = mutex.withLock {
         db.withTransaction {
+            val changed = db.ads().all() != ads.sortedBy { it.key }
             db.ads().clear()
             db.ads().insertAll(ads)
             if (source == null) {
@@ -88,7 +91,22 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
                 db.settings().put(SettingRow(Settings.AD_LIBRARY, source))
                 db.settings().put(SettingRow(Settings.AD_LAST_SYNC, System.currentTimeMillis().toString()))
             }
+            if (source == null || ads.isEmpty()) removeChannel(Lineup.ADS_ID)
+            else {
+                val previous = db.channels().byId(Lineup.ADS_ID)
+                val used = db.channels().all().filterNot { it.id == Lineup.ADS_ID }.map { it.number }.toSet() + Lineup.RESTART_NUMBER
+                var number = previous?.number ?: Lineup.adsChannel.number
+                while (number in used) number++
+                db.channels().upsert(ChannelRow.of(
+                    Lineup.adsChannel.copy(number = number), true, false, ads.sumOf { it.durationMs },
+                ))
+                if (changed) {
+                    db.entries().deleteChannel(Lineup.ADS_ID)
+                    db.states().delete(Lineup.ADS_ID)
+                }
+            }
         }
+        _guideRevision.value++
     }
 
     fun activeChannels(): Flow<List<ChannelRow>> = db.channels().observeActive()
@@ -115,6 +133,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             if (items != null) {
                 db.items().replaceAll(items.map(ItemRow::of))
                 for (id in db.entries().channelsWithMissingItems()) {
+                    if (id == Lineup.ADS_ID) continue
                     db.entries().deleteChannel(id)
                     db.states().delete(id)
                     if (id == Lineup.RESTART_ID) db.channels().delete(id)
@@ -122,7 +141,8 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             }
             val contents = items ?: db.items().all().map { it.toItem() }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
-            val planned = Lineup.plan(contents, existing, eastWest, music)
+            val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
+            val planned = Lineup.plan(contents, existing, eastWest, music, adsPoolMs = adsMs)
             db.channels().upsertAll(
                 planned.channels.map { ChannelRow.of(it.def, it.builtIn, it.dormant, it.poolMs) },
             )
@@ -171,9 +191,11 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         val last = db.entries().lastEnd(row.id)
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
-        val pool = Resolver.pool(def, lib().items)
+        val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
+            else Resolver.pool(def, lib().items)
         val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = row.id.hashCode().toLong())
-        val ext = scheduler.extend(def, pool, state, last, nowMs)
+        val ext = scheduler.extend(def, pool, state, last, nowMs,
+            backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
         db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
     }

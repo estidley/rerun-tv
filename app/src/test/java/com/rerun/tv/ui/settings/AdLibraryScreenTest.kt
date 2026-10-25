@@ -10,8 +10,10 @@ import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.TvController
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import com.rerun.tv.data.SyncProgress
 import org.junit.Rule
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mockito.*
@@ -22,6 +24,26 @@ import org.robolectric.annotation.Config
 @Config(application = Application::class, sdk = [35], qualifiers = "w1920dp-h1080dp-mdpi")
 class AdLibraryScreenTest {
     @get:Rule val compose = createComposeRule()
+    private var controller: TvController? = null
+
+    @After
+    fun tearDown() { controller?.dispose() }
+
+    private suspend fun controller(app: RerunApp, settings: Settings): TvController {
+        val schedule = mock(com.rerun.tv.data.ScheduleRepo::class.java)
+        `when`(app.schedule).thenReturn(schedule)
+        `when`(schedule.activeChannels()).thenReturn(flowOf(emptyList()))
+        `when`(schedule.active()).thenReturn(emptyList())
+        `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
+        `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
+        `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
+        `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
+        `when`(settings.flag(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
+            .thenReturn(flowOf(false))
+        return TvController(app, mock(com.rerun.tv.player.TunerEngine::class.java)).also { controller = it }
+    }
 
     @Test
     fun selectingALibraryAndOffUpdatesTheSavedSource() = runBlocking<Unit> {
@@ -31,10 +53,18 @@ class AdLibraryScreenTest {
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
         `when`(sync.adCount()).thenReturn(0)
-        `when`(sync.syncAds("ads")).thenReturn(flowOf(SyncProgress("Ads synced", 2, 2, true)))
-        `when`(sync.syncAds(null)).thenReturn(flowOf(SyncProgress("Ads disabled", 0, 0, true)))
+        var saved: String? = null
+        `when`(settings.adLibrary()).thenAnswer { saved }
+        `when`(sync.syncAds("ads")).thenReturn(flow {
+            saved = "ads"
+            emit(SyncProgress("Ads synced", 2, 2, true))
+        })
+        `when`(sync.syncAds(null)).thenReturn(flow {
+            saved = null
+            emit(SyncProgress("Ads disabled", 0, 0, true))
+        })
         `when`(sync.adLibraries()).thenReturn(listOf(Section("ads", "movie", "Retro Ads")))
-        val controller = mock(TvController::class.java)
+        val controller = controller(app, settings)
         compose.setContent { AdLibraryScreen(controller, app) }
         compose.onNodeWithText("■ Off").assertExists()
         compose.onNodeWithText("Retro Ads").performClick()
@@ -57,7 +87,7 @@ class AdLibraryScreenTest {
         `when`(app.sync).thenReturn(sync)
         `when`(sync.adCount()).thenReturn(0)
         `when`(sync.adLibraries()).thenAnswer { throw IllegalStateException("Offline") }.thenReturn(emptyList())
-        val controller = mock(TvController::class.java)
+        val controller = controller(app, settings)
         compose.setContent { AdLibraryScreen(controller, app) }
         compose.onNodeWithText("Couldn't load ad libraries: Offline").assertIsDisplayed()
         compose.onNodeWithText("Retry").performClick()
@@ -76,7 +106,7 @@ class AdLibraryScreenTest {
         `when`(sync.syncAds(null)).thenReturn(flowOf(SyncProgress("Ads disabled", 0, 0, true)))
         `when`(sync.adLibraries()).thenReturn(listOf(Section("ads", "movie", "Retro Ads")))
         `when`(sync.syncAds("ads")).thenAnswer { throw IllegalStateException("Save failed") }
-        val controller = mock(TvController::class.java)
+        val controller = controller(app, settings)
         compose.setContent { AdLibraryScreen(controller, app) }
         compose.onNodeWithText("Retro Ads").performScrollTo().performClick()
         compose.onNodeWithText("Ad sync failed: Save failed").assertExists()

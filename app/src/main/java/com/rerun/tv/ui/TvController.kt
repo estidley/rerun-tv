@@ -151,6 +151,19 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
+    fun setAdLibrary(source: String?) {
+        updateLineup("Syncing ads...", "Ad sync failed") {
+            app.sync.syncAds(source).collect { p ->
+                _lineupUpdate.value = _lineupUpdate.value.copy(
+                    message = if (p.finished) p.stage else "${p.stage} ${p.done}/${p.total}",
+                )
+            }
+            val previous = currentId
+            reconcileChannels()
+            if (previous == Lineup.ADS_ID && currentId == previous && foreground) engine.tune(previous)
+        }
+    }
+
     /** Navigation must not cancel a library update or roll back the user's lineup switch. */
     private fun updateLineup(
         message: String, failure: String, music: Boolean? = null, eastWest: Boolean? = null,
@@ -272,7 +285,9 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     fun go(screen: Screen) {
         engine.setVisible(foreground && screen == Screen.Player)
-        _screen.value = if (screen is Screen.Editor && screen.channelId != null) {
+        _screen.value = if (screen is Screen.Editor && screen.channelId == Lineup.ADS_ID) {
+            Screen.AdLibrary
+        } else if (screen is Screen.Editor && screen.channelId != null) {
             Screen.Editor(Lineup.eastOf(screen.channelId))
         } else screen
     }

@@ -41,6 +41,42 @@ class ScheduleRepoTest {
     fun tearDown() = db.close()
 
     @Test
+    fun adsStationUsesOnlyTheAdCatalogAndSurvivesRegularLibraryRefreshes() = runBlocking {
+        val clip = movie("ad").copy(durationMs = 15_000, partKey = "/library/parts/ad/file.mp4")
+        repo.replaceAds("commercials", listOf(AdRow.of(clip)))
+        val station = requireNotNull(repo.channel(Lineup.ADS_ID))
+        assertEquals("Buy Me Maybe", station.name)
+        assertFalse(station.dormant)
+        assertTrue(repo.libraryItems().isEmpty())
+        assertNull(repo.item("ad"))
+        assertEquals(clip.key, repo.adItem("ad")?.key)
+        repo.ensure(Lineup.ADS_ID, now)
+        val entries = repo.entries(Lineup.ADS_ID, now, now + 120_000)
+        assertTrue(entries.size >= 8)
+        assertTrue(entries.all { it.kind == com.rerun.core.schedule.EntryKind.PROGRAM && it.itemKey == "ad" })
+        assertTrue(entries.zipWithNext().all { (a, b) -> a.endMs == b.startMs })
+        repo.refreshChannels(true, false, listOf(movie("show")), selectedLibraries = setOf("regular"))
+        repo.ensure(Lineup.ADS_ID, now)
+        assertNotNull(repo.channel(Lineup.ADS_ID))
+        assertNull(repo.channel(Lineup.westId(Lineup.ADS_ID)))
+        val before = repo.entries(Lineup.ADS_ID, now, now + 120_000)
+        repo.refreshChannels(false, false, listOf(movie("show")))
+        assertEquals(before, repo.entries(Lineup.ADS_ID, now, now + 120_000))
+        repo.replaceAds("commercials", listOf(AdRow.of(clip)))
+        assertEquals(before, repo.entries(Lineup.ADS_ID, now, now + 120_000))
+        repo.replaceAds("commercials", listOf(AdRow.of(clip.copy(key = "new"))))
+        assertTrue(repo.entries(Lineup.ADS_ID, now, now + 120_000).isEmpty())
+        repo.ensure(Lineup.ADS_ID, now)
+        assertTrue(repo.entries(Lineup.ADS_ID, now, now + 120_000).all { it.itemKey == "new" })
+        repo.replaceAds(null, emptyList())
+        assertNull(repo.channel(Lineup.ADS_ID))
+        assertTrue(repo.entries(Lineup.ADS_ID, 0, Long.MAX_VALUE).isEmpty())
+        assertNull(db.states().get(Lineup.ADS_ID))
+        repo.replaceAds("commercials", emptyList())
+        assertNull(repo.channel(Lineup.ADS_ID))
+    }
+
+    @Test
     fun westWaitsThenCopiesEastAndFollowsEdits() = runBlocking {
         val original = movie("1")
         repo.refreshChannels(eastWest = true, music = false, items = listOf(original, movie("2")))

@@ -9,6 +9,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.rerun.tv.R
 
@@ -76,15 +77,19 @@ object Retro {
     val BannerBg: Color @Composable get() = GuideBlueDeep.copy(alpha = 0.9f)
 
     val Font = FontFamily(Font(R.font.vt323))
+    val ReadableFont = FontFamily(
+        Font(R.font.barlow_semi_condensed_regular, FontWeight.Normal),
+        Font(R.font.barlow_semi_condensed_medium, FontWeight.Medium),
+    )
 
     private val shadow = Shadow(Color.Black, Offset(2f, 2f), 0f)
 
     val Osd: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Vcr, fontSize = 64.sp, shadow = shadow)
     val OsdSmall: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Vcr, fontSize = 32.sp, shadow = shadow)
     val Title: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = White, fontSize = 40.sp, shadow = shadow)
-    val Body: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = White, fontSize = 28.sp, shadow = shadow)
-    val Caption: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Dim, fontSize = 22.sp)
+    val Body: TextStyle @Composable get() = TextStyle(fontFamily = ReadableFont, fontWeight = FontWeight.Medium, color = White, fontSize = 28.sp)
+    val Caption: TextStyle @Composable get() = TextStyle(fontFamily = ReadableFont, color = Dim, fontSize = 22.sp)
     val GuideNumber: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Yellow, fontSize = 30.sp, shadow = shadow)
-    val GuideCell: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = White, fontSize = 26.sp)
+    val GuideCell: TextStyle @Composable get() = TextStyle(fontFamily = ReadableFont, fontWeight = FontWeight.Medium, color = White, fontSize = 26.sp)
     val Huge: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = White, fontSize = 120.sp, shadow = shadow)
 }

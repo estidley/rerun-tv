@@ -26,6 +26,7 @@ Analyze changed PowerShell scripts with PSScriptAnalyzer; check `$LASTEXITCODE` 
 - Routine scheduling appends locked entries. Library inclusion changes intentionally invalidate schedules; channel edits preserve the currently airing entry and rebuild the future.
 - Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception, on a hidden one-shot channel.
 - Ads come from a separately persisted catalog and fit inside scheduled filler; they must never delay the next program. Guide cells include the following break without listing individual ads.
+- Buy Me Maybe is generated from a nonempty enabled ad catalog only. Keep its clips separate from regular library pools, back-to-back without padding/tail skipping, and omit West feeds. Show hourly station blocks in the guide without changing clip-level playback schedules.
 - Keep audio muted in menus across retunes and rollovers. Activity stop cancels playback, not scans; scan completion must not start background playback.
 - Own navigation-safe library/lineup updates in `TvController`, not a composable coroutine. Sign-out cancels and joins controller jobs before clearing connection data.
 - Do not infer an empty lineup from a flow's initial empty value. Await startup refresh and a successful channel query; keep loading, failure, and confirmed empty states distinct.

@@ -35,8 +35,8 @@ fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<Gu
     return out
 }
 
-/** Music displays hour-long station blocks, not a cell for each shuffled song. Gaps stay Off Air. */
-fun musicGuideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long, title: String): List<GuideBlock> {
+/** Groups continuous playback into hour-long station blocks. Gaps stay Off Air. */
+fun hourlyGuideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long, title: String): List<GuideBlock> {
     val spans = ArrayList<GuideBlock>()
     for (block in guideBlocks(entries, fromMs, toMs)) {
         val previous = spans.lastOrNull()

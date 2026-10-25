@@ -512,6 +512,37 @@ class TunerEngineTest {
           ]}]}]}}"""
 
     @Test
+    fun adsStationPlaysShortClipsFromTheSeparateCatalogIncludingTheirLastSeconds() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+        val clip = PlexParse.movies(metadata).single().copy(durationMs = 15_000)
+        prepare(Lineup.ADS_ID, clip)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.item(clip.key)).thenReturn(null)
+        `when`(repo.adItem(clip.key)).thenReturn(clip)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry(Lineup.ADS_ID, now - 11_000, now + 4_000, EntryKind.PROGRAM, clip.key),
+            ScheduleEntry(Lineup.ADS_ID, now + 4_000, now + 19_000, EntryKind.PROGRAM, clip.key),
+        ))
+        engine.tune(Lineup.ADS_ID)
+        await { sources.size == 1 }
+        assertEquals(now - 11_000, engine.state.value.located!!.entry.startMs)
+        assertEquals(clip, engine.state.value.item)
+        assertEquals(clip, engine.state.value.nextItem)
+        verify(player).seekTo(11_000)
+        listener.onRenderedFirstFrame()
+        engine.setVisible(false)
+        wallTime = now + 4_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        await { sources.size == 2 }
+        assertTrue(engine.state.value.sameChannelTransition)
+        assertEquals(now + 4_000, engine.state.value.located!!.entry.startMs)
+        verify(player, never()).setVolume(1f)
+        verify(repo, never()).item(clip.key)
+    }
+
+    @Test
     fun normalizationAppliesToProgramsAndAdsButWarnsForUnanalyzedTracks() = runBlocking {
         val metadata = videoWithSubtitle("srt").replace(
             """"id":7,"streamType":3""",

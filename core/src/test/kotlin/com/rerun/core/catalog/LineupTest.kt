@@ -30,6 +30,35 @@ class LineupTest {
     )
 
     @Test
+    fun adsStationNeedsOnlyOneClipAndDoesNotGetAWestFeedOrUseAReservedNumber() {
+        val custom = ChannelDef("custom:one", 998, "Custom", ChannelKind.CUSTOM, Rules())
+        val existing = listOf(StoredChannel(custom, false))
+        val enabled = Lineup.plan(emptyList(), existing, eastWest = true, music = false, adsPoolMs = 15_000)
+        val ads = enabled.channels.single { it.def.id == Lineup.ADS_ID }
+        assertEquals("Buy Me Maybe", ads.def.name)
+        assertFalse(ads.dormant)
+        assertEquals(15_000, ads.poolMs)
+        assertNotEquals(998, ads.def.number)
+        assertNotEquals(Lineup.RESTART_NUMBER, ads.def.number)
+        assertTrue(enabled.channels.none { it.def.id == Lineup.westId(Lineup.ADS_ID) })
+        val disabled = Lineup.plan(emptyList(), listOf(StoredChannel(ads.def, true)), false, false)
+        assertTrue(Lineup.ADS_ID in disabled.deleteIds)
+    }
+
+    @Test
+    fun adsScheduleIncludesShortClipsBackToBackWithoutFiller() {
+        val clips = listOf(movie("a", durationMs = 15_000), movie("b", durationMs = 30_000))
+        val entries = Scheduler(ZoneId.of("UTC")).extend(
+            Lineup.adsChannel, clips, ChannelState(seed = 1), null, 0, horizonMs = 120_000, backToBack = true,
+        ).entries
+        assertTrue(entries.all { it.kind == EntryKind.PROGRAM })
+        assertTrue(entries.zipWithNext().all { (a, b) -> a.endMs == b.startMs && a.itemKey != b.itemKey })
+        assertTrue(entries.all { it.endMs - it.startMs in setOf(15_000L, 30_000L) })
+        val tail = com.rerun.core.schedule.locate(entries, entries.first().endMs - 1, skipTail = false)
+        assertEquals(entries.first(), tail?.entry)
+    }
+
+    @Test
     fun onScreenNamesAreParodies() {
         val defs = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels()
         for (def in defs) {

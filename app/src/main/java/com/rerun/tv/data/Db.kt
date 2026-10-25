@@ -92,6 +92,9 @@ data class AdRow(
 
 @Dao
 interface AdDao {
+    @Query("SELECT * FROM ads WHERE `key` = :key")
+    suspend fun byKey(key: String): AdRow?
+
     @Query("SELECT * FROM ads ORDER BY `key`")
     suspend fun all(): List<AdRow>
 

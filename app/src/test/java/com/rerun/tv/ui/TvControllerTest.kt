@@ -68,6 +68,38 @@ class TvControllerTest {
     fun tearDown() = controller.dispose()
 
     @Test
+    fun editingTheAdStationOpensItsCatalogSettings() {
+        controller.go(Screen.Editor(Lineup.ADS_ID))
+        assertEquals(Screen.AdLibrary, controller.screen.value)
+    }
+
+    @Test
+    fun disablingAdsSurvivesNavigationAndDefersReplacementPlaybackWhenStopped() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        `when`(settings.isSignedIn).thenReturn(true)
+        `when`(repo.active()).thenReturn(listOf(channel("east")))
+        `when`(sync.syncAds(null)).thenReturn(flow {
+            emit(com.rerun.tv.data.SyncProgress("Ads disabled", 0, 0))
+            finish.await()
+        })
+        controller.tuneTo(Lineup.ADS_ID, sound = false)
+        controller.setAdLibrary(null)
+        assertTrue(controller.lineupUpdate.value.busy)
+        controller.go(Screen.Guide)
+        controller.stop()
+        clearInvocations(engine)
+        finish.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertFalse(controller.lineupUpdate.value.busy)
+        assertEquals("east", controller.currentChannelId())
+        assertEquals(Screen.Guide, controller.screen.value)
+        verify(engine, never()).tune(anyString())
+        controller.resume()
+        verify(engine).tune("east")
+        verify(engine, never()).setVisible(true)
+    }
+
+    @Test
     fun editingWestOpensItsSourceChannel() {
         controller.go(Screen.Editor("custom:one:w"))
         assertEquals(Screen.Editor("custom:one"), controller.screen.value)

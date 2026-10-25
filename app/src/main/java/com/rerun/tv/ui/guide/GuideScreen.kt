@@ -49,13 +49,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
+import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
 import com.rerun.core.schedule.GRID_MS
 import com.rerun.core.schedule.GuideBlock
 import com.rerun.core.schedule.gridFloor
 import com.rerun.core.schedule.guideBlocks
-import com.rerun.core.schedule.musicGuideBlocks
+import com.rerun.core.schedule.hourlyGuideBlocks
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.ui.Screen
@@ -136,11 +137,14 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
                 val mapped = rows.associate { row ->
                     val entries = all[row.id].orEmpty()
-                    row.id to if (row.def.kind == ChannelKind.MUSIC) {
-                        val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
-                        musicGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, title)
-                    } else {
-                        guideBlocks(entries, windowStart, windowStart + WINDOW_MS)
+                    row.id to when {
+                        row.id == Lineup.ADS_ID ->
+                            hourlyGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, row.name)
+                        row.def.kind == ChannelKind.MUSIC -> {
+                            val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
+                            hourlyGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, title)
+                        }
+                        else -> guideBlocks(entries, windowStart, windowStart + WINDOW_MS)
                     }
                 }
                 val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()

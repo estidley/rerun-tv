@@ -18,17 +18,15 @@ import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvStage
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
 
 @Composable
 fun AdLibraryScreen(controller: TvController, app: RerunApp = RerunApp.instance) {
-    val scope = rememberCoroutineScope()
+    val update by controller.lineupUpdate.collectAsState()
     val first = remember { FocusRequester() }
     var libraries by remember { mutableStateOf<List<Section>?>(null) }
     var selected by remember { mutableStateOf<String?>(null) }
-    var busy by remember { mutableStateOf(false) }
+    val busy = update.busy
     var error by remember { mutableStateOf<String?>(null) }
-    var status by remember { mutableStateOf<String?>(null) }
     var count by remember { mutableIntStateOf(0) }
     var attempt by remember { mutableIntStateOf(0) }
     BackHandler { controller.go(Screen.Settings) }
@@ -46,35 +44,31 @@ fun AdLibraryScreen(controller: TvController, app: RerunApp = RerunApp.instance)
     LaunchedEffect(libraries, error) {
         if (libraries != null || error != null) first.requestFocus()
     }
-    fun save(key: String?) {
-        if (busy) return
-        busy = true
-        scope.launch {
+    LaunchedEffect(update.busy, update.message, update.error) {
+        if (!update.busy && update.error == null) {
             try {
-                error = null
-                status = "Syncing ads..."
-                app.sync.syncAds(key).collect { p ->
-                    status = if (p.finished) p.stage else "${p.stage} ${p.done}/${p.total}"
-                }
-                selected = key
+                selected = app.settings.adLibrary()
                 count = app.sync.adCount()
-                error = null
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                status = null
-                error = "Ad sync failed: ${e.message}"
-            } finally {
-                busy = false
+                error = "Couldn't load ad catalog: ${e.message}"
             }
         }
+    }
+    fun save(key: String?) {
+        if (busy) return
+        error = null
+        controller.setAdLibrary(key)
     }
     TvStage("BACK settings") {
         BasicText("AD LIBRARY", style = Retro.Title)
         BasicText("Choose a Plex Other Videos or Movies library containing your commercial clips.", style = Retro.Caption)
         BasicText("Selecting a library syncs its ad catalog. Clips fill breaks without delaying the next program.", style = Retro.Caption)
+        BasicText("Buy Me Maybe plays your ads back-to-back whenever the catalog has clips.", style = Retro.Caption)
         BasicText("The chosen library is excluded from regular imports. Re-sync to remove previously imported clips.", style = Retro.Caption)
         error?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
-        status?.let { BasicText(it, style = Retro.Body) }
+        (update.error ?: update.message)?.let { BasicText(it, style = Retro.Body) }
         val available = libraries
         if (available == null) {
             if (error == null) BasicText("Loading libraries...", style = Retro.Body)

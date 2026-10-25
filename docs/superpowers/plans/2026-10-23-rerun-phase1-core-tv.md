@@ -11,7 +11,9 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
 - East/West feeds, genre music stations, Off Air and Up Next states, hidden episode start-over.
 - Persistent ad library, deterministic gap-filling playback, and program guide cells that include breaks.
+- Buy Me Maybe commercials-only station while an enabled ad catalog contains clips; back-to-back playback without a minimum library size and hourly guide blocks instead of individual ad listings.
 - TV remote navigation, adaptive guide, display themes/density, CRT/effects and margined Settings.
+- Guide opening selects the currently airing station/program; RR launcher artwork and locally bundled Barlow Semi Condensed complement VT323 display text.
 - Navigation-safe scans, guide progress/elapsed time and restricted update controls.
 - Startup loading/error/confirmed-empty states; no premature Settings/sync prompt during restore.
 - Foreground-only playback reconciliation, including library changes completed after screen navigation.
@@ -30,6 +32,8 @@ The suite includes regression coverage for:
 - Scans surviving navigation, failure rollback, guide controls and background completion.
 - Audio/video request policy, normalization eligibility, subtitle and HDR paths.
 - Same-station fades, cancellation during fade, menu mute and wall-clock offsets.
+- Ad station lifecycle, short-clip playback and hourly guide grouping without changing clip boundaries.
+- Current-program guide focus, music conversion fallback and readable/display typography roles across themes.
 
 Local JVM benchmark medians from the first optimization pass:
 
@@ -47,6 +51,8 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 - [ ] Update an installed signed build with saved channels: loading/updating appears until restore settles; genuinely empty and failed states remain distinct.
 - [ ] Enable Music or save library changes, leave the screen, and confirm final lineup and muted menu playback. Press Home mid-scan; no playback starts until resume.
 - [ ] Tune near program end, observe ads at the break, and confirm the next program starts on schedule.
+- [ ] Enable/sync ads and tune Buy Me Maybe; confirm hourly guide blocks, short clips playing back-to-back, regular sync preserving the station, and disabling ads returning to another station without unmuting menus.
+- [ ] Check RR launcher artwork and readable guide/menu typography at normal TV viewing distance.
 - [ ] Confirm fades composite correctly over the real video surface, including program/ad transitions and station changes during fades.
 - [ ] Check audio and subtitle selection with multi-track 4K/HDR media on a live server; audio-only changes should not impose video downscaling limits.
 - [ ] Verify HDR color rendering, tone mapping, fallback errors and Dolby Vision limitations on affected TVs.

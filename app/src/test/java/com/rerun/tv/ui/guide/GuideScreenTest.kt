@@ -206,6 +206,35 @@ class GuideScreenTest {
     }
 
     @Test
+    fun adStationGuideDisplaysHourlyBlocksInsteadOfIndividualAds() = runBlocking<Unit> {
+        val start = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L
+        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(mapOf(
+            com.rerun.core.catalog.Lineup.ADS_ID to (0 until 480).map {
+                ScheduleEntry(
+                    com.rerun.core.catalog.Lineup.ADS_ID, start + it * 30_000L,
+                    start + (it + 1) * 30_000L, EntryKind.PROGRAM, "ad:$it",
+                )
+            },
+        ))
+        compose.runOnIdle {
+            channels.value = listOf(ChannelRow.of(com.rerun.core.catalog.Lineup.adsChannel, true, false))
+        }
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithText("Buy Me Maybe").fetchSemanticsNodes().size >= 5
+        }
+        val selected = hasAnyAncestor(hasTestTag("guide-row:ads:only")) and isSelected()
+        val current = compose.onNode(selected).fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        assertTrue(compose.onNode(selected).fetchSemanticsNode().boundsInRoot.left > current.left)
+        verify(schedule, never()).item(anyString())
+        verify(schedule, never()).adCatalog()
+        compose.onRoot().performKeyInput { pressKey(Key.Enter) }
+        assertEquals(Screen.Player, controller.screen.value)
+        assertEquals(com.rerun.core.catalog.Lineup.ADS_ID, controller.currentChannelId())
+    }
+
+    @Test
     fun musicGuideDisplaysStationHoursInsteadOfIndividualSongs() = runBlocking<Unit> {
         val start = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L
         val entries = (0 until 80).map {
