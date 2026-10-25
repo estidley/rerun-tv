@@ -6,8 +6,16 @@ function Set-RerunJdk {
     function Test-Jdk17([string]$JdkHome) {
         $java = Join-Path $JdkHome 'bin\java.exe'
         if (-not (Test-Path $java)) { return $false }
-        $banner = & $java -version 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) { return $false }
+        # Java writes its version to stderr. Windows PowerShell 5.1 turns that
+        # into a terminating error under Stop, even when Java exits successfully.
+        $previousErrorAction = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $banner = & $java -version 2>&1 | Out-String
+            $javaExitCode = $LASTEXITCODE
+        }
+        finally { $ErrorActionPreference = $previousErrorAction }
+        if ($javaExitCode -ne 0) { return $false }
         if ($banner -notmatch 'version "(\d+)') { return $false }
         return [int]$Matches[1] -ge 17
     }
