@@ -22,7 +22,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - TV remote navigation, adaptive guide, display themes/density, CRT/effects and margined Settings.
 - Guide opening selects the currently airing station/program; RR launcher artwork and locally bundled Barlow Semi Condensed complement VT323 display text.
 - Navigation-safe scans, guide progress/elapsed time and restricted update controls.
-- Startup loading/error/confirmed-empty states; no premature Settings/sync prompt during restore.
+- Startup loading/error/confirmed-empty states; beret wordmark and animated loading spinner,
+  with no premature Settings/sync prompt during restore.
 - Foreground-only playback reconciliation, including library changes completed after screen navigation.
 - Audio language/per-airing selection, subtitles, HDR compatibility controls and optional Plex normalization.
 - Same-station fade-through-black, retaining static/roll only for station changes.

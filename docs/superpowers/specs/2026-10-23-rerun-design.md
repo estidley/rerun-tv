@@ -77,7 +77,9 @@ diagnostics; HTTP token attachment follows the trusted Plex host policy.
 
 Startup starts in loading state for an existing sign-in, awaits the automatic saved-lineup refresh,
 then queries active channels. Only a successful settled empty result displays no-channel guidance.
-Failures have their own message. Missing connection/initial-sync configuration returns to onboarding.
+The loading card uses the existing beret wordmark and an indeterminate animated spinner.
+Failures and confirmed empty states retain the wordmark but not the spinner. Missing
+connection/initial-sync configuration returns to onboarding.
 
 Music, re-sync, ad catalog and included-library updates are controller-owned and survive screen navigation.
 Guide rebuilding hides rows behind progress/elapsed time and permits only Channels and Settings controls.
