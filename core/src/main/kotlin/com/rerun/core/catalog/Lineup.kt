@@ -6,7 +6,6 @@ import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
-import com.rerun.core.schedule.ScheduleEntry
 import java.util.UUID
 
 /** A channel row the lineup planner can see. Room stays outside core. */
@@ -27,30 +26,22 @@ data class LineupPlan(val channels: List<PlannedChannel>, val deleteIds: List<St
  * What goes on the dial.
  *
  * Built-in channels always exist (dormant until they have 4 hours). Extra themes, movie
- * overflow, and music stations are created only once their pool is long enough. West feeds
- * are the East schedule shifted forward by [WEST_LAG_MS], so West at time T is what East
- * played at T − 3 hours.
+ * overflow, and music stations are created only once their pool is long enough.
  */
 object Lineup {
     const val RESTART_ID = "from-the-top"
     const val RESTART_NUMBER = 999
-    const val WEST_LAG_MS = 3 * 3_600_000L
-    const val WEST_NUMBER_OFFSET = 500
     const val MUSIC_BASE = 2000
     const val ADS_ID = "ads:only"
     const val TV_DECADE_MIN_MS = 24 * 3_600_000L
     const val MUSIC_DECADE_MIN_MS = 12 * 3_600_000L
     val adsChannel = ChannelDef(ADS_ID, 998, "Buy Me Maybe", ChannelKind.CUSTOM, Rules(kinds = setOf(MediaKind.MOVIE)))
 
-    fun isWest(id: String): Boolean = id.endsWith(":w")
-    fun westId(eastId: String): String = if (isWest(eastId)) eastId else "$eastId:w"
-    fun eastOf(id: String): String = if (isWest(id)) id.removeSuffix(":w") else id
-
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =
-        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:") || isWest(id)
+        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:")
 
-    /** Built-ins plus every extra that currently has enough content. No West twins. */
+    /** Built-ins plus every extra that currently has enough content. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
         val movieMs = moviePoolMs(library)
         val extras = optionalThemes().filter { qualified(it, library) }
@@ -66,10 +57,6 @@ object Lineup {
     fun optionalThemes(): List<ChannelDef> = optional
     fun movieChannels(): List<ChannelDef> = movies
 
-    /** Copies [entries] onto [channelId], moving each slot forward by [lagMs]. */
-    fun shift(entries: List<ScheduleEntry>, channelId: String, lagMs: Long): List<ScheduleEntry> =
-        entries.map { it.copy(channelId = channelId, startMs = it.startMs + lagMs, endMs = it.endMs + lagMs) }
-
     /**
      * Merges the catalog with channels already stored.
      * Stock generated rows that no longer qualify are listed in [LineupPlan.deleteIds].
@@ -77,7 +64,7 @@ object Lineup {
      * [RESTART_ID] is left untouched.
      */
     fun plan(
-        library: List<MediaItem>, existing: List<StoredChannel>, eastWest: Boolean, music: Boolean,
+        library: List<MediaItem>, existing: List<StoredChannel>, music: Boolean,
         adsPoolMs: Long = 0,
     ): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
@@ -90,58 +77,35 @@ object Lineup {
         }
         val builtIn = Catalog.builtInChannels()
         val stations = musicTemplates(library)
-        val movieMs = moviePoolMs(library)
-        val qualified = (builtIn + optional.filter { duration(it) >= Resolver.DORMANT_MS } +
-            movies.filter { movieMs >= movieThreshold(it.id) } +
-            (if (music) stations.filter { duration(it) >= Resolver.DORMANT_MS } else emptyList()) +
-            decadeTemplates.filter {
-                (it.kind != ChannelKind.MUSIC || music) && duration(it) >= decadeMinimum(it)
-            }).map { it.id }.toSet()
         val templates = builtIn + optional + movies + stations + decadeTemplates
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
         for (template in templates) {
-            if (isGenerated(template.id) && template.id !in qualified) {
-                val prev = existingById[template.id] ?: continue
-                if (looksStock(prev.def, template)) continue
-                val kept = prev.def.copy(name = Catalog.chooseName(template.id, prev.def.name, template.name))
-                val pool = duration(kept)
-                val dormant = (kept.kind == ChannelKind.MUSIC && !music) || pool < Resolver.DORMANT_MS
-                upserts += PlannedChannel(kept, prev.builtIn, dormant, pool)
-                if (feedsOn(eastWest, kept, dormant)) upserts += westOf(kept, kept.name, pool)
-                seen += template.id
-                continue
-            }
             val prev = existingById[template.id]
             val base = prev?.def ?: template
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
             val pool = duration(base)
-            val dormant = pool < Resolver.DORMANT_MS
-            val showFeed = feedsOn(eastWest, base, dormant)
-            val east = base.copy(name = baseName)
-            upserts += PlannedChannel(east, prev?.builtIn ?: true, dormant, pool)
+            val dormant = isDormant(base, pool, music)
+            if (isGenerated(template.id) && dormant && (prev == null || looksStock(prev.def, template))) continue
+            upserts += PlannedChannel(base.copy(name = baseName), prev?.builtIn ?: true, dormant, pool)
             seen += template.id
-            if (showFeed) upserts += westOf(east, baseName, pool)
         }
 
         for (prev in existing) {
             val id = prev.def.id
-            if (id in seen || id == RESTART_ID || isWest(id)) continue
+            if (id in seen || id == RESTART_ID) continue
             if (isGenerated(id)) {
                 // A genre can disappear completely; retain edits even without a live template.
                 if (id.startsWith("music:") && !looksStockMusic(prev.def)) {
-                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = true, poolMs = duration(prev.def))
+                    val pool = duration(prev.def)
+                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = isDormant(prev.def, pool, music), poolMs = pool)
                 }
                 continue
             }
             val pool = duration(prev.def)
-            val dormant = pool < Resolver.DORMANT_MS
-            val baseName = Catalog.stripFeed(prev.def.name)
-            val showFeed = feedsOn(eastWest, prev.def, dormant)
-            val east = prev.def.copy(name = baseName)
-            upserts += PlannedChannel(east, prev.builtIn, dormant, pool)
-            if (showFeed) upserts += westOf(east, baseName, pool)
+            val dormant = isDormant(prev.def, pool, music)
+            upserts += PlannedChannel(prev.def, prev.builtIn, dormant, pool)
         }
 
         if (adsPoolMs > 0) {
@@ -155,19 +119,9 @@ object Lineup {
         return LineupPlan(uniqueNumbers(upserts), deleteIds)
     }
 
-    private fun westOf(east: ChannelDef, baseName: String, poolMs: Long): PlannedChannel {
-        val west = east.copy(
-            id = westId(east.id),
-            number = east.number + WEST_NUMBER_OFFSET,
-            name = "$baseName-W",
-            hidden = false,
-        )
-        return PlannedChannel(west, builtIn = true, dormant = false, poolMs = poolMs)
-    }
-
     /**
      * Keeps a custom or built-in number where the user left it.
-     * Generated rows (extras, music, West) take the next free number when theirs is taken.
+     * Generated rows (extras and music) take the next free number when theirs is taken.
      */
     private fun uniqueNumbers(channels: List<PlannedChannel>): List<PlannedChannel> {
         val used = HashSet<Int>()
@@ -184,9 +138,6 @@ object Lineup {
         }
     }
 
-    private fun feedsOn(eastWest: Boolean, def: ChannelDef, dormant: Boolean): Boolean =
-        eastWest && !def.hidden && !dormant && def.id != RESTART_ID && !isWest(def.id)
-
     private fun qualified(def: ChannelDef, library: List<MediaItem>): Boolean =
         !Resolver.isDormant(Resolver.pool(def, library))
 
@@ -202,6 +153,23 @@ object Lineup {
         "movies:3" -> 48 * 3_600_000L
         else -> Long.MAX_VALUE
     }
+
+    fun minimumContentMs(def: ChannelDef): Long {
+        val override = def.minimumContentHours
+        require(override == null || override in 0..168) { "Minimum content must be 0–168 hours" }
+        if (override != null) return override * 3_600_000L
+        val id = def.id
+        return when {
+            id == ADS_ID || id == RESTART_ID -> 0
+            id.startsWith("decade:tv:") -> TV_DECADE_MIN_MS
+            id.startsWith("decade:music:") -> MUSIC_DECADE_MIN_MS
+            id.startsWith("movies:") -> movieThreshold(id)
+            else -> Resolver.DORMANT_MS
+        }
+    }
+
+    fun isDormant(def: ChannelDef, poolMs: Long, music: Boolean = true): Boolean =
+        (def.kind == ChannelKind.MUSIC && !music) || poolMs <= 0 || poolMs < minimumContentMs(def)
 
     private fun decadeMinimum(def: ChannelDef): Long =
         if (def.kind == ChannelKind.MUSIC) MUSIC_DECADE_MIN_MS else TV_DECADE_MIN_MS
@@ -238,7 +206,7 @@ object Lineup {
     }
 
     private fun looksStock(stored: ChannelDef, template: ChannelDef): Boolean {
-        val name = Catalog.stripFeed(stored.name)
+        val name = stored.name
         val nameOk = name == template.name || name in Catalog.retiredNames(template.id)
         return nameOk &&
             stored.number == template.number &&
@@ -247,6 +215,7 @@ object Lineup {
             stored.order == template.order &&
             stored.blocks == template.blocks &&
             stored.hidden == template.hidden &&
+            stored.minimumContentHours == template.minimumContentHours &&
             stored.kidsSafe == template.kidsSafe &&
             stored.movieEveryMs == template.movieEveryMs
     }
@@ -298,8 +267,7 @@ object Lineup {
     }
 
     private fun reservedNumbers(): Set<Int> {
-        val east = (Catalog.builtInChannels() + optional + movies + decadeTemplates).map { it.number }
-        return (east + east.map { it + WEST_NUMBER_OFFSET } + RESTART_NUMBER).toSet()
+        return ((Catalog.builtInChannels() + optional + movies + decadeTemplates).map { it.number } + RESTART_NUMBER).toSet()
     }
 
     private val kidRatings = setOf("G", "PG", "TV-Y", "TV-Y7", "TV-Y7-FV", "TV-G", "TV-PG")

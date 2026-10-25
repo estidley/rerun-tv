@@ -41,6 +41,46 @@ class ScheduleRepoTest {
     fun tearDown() = db.close()
 
     @Test
+    fun cableStockNamesUpdateWithoutChangingTheLockedScheduleOrPersonalRenames() = runBlocking {
+        val documentary = movie("history").copy(studio = "TBS", durationMs = 4 * 3_600_000L)
+        repo.refreshChannels(false, listOf(documentary))
+        val tbs = requireNotNull(repo.channel("tbs"))
+        db.channels().upsert(ChannelRow.of(tbs.def.copy(name = "Laugh Track"), true, false, tbs.poolMs))
+        repo.ensure("tbs", now)
+        val before = repo.entries("tbs", now, now + DAY)
+        assertTrue(before.isNotEmpty())
+        repo.refreshChannels(false)
+        assertEquals("Ted's TV", repo.channel("tbs")?.name)
+        assertEquals(before, repo.entries("tbs", now, now + DAY))
+        repo.saveChannel(ChannelRow.of(tbs.def.copy(name = "My Superstation", minimumContentHours = 1), true))
+        repo.refreshChannels(false)
+        assertEquals("My Superstation", repo.channel("tbs")?.name)
+        assertEquals(1, repo.channel("tbs")?.def?.minimumContentHours)
+        assertEquals(before, repo.entries("tbs", now, now + DAY))
+    }
+
+    @Test
+    fun minimumOverridesPersistAndCannotAccidentallyActivateAnEmptyOrSmallStockPool() = runBlocking {
+        val item = movie("one").copy(durationMs = 3_600_000)
+        repo.refreshChannels(false, listOf(item))
+        val stock = Lineup.movieChannels()[1]
+        repo.saveChannel(ChannelRow.of(stock.copy(name = "Renamed"), true, false, 99 * 3_600_000L))
+        assertTrue(requireNotNull(repo.channel(stock.id)).dormant)
+        val override = stock.copy(name = "Small movie night", minimumContentHours = 1)
+        repo.saveChannel(ChannelRow.of(override, true))
+        assertFalse(requireNotNull(repo.channel(stock.id)).dormant)
+        repo.refreshChannels(false)
+        assertEquals(1, repo.channel(stock.id)?.def?.minimumContentHours)
+        repo.ensure(stock.id, now)
+        assertTrue(repo.entries(stock.id, now, now + DAY).isNotEmpty())
+        repo.saveChannel(ChannelRow.of(override.copy(minimumContentHours = null), true, false))
+        assertTrue(requireNotNull(repo.channel(stock.id)).dormant)
+        repo.refreshChannels(false, emptyList())
+        repo.saveChannel(ChannelRow.of(override.copy(minimumContentHours = 0), true, false))
+        assertTrue(requireNotNull(repo.channel(stock.id)).dormant)
+    }
+
+    @Test
     fun decadeStationsPersistScheduleAndDisappearWhenTheirPoolNoLongerQualifies() = runBlocking {
         val library = PlexParse.episodes(
             """{"MediaContainer":{"Metadata":[${
@@ -50,19 +90,17 @@ class ScheduleRepoTest {
                 }
             }]}}""", emptyMap(),
         )
-        repo.refreshChannels(eastWest = true, music = false, items = library)
+        repo.refreshChannels(music = false, items = library)
         val id = "decade:tv:1980"
         assertEquals("1980s TV", repo.channel(id)?.name)
-        assertNotNull(repo.channel(Lineup.westId(id)))
         repo.ensure(id, now)
         val entries = repo.entries(id, now, now + DAY)
         assertTrue(entries.isNotEmpty())
         assertTrue(entries.filter { it.itemKey != null }.all { it.itemKey!!.startsWith("e") })
-        repo.refreshChannels(eastWest = true, music = false)
+        repo.refreshChannels(music = false)
         assertEquals(entries, repo.entries(id, now, now + DAY))
-        repo.refreshChannels(eastWest = true, music = false, items = library.dropLast(1))
+        repo.refreshChannels(music = false, items = library.dropLast(1))
         assertNull(repo.channel(id))
-        assertNull(repo.channel(Lineup.westId(id)))
         assertTrue(repo.entries(id, 0, Long.MAX_VALUE).isEmpty())
         assertNull(db.states().get(id))
     }
@@ -82,12 +120,11 @@ class ScheduleRepoTest {
         assertTrue(entries.size >= 8)
         assertTrue(entries.all { it.kind == com.rerun.core.schedule.EntryKind.PROGRAM && it.itemKey == "ad" })
         assertTrue(entries.zipWithNext().all { (a, b) -> a.endMs == b.startMs })
-        repo.refreshChannels(true, false, listOf(movie("show")), selectedLibraries = setOf("regular"))
+        repo.refreshChannels(false, listOf(movie("show")), selectedLibraries = setOf("regular"))
         repo.ensure(Lineup.ADS_ID, now)
         assertNotNull(repo.channel(Lineup.ADS_ID))
-        assertNull(repo.channel(Lineup.westId(Lineup.ADS_ID)))
         val before = repo.entries(Lineup.ADS_ID, now, now + 120_000)
-        repo.refreshChannels(false, false, listOf(movie("show")))
+        repo.refreshChannels(false, listOf(movie("show")))
         assertEquals(before, repo.entries(Lineup.ADS_ID, now, now + 120_000))
         repo.replaceAds("commercials", listOf(AdRow.of(clip)))
         assertEquals(before, repo.entries(Lineup.ADS_ID, now, now + 120_000))
@@ -104,51 +141,39 @@ class ScheduleRepoTest {
     }
 
     @Test
-    fun westWaitsThenCopiesEastAndFollowsEdits() = runBlocking {
+    fun editingKeepsTheCurrentProgramAndRebuildsTheFuture() = runBlocking {
         val original = movie("1")
-        repo.refreshChannels(eastWest = true, music = false, items = listOf(original, movie("2")))
-        val east = requireNotNull(repo.channel("movies:1"))
-        val westId = Lineup.westId(east.id)
-        repo.ensure(westId, now)
-        val eastEntries = repo.entries(east.id, now - 1, now + DAY)
-        val westEntries = repo.entries(westId, now - 1, now + DAY)
-        assertTrue(westEntries.none { it.startMs <= now && now < it.endMs })
-        assertEquals(eastEntries.first().startMs + Lineup.WEST_LAG_MS, westEntries.first().startMs)
-
-        val future = now + Lineup.WEST_LAG_MS
-        assertEquals(
-            repo.entries(east.id, now, now + 1).single().itemKey,
-            repo.entries(westId, future, future + 1).single().itemKey,
-        )
-        val edited = east.def.copy(name = "Edited", rules = east.def.rules.copy(titles = setOf("2")))
+        repo.refreshChannels(music = false, items = listOf(original, movie("2")))
+        val channel = requireNotNull(repo.channel("movies:1"))
+        repo.ensure(channel.id, now)
+        val current = repo.entries(channel.id, now, now + 1).single()
+        val edited = channel.def.copy(name = "Edited", rules = channel.def.rules.copy(titles = setOf("2")))
         repo.saveChannel(ChannelRow.of(edited, true, false))
-        repo.refreshChannels(eastWest = true, music = false)
-        repo.resetFuture(east.id, now)
-        assertEquals("Edited-W", repo.channel(westId)?.name)
-        val rebuilt = repo.entries(east.id, now, now + DAY)
-        val shifted = repo.entries(westId, now + Lineup.WEST_LAG_MS, now + DAY + Lineup.WEST_LAG_MS)
-        assertEquals(Lineup.shift(rebuilt, westId, Lineup.WEST_LAG_MS), shifted)
+        repo.resetFuture(channel.id, now)
+        val rebuilt = repo.entries(channel.id, now, now + DAY)
+        assertEquals(current, rebuilt.first())
+        assertEquals("Edited", repo.channel(channel.id)?.name)
         assertTrue(rebuilt.drop(1).filter { it.itemKey != null }.all { it.itemKey == "2" })
     }
 
     @Test
-    fun dormantAndHiddenEastLoseTheirTwins() = runBlocking {
-        repo.refreshChannels(true, false, listOf(movie("1")))
-        val east = requireNotNull(repo.channel("movies:1"))
-        repo.ensure(Lineup.westId(east.id), now)
-        repo.saveChannel(ChannelRow.of(east.def.copy(hidden = true), true, false))
-        assertNull(repo.channel(Lineup.westId(east.id)))
-        assertTrue(repo.entries(Lineup.westId(east.id), 0, Long.MAX_VALUE).isEmpty())
-        repo.saveChannel(ChannelRow.of(east.def.copy(rules = east.def.rules.copy(titles = setOf("missing"))), true, true))
-        repo.refreshChannels(true, false)
-        assertNull(repo.channel(Lineup.westId(east.id)))
+    fun dormantAndHiddenChannelsDoNotGenerateSchedules() = runBlocking {
+        repo.refreshChannels(false, listOf(movie("1")))
+        val channel = requireNotNull(repo.channel("movies:1"))
+        repo.saveChannel(ChannelRow.of(channel.def.copy(hidden = true), true, false))
+        repo.ensure(channel.id, now)
+        assertTrue(repo.entries(channel.id, 0, Long.MAX_VALUE).isEmpty())
+        repo.saveChannel(ChannelRow.of(channel.def.copy(rules = channel.def.rules.copy(titles = setOf("missing"))), true, true))
+        repo.refreshChannels(false)
+        repo.ensure(channel.id, now)
+        assertTrue(repo.entries(channel.id, 0, Long.MAX_VALUE).isEmpty())
     }
 
     @Test
     fun libraryRefreshInvalidatesCachedItems() = runBlocking {
-        repo.refreshChannels(false, false, listOf(movie("1")))
+        repo.refreshChannels(false, listOf(movie("1")))
         assertNotNull(repo.item("1"))
-        repo.refreshChannels(false, false, listOf(movie("2")))
+        repo.refreshChannels(false, listOf(movie("2")))
         assertNull(repo.item("1"))
         assertNotNull(repo.item("2"))
     }
@@ -238,12 +263,14 @@ class ScheduleRepoTest {
     }
 
     @Test
-    fun deletingEastDeletesWestScheduleAndState() = runBlocking {
-        repo.refreshChannels(true, false, listOf(movie("1")))
-        repo.ensure("movies:1:w", now)
+    fun deletingAChannelDeletesItsScheduleAndState() = runBlocking {
+        repo.refreshChannels(false, listOf(movie("1")))
+        repo.ensure("movies:1", now)
+        assertNotNull(db.states().get("movies:1"))
         repo.deleteChannel("movies:1")
-        assertNull(repo.channel("movies:1:w"))
-        assertTrue(repo.entries("movies:1:w", 0, Long.MAX_VALUE).isEmpty())
+        assertNull(repo.channel("movies:1"))
+        assertTrue(repo.entries("movies:1", 0, Long.MAX_VALUE).isEmpty())
+        assertNull(db.states().get("movies:1"))
     }
 
     @Test

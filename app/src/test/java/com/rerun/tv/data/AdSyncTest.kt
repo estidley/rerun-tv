@@ -127,7 +127,7 @@ class AdSyncTest {
             old.version = 1
             old.close()
             val upgraded = Room.databaseBuilder(context, RerunDb::class.java, name)
-                .addMigrations(RerunDb.MIGRATION_1_2).allowMainThreadQueries().build()
+                .addMigrations(RerunDb.MIGRATION_1_2, RerunDb.MIGRATION_2_3).allowMainThreadQueries().build()
             try {
                 preserved.forEach { (key, value) -> assertEquals(value, upgraded.settings().get(key)) }
                 assertTrue(upgraded.ads().all().isEmpty())

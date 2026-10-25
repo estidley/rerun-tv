@@ -47,7 +47,6 @@ data class LineupUpdate(
     val message: String? = null,
     val error: String? = null,
     val music: Boolean? = null,
-    val eastWest: Boolean? = null,
     val lastSyncMs: Long? = null,
 )
 
@@ -77,12 +76,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     val channels: StateFlow<List<ChannelRow>> =
         app.schedule.activeChannels().map { rows ->
-            val byId = rows.associateBy { it.id }
-            rows.sortedWith(
-                compareBy<ChannelRow> { byId[Lineup.eastOf(it.id)]?.number ?: it.number }
-                    .thenBy { Lineup.eastOf(it.id) }
-                    .thenBy { Lineup.isWest(it.id) },
-            )
+            rows.sortedWith(compareBy<ChannelRow> { it.number }.thenBy { it.id })
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _screen = MutableStateFlow<Screen>(if (app.settings.isSignedIn) Screen.Player else Screen.Onboarding)
@@ -126,14 +120,6 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
-    fun setEastWestEnabled(enabled: Boolean) {
-        updateLineup("Updating East and West...", "Lineup failed", eastWest = enabled) {
-            changeLineupFlag(com.rerun.tv.data.Settings.EAST_WEST, enabled) { app.sync.refreshChannels() }
-            reconcileChannels()
-            _lineupUpdate.value = _lineupUpdate.value.copy(message = "East and West ${if (enabled) "on" else "off"}")
-        }
-    }
-
     fun resyncLibrary() {
         updateLineup("Reading libraries", "Sync failed") {
             syncLibrary()
@@ -166,12 +152,12 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     /** Navigation must not cancel a library update or roll back the user's lineup switch. */
     private fun updateLineup(
-        message: String, failure: String, music: Boolean? = null, eastWest: Boolean? = null,
+        message: String, failure: String, music: Boolean? = null,
         operation: suspend () -> Unit,
     ) {
         if (_lineupUpdate.value.busy || signingOut) return
         _lineupUpdate.value = LineupUpdate(
-            true, message, music = music, eastWest = eastWest, lastSyncMs = _lineupUpdate.value.lastSyncMs,
+            true, message, music = music, lastSyncMs = _lineupUpdate.value.lastSyncMs,
         )
         lineupJob = scope.launch {
             try {
@@ -181,7 +167,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             } catch (e: Exception) {
                 _lineupUpdate.value = _lineupUpdate.value.copy(message = null, error = "$failure: ${e.message}")
             } finally {
-                _lineupUpdate.value = _lineupUpdate.value.copy(busy = false, music = null, eastWest = null)
+                _lineupUpdate.value = _lineupUpdate.value.copy(busy = false, music = null)
             }
         }
     }
@@ -287,8 +273,6 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         engine.setVisible(foreground && screen == Screen.Player)
         _screen.value = if (screen is Screen.Editor && screen.channelId == Lineup.ADS_ID) {
             Screen.AdLibrary
-        } else if (screen is Screen.Editor && screen.channelId != null) {
-            Screen.Editor(Lineup.eastOf(screen.channelId))
         } else screen
     }
 
@@ -379,7 +363,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         engine.stop()
     }
 
-    /** Keep menus open while replacing a feed that a lineup change removed. */
+    /** Keep menus open while replacing a channel that a lineup change removed. */
     suspend fun reconcileChannels() {
         val generation = connectionGeneration
         val list = app.schedule.active()
@@ -391,7 +375,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         val current = currentId
         if (current in ids || (current == Lineup.RESTART_ID && app.schedule.channel(current) != null)) return
         if (generation != connectionGeneration) return
-        val replacement = current?.let { id -> list.firstOrNull { it.id == Lineup.eastOf(id) } } ?: list.firstOrNull()
+        val replacement = list.firstOrNull()
         currentId = replacement?.id
         if (replacement == null) engine.clear() else if (foreground) engine.tune(replacement.id)
     }
