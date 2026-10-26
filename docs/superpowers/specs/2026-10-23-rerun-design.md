@@ -69,7 +69,7 @@ The MCU group follows the Marvel source verified 2026-10-25 with independent TV-
 Legacy universes follow as separate groups; time-travel placements are an editorial viewing order.
 Unmapped seasons/items use the documented grouped fallback, and missing library files are skipped.
 A state marker prevents a prior shuffle deck from being reused as chronology. Normal movie/episode and music
-schedulers retain their existing algorithms. The guide, filler, West feeds and locked schedule rules still apply.
+schedulers retain their existing algorithms. The guide, filler and locked schedule rules still apply.
 Five SVG icon samples are review artifacts; no icon assets are added to the app before design approval.
 
 ## Scheduling and ads
