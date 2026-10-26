@@ -51,8 +51,8 @@ class GuideLayoutTest {
     @Test
     fun channelNamesWrapWhenRowsHaveRoom() {
         assertEquals(1, guideRows(40f, 100, 0).channelNameLines)
-        assertEquals(2, guideRows(700f, 100, 0).channelNameLines)
-        assertEquals(2, guideRows(700f, 3, 0).channelNameLines)
+        assertEquals(3, guideRows(700f, 100, 0).channelNameLines)
+        assertEquals(3, guideRows(700f, 3, 0).channelNameLines)
     }
 
     @Test

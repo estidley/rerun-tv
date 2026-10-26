@@ -10,6 +10,14 @@ fun fixture(name: String): String =
 
 class PlexParseTest {
     @Test
+    fun summaryIsTrimmedAndBlankIsNull() {
+        assertEquals("A hacker.", PlexParse.summary("""{"MediaContainer":{"Metadata":[{"summary":"  A hacker. "}]}}"""))
+        assertNull(PlexParse.summary("""{"MediaContainer":{"Metadata":[{"summary":"  "}]}}"""))
+        assertNull(PlexParse.summary("""{"MediaContainer":{"Metadata":[{}]}}"""))
+        assertNull(PlexParse.summary("""{"MediaContainer":{}}"""))
+    }
+
+    @Test
     fun parsesPinToken() {
         val pin = PlexParse.pin(fixture("pin.json"))
         assertEquals(Pin(2310582993, "K7QZ", "abc123token"), pin)

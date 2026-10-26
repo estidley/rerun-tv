@@ -111,6 +111,10 @@ object PlexParse {
         )
     }
 
+    /** Plex's description of a movie, episode or show; null when absent or blank. */
+    fun summary(text: String): String? =
+        container(text).arr("Metadata").firstOrNull()?.str("summary")?.trim()?.takeIf { it.isNotEmpty() }
+
     /** Streams for the same first media/part that playback uses. */
     fun subtitles(text: String): List<SubtitleStream> =
         container(text).arr("Metadata").firstOrNull()?.arr("Media")?.firstOrNull()

@@ -3,6 +3,7 @@ package com.rerun.tv.ui
 import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
+import com.rerun.core.plex.PlexParse
 import com.rerun.core.plex.ServerUri
 import com.rerun.core.schedule.EntryKind
 import com.rerun.tv.RerunApp
@@ -71,6 +72,8 @@ sealed interface Screen {
 }
 
 /** App-level state and remote-control actions. One per activity. */
+private const val SUMMARY_CAPACITY = 64
+
 class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -292,7 +295,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             previousId = null
             channelBeforeRestart = null
             serverBase = null
-            _bannerUntil.value = 0L
+            synchronized(summaries) { summaries.clear() }
             go(Screen.Onboarding)
         } finally {
             signingOut = false
@@ -448,6 +451,30 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun currentChannelId(): String? = currentId
+
+    private val summaries = object : LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > SUMMARY_CAPACITY
+    }
+
+    /** Program description from Plex, fetched on demand for the focused guide cell. Never persisted; failures are null. */
+    suspend fun programSummary(item: MediaItem?): String? {
+        if (item == null || item.kind == MediaKind.TRACK) return null
+        val base = serverBase ?: return null
+        val token = token ?: return null
+        val path = "/library/metadata/${item.key}"
+        if (!ServerUri.isLibraryPath(path) || !ServerUri.isAcceptable(base)) return null
+        val cacheKey = "$base|${item.key}"
+        synchronized(summaries) { summaries[cacheKey] }?.let { return it }
+        val text = try {
+            withContext(Dispatchers.IO) { PlexParse.summary(app.plex.get(base, path, token)) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        synchronized(summaries) { summaries[cacheKey] = text }
+        return text
+    }
 
     fun dispose() {
         scope.cancel()

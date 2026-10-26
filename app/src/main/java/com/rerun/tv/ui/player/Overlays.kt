@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -53,8 +55,37 @@ fun describe(item: MediaItem?): String = when {
     else -> item.title + (item.year?.let { " ($it)" } ?: "")
 }
 
-private val clock = SimpleDateFormat("h:mm", Locale.US)
-fun clockTime(ms: Long): String = clock.format(Date(ms))
+private class LocaleFormats(val locale: Locale) {
+    val time = SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "jmm"), locale)
+    val date = SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEMMMd"), locale)
+}
+
+private var cachedFormats: LocaleFormats? = null
+
+@Synchronized
+private fun formats(): LocaleFormats {
+    val locale = Locale.getDefault()
+    return cachedFormats?.takeIf { it.locale == locale } ?: LocaleFormats(locale).also { cachedFormats = it }
+}
+
+/** Time of day in the device's locale and 12/24-hour convention; used everywhere a time is shown. */
+@Synchronized
+fun clockTime(ms: Long): String = formats().time.apply { timeZone = java.util.TimeZone.getDefault() }.format(Date(ms))
+
+/** Weekday and date in the device's locale, e.g. "Mon, Oct 26". */
+@Synchronized
+fun clockDate(ms: Long): String = formats().date.apply { timeZone = java.util.TimeZone.getDefault() }.format(Date(ms))
+
+/** "8:00 PM · in 12 min" for a program starting at [startMs]. */
+fun upNextTiming(startMs: Long, nowMs: Long): String {
+    val minutes = ((startMs - nowMs).coerceAtLeast(0) + 59_999) / 60_000
+    val until = when {
+        minutes <= 0 -> "starting now"
+        minutes < 60 -> "in $minutes min"
+        else -> "in ${minutes / 60} hr" + if (minutes % 60 > 0) " ${minutes % 60} min" else ""
+    }
+    return "${clockTime(startMs)}  ·  $until"
+}
 
 /** Channel icon with a small gray number beneath it in the top-right corner. */
 @Composable
@@ -93,7 +124,18 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
                     endsMs?.let { "ends ${clockTime(it)}" },
                 )
                 BasicText(bits.joinToString("  ·  "), style = Retro.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (next != null) BasicText("UP NEXT  ${describe(next)}", style = Retro.Caption.copy(color = Retro.Cyan), maxLines = 1)
+            }
+            if (next != null) {
+                var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(endsMs) {
+                    while (true) { now = System.currentTimeMillis(); delay(15_000) }
+                }
+                Spacer(Modifier.width(24.dp))
+                Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.End) {
+                    BasicText("UP NEXT", style = Retro.Caption.copy(color = Retro.Yellow), maxLines = 1)
+                    BasicText(describe(next), style = Retro.Body.copy(color = Retro.Cyan, textAlign = TextAlign.End), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    endsMs?.let { BasicText(upNextTiming(it, now), style = Retro.Caption, maxLines = 1) }
+                }
             }
         }
     }

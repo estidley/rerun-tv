@@ -3,10 +3,16 @@ package com.rerun.tv.ui.guide
 import kotlin.math.floor
 
 /** Row and program-panel sizing. [textScale] multiplies guide cell and program-panel text. */
-enum class GuideDensity(val label: String, val minimumHeight: Float, val detailHeight: Float, val textScale: Float) {
-    COMPACT("Compact", 72f, 170f, 0.9f),
-    DEFAULT("Default", 104f, 170f, 1f),
-    LARGE("Large", 150f, 260f, 1.35f);
+enum class GuideDensity(
+    val label: String,
+    val minimumHeight: Float,
+    val detailHeight: Float,
+    val textScale: Float,
+    val summaryLines: Int,
+) {
+    COMPACT("Compact", 72f, 190f, 0.9f, 2),
+    DEFAULT("Default", 104f, 200f, 1f, 2),
+    LARGE("Large", 150f, 310f, 1.35f, 4);
 
     companion object {
         fun from(value: String?): GuideDensity = entries.firstOrNull { it.name == value } ?: DEFAULT
@@ -39,6 +45,6 @@ internal fun guideRows(availableHeight: Float, channelCount: Int, focusedIndex: 
         else -> density.minimumHeight
     }
     val first = (focusedIndex - visible / 2).coerceIn(0, (channelCount - visible).coerceAtLeast(0))
-    val lines = floor((rowHeight - 8f) / (28f * density.textScale)).toInt().coerceIn(1, 2)
+    val lines = floor((rowHeight - 8f) / (28f * density.textScale)).toInt().coerceIn(1, 3)
     return GuideRows(visible, rowHeight, first, lines, channelCount >= capacity)
 }
