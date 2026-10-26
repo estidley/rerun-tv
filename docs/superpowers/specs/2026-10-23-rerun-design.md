@@ -6,7 +6,7 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
-Channel identities use stable IDs, independent of user-renamed display text. `ChannelIcon` loads bundled lossless WebP artwork in guide rows, channel management and playback OSD/info. The 102 SVG masters/wordmarks live under `design/channel-icons`; a pinned Sharp generator produces 256 px transparent Android drawables and a static resource map. Managed West IDs resolve to East; unknown music/custom channels use explicit fallback art.
+Channel identities use stable IDs, independent of user-renamed display text. `ChannelIcon` loads bundled lossless WebP artwork in guide rows, channel management and playback OSD/info. The 102 SVG masters/wordmarks live under `design/channel-icons`; a pinned Sharp generator produces 256 px transparent Android drawables and a static resource map. Unknown music/custom channels use explicit fallback art.
 
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
@@ -72,7 +72,7 @@ Legacy universes follow as separate groups; time-travel placements are an editor
 Unmapped seasons/items use the documented grouped fallback, and missing library files are skipped.
 A state marker prevents a prior shuffle deck from being reused as chronology. Normal movie/episode and music
 schedulers retain their existing algorithms. The guide, filler and locked schedule rules still apply.
-Five SVG icon samples are review artifacts; no icon assets are added to the app before design approval.
+The full icon set is bundled in `app/src/main/res/drawable-nodpi`; only physical TV legibility remains to be checked on a device.
 
 ## Scheduling and ads
 
