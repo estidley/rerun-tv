@@ -74,7 +74,7 @@ class SettingsScreenTest {
         }
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
-        `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
+        `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
@@ -113,7 +113,7 @@ class SettingsScreenTest {
         val labels = listOf(
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
-            "Compact", "■ Comfortable", "Large", "Subtitles", "Subtitle language: Automatic",
+            "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic",
             "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
             "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )

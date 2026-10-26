@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Arrangement
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.core.catalog.Lineup
@@ -72,7 +73,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private const val WINDOW_MS = 3 * 3_600_000L
-private val CHANNEL_W = 230.dp
+private val CHANNEL_W = 120.dp
 private val TIME_HEADER_H = 36.dp
 
 /** 90s cable-guide grid: channels down the side, half-hours across, a cyan now-line. */
@@ -219,7 +220,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 HeaderButton("SETTINGS", header && headerIndex == 1)
             }
             Spacer(Modifier.height(12.dp))
-            DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem))
+            DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem), GuideDensity.from(density))
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 if (updating || loadError != null || rows.isEmpty()) {
@@ -240,6 +241,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 val timelineW = maxWidth - CHANNEL_W
                 val pxPerMs = timelineW.value / WINDOW_MS
                 val layout = guideRows((maxHeight - TIME_HEADER_H).value, rows.size, focusRow, GuideDensity.from(density))
+                val scale = GuideDensity.from(density).textScale
                 Column(Modifier.fillMaxSize().clipToBounds().testTag("guide-grid")) {
                     TimeHeader(windowStart, timelineW)
                     rows.drop(layout.firstIndex).take(layout.visibleCount).forEachIndexed { i, ch ->
@@ -252,24 +254,21 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                                 Modifier.width(CHANNEL_W).fillMaxHeight()
                                     .background(channelColor).border(2.dp, Retro.Cyan)
                                     .testTag("guide-channel:${ch.id}")
-                                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.Center,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                BasicText(ch.number.toString(), style = Retro.GuideNumber, modifier = Modifier.width(58.dp))
-                                ChannelIcon(ch.id, size = 30.dp)
-                                Spacer(Modifier.width(8.dp))
-                                BasicText(
-                                    ch.name, style = Retro.GuideCell.copy(lineHeight = 28.sp),
-                                    maxLines = layout.channelNameLines, overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    ChannelIcon(ch.id, size = (layout.rowHeight - 30f).coerceIn(32f, 96f * scale).dp)
+                                    BasicText(ch.number.toString(), style = Retro.ChannelNumber.copy(fontSize = (18f * scale).sp))
+                                }
                             }
                             Box(Modifier.width(timelineW).fillMaxHeight()) {
                                 for (b in blocks[ch.id].orEmpty()) {
                                     val x = ((b.startMs - windowStart) * pxPerMs).dp
                                     val w = ((b.endMs - b.startMs) * pxPerMs).dp
                                     val sel = rowIndex == focusRow && focusTime >= b.startMs && focusTime < b.endMs
-                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel, rowColor)
+                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel, rowColor, scale)
                                 }
                                 val nowX = ((now - windowStart) * pxPerMs).dp
                                 if (now in windowStart until windowStart + WINDOW_MS) {
@@ -319,7 +318,7 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp) {
 }
 
 @Composable
-private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean, rowColor: Color) {
+private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean, rowColor: Color, scale: Float) {
     val title = block.title
     val label = when {
         block.offAir -> "Off Air"
@@ -336,15 +335,17 @@ private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Bo
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        BasicText(label, style = Retro.GuideCell.copy(color = if (selected) Retro.GuideBlueDeep else Retro.White), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        BasicText(label, style = Retro.GuideCell.copy(color = if (selected) Retro.GuideBlueDeep else Retro.White, fontSize = Retro.GuideCell.fontSize * scale), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?) {
-    Row(Modifier.fillMaxWidth().height(170.dp).background(Retro.GuideBlueDeep.copy(alpha = 0.7f)).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(12.dp)) {
+private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?, density: GuideDensity) {
+    val scale = density.textScale
+    val posterH = density.detailHeight - 24f
+    Row(Modifier.fillMaxWidth().height(density.detailHeight.dp).background(Retro.GuideBlueDeep.copy(alpha = 0.7f)).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(12.dp)) {
         if (poster != null) {
-            AsyncImage(poster, null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 98.dp, height = 146.dp))
+            AsyncImage(poster, null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = (posterH * 0.67f).dp, height = posterH.dp))
             Spacer(Modifier.width(20.dp))
         }
         Column {
@@ -355,7 +356,7 @@ private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBloc
                 item?.contentRating,
                 item?.genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotBlank() },
             )
-            BasicText(bits.joinToString("  ·  "), style = Retro.Body, maxLines = 1)
+            BasicText(bits.joinToString("  ·  "), style = Retro.Body.copy(fontSize = Retro.Body.fontSize * scale), maxLines = 1)
             if (item?.kind == MediaKind.EPISODE) BasicText(item.title, style = Retro.Caption.copy(color = Retro.Cyan), maxLines = 1)
         }
     }

@@ -132,11 +132,19 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             }
             if (items != null) {
                 db.items().replaceAll(items.map(ItemRow::of))
+                val resyncNow = System.currentTimeMillis()
                 for (id in db.entries().channelsWithMissingItems()) {
                     if (id == Lineup.ADS_ID) continue
-                    db.entries().deleteChannel(id)
-                    db.states().delete(id)
-                    if (id == Lineup.RESTART_ID) db.channels().delete(id)
+                    if (id == Lineup.RESTART_ID) {
+                        db.entries().deleteChannel(id)
+                        db.states().delete(id)
+                        db.channels().delete(id)
+                        continue
+                    }
+                    // Keep what is airing and later entries that are still playable; a removed item cannot air.
+                    val current = db.entries().range(id, resyncNow, resyncNow + 1).firstOrNull()
+                    val from = db.entries().firstMissingStart(id, current?.startMs ?: resyncNow)
+                    if (from != null) db.entries().deleteFrom(id, from)
                 }
             }
             val contents = items ?: db.items().all().map { it.toItem() }
@@ -207,7 +215,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         val def = row.def
         val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
             else Resolver.pool(def, lib().items)
-        val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = row.id.hashCode().toLong())
+        val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = kotlin.random.Random.nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs,
             backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))

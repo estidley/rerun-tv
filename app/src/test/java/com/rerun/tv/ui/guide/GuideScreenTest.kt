@@ -74,7 +74,7 @@ class GuideScreenTest {
         val settings = mock(Settings::class.java)
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
-        `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
+        `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
@@ -374,10 +374,10 @@ class GuideScreenTest {
         val last = compose.onNodeWithTag("guide-row:test:${expected.visibleCount - 1}").fetchSemanticsNode().boundsInRoot
         assertEquals(grid.bottom, last.bottom, 1f)
         assertTrue(first.height >= 72f * density - 1f)
-        val textLayouts = mutableListOf<TextLayoutResult>()
-        compose.onNodeWithText("A long channel name 0", useUnmergedTree = true)
-            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(textLayouts) }
-        assertEquals(2, textLayouts.single().lineCount)
+        compose.onNode(
+            androidx.compose.ui.test.hasText("1") and androidx.compose.ui.test.hasAnyAncestor(androidx.compose.ui.test.hasTestTag("guide-channel:test:0")),
+            useUnmergedTree = true,
+        ).assertExists()
         for (choice in ColorTheme.entries) {
             compose.runOnIdle { theme.value = choice }
             compose.waitForIdle()

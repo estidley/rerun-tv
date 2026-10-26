@@ -10,7 +10,7 @@ class GuideLayoutTest {
             val layout = guideRows(height, 100, 0)
             assertTrue(layout.visibleCount > 0)
             assertEquals(height, layout.rowHeight * layout.visibleCount, 0.01f)
-            assertTrue(layout.rowHeight >= 72f)
+            assertTrue(layout.rowHeight >= 104f)
         }
     }
 
@@ -23,7 +23,7 @@ class GuideLayoutTest {
     fun shortLineupsDoNotStretchIntoGiantRows() {
         val layout = guideRows(700f, 3, 0)
         assertEquals(3, layout.visibleCount)
-        assertEquals(72f, layout.rowHeight, 0f)
+        assertEquals(104f, layout.rowHeight, 0f)
         assertEquals(0, layout.firstIndex)
     }
 
@@ -58,16 +58,17 @@ class GuideLayoutTest {
     @Test
     fun densityChangesVisibleRowsWhilePreservingFillAndFocus() {
         val compact = guideRows(700f, 100, 50, GuideDensity.COMPACT)
-        val comfortable = guideRows(700f, 100, 50, GuideDensity.COMFORTABLE)
+        val default = guideRows(700f, 100, 50, GuideDensity.DEFAULT)
         val large = guideRows(700f, 100, 50, GuideDensity.LARGE)
-        assertTrue(compact.visibleCount > comfortable.visibleCount)
-        assertTrue(comfortable.visibleCount > large.visibleCount)
-        for (layout in listOf(compact, comfortable, large)) {
+        assertTrue(compact.visibleCount > default.visibleCount)
+        assertTrue(default.visibleCount > large.visibleCount)
+        for (layout in listOf(compact, default, large)) {
             assertEquals(700f, layout.rowHeight * layout.visibleCount, 0.01f)
             assertTrue(50 in layout.firstIndex until layout.firstIndex + layout.visibleCount)
         }
-        assertEquals(1, compact.channelNameLines)
-        assertEquals(3, large.channelNameLines)
-        assertEquals(GuideDensity.COMFORTABLE, GuideDensity.from("invalid"))
+        assertTrue(GuideDensity.LARGE.detailHeight > GuideDensity.DEFAULT.detailHeight)
+        assertEquals("COMPACT", GuideDensity.fromLegacy("COMFORTABLE"))
+        assertEquals("DEFAULT", GuideDensity.fromLegacy("LARGE"))
+        assertEquals(GuideDensity.DEFAULT, GuideDensity.from("invalid"))
     }
 }

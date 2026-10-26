@@ -88,7 +88,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     val crtLevel: StateFlow<String> = app.settings.crtLevel().stateIn(scope, SharingStarted.Eagerly, "SUBTLE")
     val colorTheme: StateFlow<String> = app.settings.colorTheme().stateIn(scope, SharingStarted.Eagerly, "STANDARD_BLUE")
-    val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "COMFORTABLE")
+    val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "DEFAULT")
     val subtitleLanguage: StateFlow<String> = app.settings.subtitleLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val audioLanguage: StateFlow<String> = app.settings.audioLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val hdrMode: StateFlow<String> = app.settings.hdrMode().stateIn(scope, SharingStarted.Eagerly, "AUTO")
@@ -186,7 +186,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private suspend fun syncLibrary(selected: Set<String>? = null) {
         app.sync.sync(selected).collect { p ->
             _lineupUpdate.value = _lineupUpdate.value.copy(
-                message = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}",
+                message = if (p.finished) "Library synced: ${p.total} items" else "${p.stage} ${p.done}/${p.total}",
             )
         }
         _lineupUpdate.value = _lineupUpdate.value.copy(lastSyncMs = app.settings.lastSyncMs())

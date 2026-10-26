@@ -16,6 +16,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
+import com.rerun.core.codec.StateCodec
+import com.rerun.core.schedule.ChannelState
+import com.rerun.core.schedule.EntryKind
+import com.rerun.core.schedule.ScheduleEntry
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -181,6 +185,34 @@ class ScheduleRepoTest {
         assertEquals(current, rebuilt.first())
         assertEquals("Edited", repo.channel(channel.id)?.name)
         assertTrue(rebuilt.drop(1).filter { it.itemKey != null }.all { it.itemKey == "2" })
+    }
+
+    @Test
+    fun resyncKeepsAiringAndStillValidEntriesAndTrimsOnlyRemovedItems() = runBlocking {
+        repo.refreshChannels(false, listOf(movie("1"), movie("2"), movie("3")))
+        val id = "movies:1"
+        val t = System.currentTimeMillis()
+        val hour = 3_600_000L
+        val rows = listOf("1" to -hour / 2, "2" to hour / 2, "3" to 3 * hour / 2, "1" to 5 * hour / 2)
+        db.entries().insertAll(rows.map { (key, offset) ->
+            EntryRow.of(ScheduleEntry(id, t + offset, t + offset + hour, EntryKind.PROGRAM, key))
+        })
+        db.states().put(StateRow(id, StateCodec.encode(ChannelState(seed = 42))))
+        repo.refreshChannels(false, listOf(movie("1"), movie("2"), movie("3")))
+        assertEquals(4, db.entries().range(id, 0, Long.MAX_VALUE).size)
+
+        repo.refreshChannels(false, listOf(movie("1"), movie("3")))
+        val kept = db.entries().range(id, 0, Long.MAX_VALUE).filter { it.startMs < t + 3 * hour / 2 }
+        assertEquals(listOf("1"), kept.map { it.itemKey })
+        assertEquals(42L, StateCodec.decode(db.states().get(id)!!.json).seed)
+    }
+
+    @Test
+    fun newChannelStatesGetRandomSeedsSoResyncsDoNotReplayTheSameOrder() = runBlocking {
+        repo.refreshChannels(false, listOf(movie("1")))
+        repo.ensure("movies:1", now)
+        val seed = StateCodec.decode(db.states().get("movies:1")!!.json).seed
+        assertNotEquals("movies:1".hashCode().toLong(), seed)
     }
 
     @Test

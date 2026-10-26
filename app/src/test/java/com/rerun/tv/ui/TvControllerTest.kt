@@ -56,7 +56,7 @@ class TvControllerTest {
         `when`(repo.activeChannels()).thenReturn(rows)
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
-        `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
+        `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))

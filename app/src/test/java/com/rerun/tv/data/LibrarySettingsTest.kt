@@ -78,7 +78,7 @@ class LibrarySettingsTest {
 
     @Test
     fun densityAndSubtitleLanguagePersist() = runBlocking {
-        assertEquals("COMFORTABLE", settings.guideDensity().first())
+        assertEquals("DEFAULT", settings.guideDensity().first())
         assertEquals("auto", settings.subtitleLanguageValue())
         settings.setGuideDensity("LARGE")
         settings.setSubtitleLanguage("es")

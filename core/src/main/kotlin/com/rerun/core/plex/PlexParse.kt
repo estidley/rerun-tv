@@ -103,7 +103,9 @@ object PlexParse {
                     id, audio.str("languageCode") ?: audio.str("language"),
                     audio.str("displayTitle") ?: audio.str("title") ?: audio.str("language") ?: "Audio $id",
                     audio.str("codec"), audio.int("channels"), audio.bool("selected") || audio.int("selected") == 1,
-                    audio.bool("canNormalizeLoudness") || audio.int("canNormalizeLoudness") == 1,
+                    // Plex flags analyzed tracks with loudness/lra/gain stats; canNormalizeLoudness is not always present.
+                    audio.bool("canNormalizeLoudness") || audio.int("canNormalizeLoudness") == 1 ||
+                        audio.str("loudness") != null || audio.str("lra") != null,
                 )
             },
         )

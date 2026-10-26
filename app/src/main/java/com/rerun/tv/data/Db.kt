@@ -202,6 +202,9 @@ interface EntryDao {
     @Query("SELECT DISTINCT channelId FROM entries WHERE itemKey IS NOT NULL AND itemKey NOT IN (SELECT `key` FROM items)")
     suspend fun channelsWithMissingItems(): List<String>
 
+    @Query("SELECT MIN(startMs) FROM entries WHERE channelId = :channelId AND startMs >= :fromMs AND itemKey IS NOT NULL AND itemKey NOT IN (SELECT `key` FROM items)")
+    suspend fun firstMissingStart(channelId: String, fromMs: Long): Long?
+
     @Query("DELETE FROM entries")
     suspend fun clear()
 

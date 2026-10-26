@@ -60,6 +60,17 @@ class PlaybackTest {
     }
 
     @Test
+    fun analyzedLoudnessStatsMarkATrackNormalizable() {
+        val details = PlexParse.videoDetails(
+            """{"MediaContainer":{"Metadata":[{"Media":[{"Part":[{"Stream":[
+            {"id":8,"streamType":2,"loudness":-17.2,"lra":6.1},
+            {"id":9,"streamType":2}]}]}]}]}}""",
+        )
+        assertTrue(details.audio[0].canNormalizeLoudness)
+        assertFalse(details.audio[1].canNormalizeLoudness)
+    }
+
+    @Test
     fun h264AacDirectPlays() {
         val m = movie("1002").copy(container = "mp4", videoCodec = "h264", audioCodec = "aac", partKey = "/library/parts/78/1/file.mp4")
         assertTrue(Playback.canDirectPlay(m))

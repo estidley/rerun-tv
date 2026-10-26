@@ -98,8 +98,10 @@ class Settings(context: Context, private val dao: SettingDao) {
 
     fun colorTheme(): Flow<String> = dao.observe(COLOR_THEME).map { it ?: "STANDARD_BLUE" }
     suspend fun setColorTheme(v: String) = dao.put(SettingRow(COLOR_THEME, v))
-    fun guideDensity(): Flow<String> = dao.observe(GUIDE_DENSITY).map { it ?: "COMFORTABLE" }
-    suspend fun setGuideDensity(v: String) = dao.put(SettingRow(GUIDE_DENSITY, v))
+    fun guideDensity(): Flow<String> = kotlinx.coroutines.flow.combine(dao.observe(GUIDE_LAYOUT), dao.observe(GUIDE_DENSITY)) { layout, legacy ->
+        layout ?: com.rerun.tv.ui.guide.GuideDensity.fromLegacy(legacy) ?: "DEFAULT"
+    }
+    suspend fun setGuideDensity(v: String) = dao.put(SettingRow(GUIDE_LAYOUT, v))
     fun subtitleLanguage(): Flow<String> = dao.observe(SUBTITLE_LANGUAGE).map { it ?: "auto" }
     suspend fun subtitleLanguageValue(): String = dao.get(SUBTITLE_LANGUAGE) ?: "auto"
     suspend fun setSubtitleLanguage(v: String) = dao.put(SettingRow(SUBTITLE_LANGUAGE, v))
@@ -206,6 +208,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val CRT_LEVEL = "crt_level"
         const val COLOR_THEME = "color_theme"
         const val GUIDE_DENSITY = "guide_density"
+        const val GUIDE_LAYOUT = "guide_layout"
         const val SUBTITLE_LANGUAGE = "subtitle_language"
         const val AUDIO_LANGUAGE = "audio_language"
         const val NORMALIZE_LOUDNESS = "normalize_loudness"
