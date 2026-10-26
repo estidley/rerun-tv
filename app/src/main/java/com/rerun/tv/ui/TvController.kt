@@ -175,6 +175,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private suspend fun changeLineupFlag(key: String, enabled: Boolean, operation: suspend () -> Unit) {
         val previous = app.settings.isOn(key)
         try {
+            // Persist the dirty marker first so an interrupted rebuild is repaired on the next launch.
+            app.settings.invalidateLineupAppVersion()
             app.settings.setFlag(key, enabled)
             operation()
         } catch (e: Exception) {

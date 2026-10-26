@@ -147,6 +147,16 @@ class LibrarySync(
         )
     }
 
+    /**
+     * Startup rebuild. Syncs and lineup switches already rebuild the dial, so launches only need it
+     * once after an app update (renamed stock channels, new extras). Everything else skips the pass.
+     */
+    suspend fun refreshChannelsForAppVersion(appVersion: String) {
+        if (settings.lineupAppVersion() == appVersion) return
+        refreshChannels()
+        if (settings.serverBase() != null) settings.setLineupAppVersion(appVersion)
+    }
+
     private companion object {
         const val PAGE = 200
     }

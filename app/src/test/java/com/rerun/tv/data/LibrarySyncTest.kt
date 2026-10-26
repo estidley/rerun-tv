@@ -58,6 +58,18 @@ class LibrarySyncTest {
     fun tearDown() = db.close()
 
     @Test
+    fun startupRebuildRunsOnlyWhenTheInstallIdentityChangesOrWasInvalidated() = runBlocking<Unit> {
+        `when`(settings.lineupAppVersion()).thenReturn("3:100")
+        sync.refreshChannelsForAppVersion("3:100")
+        verify(settings, never()).setLineupAppVersion("3:100")
+        sync.refreshChannelsForAppVersion("3:200")
+        verify(settings).setLineupAppVersion("3:200")
+        `when`(settings.lineupAppVersion()).thenReturn(null)
+        sync.refreshChannelsForAppVersion("3:200")
+        verify(settings, times(2)).setLineupAppVersion("3:200")
+    }
+
+    @Test
     fun pickerListsOnlySupportedLibraries() = runBlocking {
         assertEquals(listOf("1", "2", "3", "5"), sync.libraries().map { it.key })
     }

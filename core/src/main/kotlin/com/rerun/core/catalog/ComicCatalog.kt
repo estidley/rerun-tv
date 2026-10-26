@@ -33,11 +33,26 @@ object ComicCatalog {
         val key = key(title)
     }
 
-    private fun key(title: String): String = titleKey(java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}+"), "").trim()
-        .replace(Regex("(?i)^marvel(?:['’]s)?\\s+"), "")
-        .replace(Regex("(?i)^studios?\\s+"), "")
-        .replace(Regex("(?i)^one[- ]shot:\\s*"), ""))
+    private val marks = Regex("\\p{M}+")
+    private val marvelPrefix = Regex("(?i)^marvel(?:['’]s)?\\s+")
+    private val studioPrefix = Regex("(?i)^studios?\\s+")
+    private val oneShotPrefix = Regex("(?i)^one[- ]shot:\\s*")
+    private val dcMoviePrefix = Regex("(?i)^(batman|superman|justice league|teen titans|suicide squad|wonder woman|green lantern|justice society|constantine|deathstroke|catwoman)[:/]")
+    private val dcStudios = setOf("dc", "dc comics", "dc entertainment", "dc films", "dc studios", "dc animation")
+    private val keyCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    // Show titles repeat across every episode, so each distinct title is normalised once.
+    private fun key(title: String): String {
+        keyCache[title]?.let { return it }
+        val k = titleKey(java.text.Normalizer.normalize(title, java.text.Normalizer.Form.NFD)
+            .replace(marks, "").trim()
+            .replace(marvelPrefix, "")
+            .replace(studioPrefix, "")
+            .replace(oneShotPrefix, ""))
+        if (keyCache.size > 50_000) keyCache.clear()
+        keyCache[title] = k
+        return k
+    }
 
     // The user's selected source, verified 2026-10-25. TV seasons have independent positions.
     // https://www.marvel.com/articles/movies/mcu-timeline-order-disney-plus
@@ -263,11 +278,10 @@ object ComicCatalog {
             MARVEL -> studio == "marvel" || studio.startsWith("marvel ") ||
                 tags.any { it == "marvel" || it == "mcu" || it.startsWith("marvel ") } ||
                 entries(item, marvelEntries).isNotEmpty() || (item.kind == MediaKind.EPISODE && !ambiguousEpisode(item) && title(item) in marvelShows)
-            DC -> studio in setOf("dc", "dc comics", "dc entertainment", "dc films", "dc studios", "dc animation") ||
+            DC -> studio in dcStudios ||
                 tags.any { it == "dc" || it == "dcu" || it == "dceu" || it.startsWith("dc ") || it == "detective comics" } ||
                 entries(item, dcEntries).isNotEmpty() || (item.kind == MediaKind.EPISODE && !ambiguousEpisode(item) && title(item) in dcShows) ||
-                (item.kind == MediaKind.MOVIE && Regex("(?i)^(batman|superman|justice league|teen titans|suicide squad|wonder woman|green lantern|justice society|constantine|deathstroke|catwoman)[:/]")
-                    .containsMatchIn(item.title))
+                (item.kind == MediaKind.MOVIE &&                 dcMoviePrefix.containsMatchIn(item.title))
             else -> false
         }
     }
