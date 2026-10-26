@@ -51,9 +51,11 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
         }
     }
 
-    private fun appVersion(): Long = runCatching {
-        androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(packageManager.getPackageInfo(packageName, 0))
-    }.getOrDefault(-1L)
+    // lastUpdateTime changes on every sideloaded reinstall, even when versionCode does not.
+    private fun appVersion(): String = runCatching {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        "${androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(info)}:${info.lastUpdateTime}"
+    }.getOrDefault("unknown")
 
     override fun newImageLoader(context: Context): ImageLoader =
         ImageLoader.Builder(context)
