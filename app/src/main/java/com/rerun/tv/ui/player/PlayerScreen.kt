@@ -68,6 +68,8 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
     val fx by controller.effects.collectAsState()
     val startup by controller.startup.collectAsState()
     val update by controller.lineupUpdate.collectAsState()
+    val subtitleSize by controller.subtitleSize.collectAsState()
+    val subtitleColor by controller.subtitleColor.collectAsState()
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -80,6 +82,9 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     player = controller.engine.player()
                 }
+            },
+            update = { view ->
+                view.subtitleView?.applyAppearance(SubtitleSize.from(subtitleSize), SubtitleColor.from(subtitleColor))
             },
             modifier = Modifier.fillMaxSize(),
         )

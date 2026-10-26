@@ -38,6 +38,8 @@ class AdLibraryScreenTest {
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
         `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.subtitleSize()).thenReturn(flowOf("MEDIUM"))
+        `when`(settings.subtitleColor()).thenReturn(flowOf("WHITE"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         `when`(settings.flag(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean()))

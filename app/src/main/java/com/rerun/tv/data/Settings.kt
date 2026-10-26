@@ -107,6 +107,16 @@ class Settings(context: Context, private val dao: SettingDao) {
     fun subtitleLanguage(): Flow<String> = dao.observe(SUBTITLE_LANGUAGE).map { it ?: "auto" }
     suspend fun subtitleLanguageValue(): String = dao.get(SUBTITLE_LANGUAGE) ?: "auto"
     suspend fun setSubtitleLanguage(v: String) = dao.put(SettingRow(SUBTITLE_LANGUAGE, v))
+    fun subtitleSize(): Flow<String> = dao.observe(SUBTITLE_SIZE).map { it ?: "MEDIUM" }
+    suspend fun setSubtitleSize(v: String) {
+        require(com.rerun.tv.ui.player.SubtitleSize.entries.any { it.name == v }) { "Invalid subtitle size" }
+        dao.put(SettingRow(SUBTITLE_SIZE, v))
+    }
+    fun subtitleColor(): Flow<String> = dao.observe(SUBTITLE_COLOR).map { it ?: "WHITE" }
+    suspend fun setSubtitleColor(v: String) {
+        require(com.rerun.tv.ui.player.SubtitleColor.entries.any { it.name == v }) { "Invalid subtitle color" }
+        dao.put(SettingRow(SUBTITLE_COLOR, v))
+    }
     fun audioLanguage(): Flow<String> = dao.observe(AUDIO_LANGUAGE).map { it ?: "auto" }
     suspend fun audioLanguageValue(): String = dao.get(AUDIO_LANGUAGE) ?: "auto"
     suspend fun setAudioLanguage(v: String) = dao.put(SettingRow(AUDIO_LANGUAGE, v))
@@ -212,6 +222,8 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val GUIDE_DENSITY = "guide_density"
         const val GUIDE_LAYOUT = "guide_layout"
         const val SUBTITLE_LANGUAGE = "subtitle_language"
+        const val SUBTITLE_SIZE = "subtitle_size"
+        const val SUBTITLE_COLOR = "subtitle_color"
         const val AUDIO_LANGUAGE = "audio_language"
         const val NORMALIZE_LOUDNESS = "normalize_loudness"
         const val HDR_MODE = "hdr_mode"

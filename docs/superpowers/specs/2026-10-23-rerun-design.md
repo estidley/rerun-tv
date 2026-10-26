@@ -137,6 +137,10 @@ instead of a silent Up Next loop. Diagnostics omit raw exception messages, URLs 
 Multi-audio selection uses an explicit Plex stream ID. Audio-only conversion allows video copy without
 1080p/bitrate caps; required video conversion retains its compatibility limits.
 Subtitles can use external or embedded text, otherwise Plex burn-in.
+Locally rendered text subtitles use saved Small/Medium/Large size and White/Yellow/Cyan/Green
+color choices, defaulting to Medium and White on a 60%-opaque black background. Appearance updates
+apply through the PlayerView without retuning and override embedded text styles and font sizes.
+Bitmap and server-burned subtitles are not restyled locally.
 
 HDR Auto checks connected display and decoder support. Convert requests SDR tone mapping;
 Prefer native bypasses the capability-driven conversion choice. Native HDR errors retry SDR once.

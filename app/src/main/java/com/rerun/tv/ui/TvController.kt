@@ -95,6 +95,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     val colorTheme: StateFlow<String> = app.settings.colorTheme().stateIn(scope, SharingStarted.Eagerly, "STANDARD_BLUE")
     val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "DEFAULT")
     val subtitleLanguage: StateFlow<String> = app.settings.subtitleLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
+    val subtitleSize: StateFlow<String> = app.settings.subtitleSize().stateIn(scope, SharingStarted.Eagerly, "MEDIUM")
+    val subtitleColor: StateFlow<String> = app.settings.subtitleColor().stateIn(scope, SharingStarted.Eagerly, "WHITE")
     val audioLanguage: StateFlow<String> = app.settings.audioLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val hdrMode: StateFlow<String> = app.settings.hdrMode().stateIn(scope, SharingStarted.Eagerly, "AUTO")
 

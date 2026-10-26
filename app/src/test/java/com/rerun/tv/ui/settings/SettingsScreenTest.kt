@@ -48,6 +48,8 @@ class SettingsScreenTest {
     private lateinit var sync: LibrarySync
     private lateinit var controller: TvController
     private val music = MutableStateFlow(false)
+    private val subtitleSize = MutableStateFlow("MEDIUM")
+    private val subtitleColor = MutableStateFlow("WHITE")
     private val showSettings = mutableStateOf(true)
 
     @Before
@@ -76,6 +78,10 @@ class SettingsScreenTest {
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
         `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.subtitleSize()).thenReturn(subtitleSize)
+        `when`(settings.subtitleColor()).thenReturn(subtitleColor)
+        doAnswer { subtitleSize.value = it.getArgument(0); Unit }.`when`(settings).setSubtitleSize(anyString())
+        doAnswer { subtitleColor.value = it.getArgument(0); Unit }.`when`(settings).setSubtitleColor(anyString())
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         controller = spy(TvController(app, mock(TunerEngine::class.java)))
@@ -104,6 +110,18 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun subtitleAppearanceCyclesAndSavesWithoutRetuning() = runBlocking<Unit> {
+        clearInvocations(controller.engine)
+        compose.onNodeWithText("Size: Medium").performScrollTo().performClick()
+        compose.onNodeWithText("Size: Large").assertExists()
+        compose.onNodeWithText("Color: White").performScrollTo().performClick()
+        compose.onNodeWithText("Color: Yellow").assertExists()
+        verify(settings).setSubtitleSize("LARGE")
+        verify(settings).setSubtitleColor("YELLOW")
+        verify(controller.engine, never()).tune(anyString())
+    }
+
+    @Test
     fun regionalFeedOptionIsAbsent() {
         compose.onNodeWithText("East and West").assertDoesNotExist()
     }
@@ -113,7 +131,7 @@ class SettingsScreenTest {
         val labels = listOf(
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
-            "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic",
+            "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic", "Size: Medium", "Color: White",
             "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
             "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )
