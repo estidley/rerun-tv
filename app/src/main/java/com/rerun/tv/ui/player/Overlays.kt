@@ -55,8 +55,15 @@ fun describe(item: MediaItem?): String = when {
     else -> item.title + (item.year?.let { " ($it)" } ?: "")
 }
 
-private class LocaleFormats(val locale: Locale) {
-    val time = SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "jmm"), locale)
+/** Set by the application so time formats honour the device's 12/24-hour setting; null falls back to the locale default. */
+@Volatile
+var clockContext: android.content.Context? = null
+
+private class LocaleFormats(val locale: Locale, val use24Hour: Boolean?) {
+    val time = SimpleDateFormat(
+        android.text.format.DateFormat.getBestDateTimePattern(locale, if (use24Hour == true) "Hmm" else if (use24Hour == false) "hmm a" else "jmm"),
+        locale,
+    )
     val date = SimpleDateFormat(android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEMMMd"), locale)
 }
 
@@ -65,7 +72,9 @@ private var cachedFormats: LocaleFormats? = null
 @Synchronized
 private fun formats(): LocaleFormats {
     val locale = Locale.getDefault()
-    return cachedFormats?.takeIf { it.locale == locale } ?: LocaleFormats(locale).also { cachedFormats = it }
+    val use24Hour = clockContext?.let { android.text.format.DateFormat.is24HourFormat(it) }
+    return cachedFormats?.takeIf { it.locale == locale && it.use24Hour == use24Hour }
+        ?: LocaleFormats(locale, use24Hour).also { cachedFormats = it }
 }
 
 /** Time of day in the device's locale and 12/24-hour convention; used everywhere a time is shown. */

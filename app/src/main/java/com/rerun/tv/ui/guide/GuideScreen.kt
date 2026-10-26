@@ -77,6 +77,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private const val WINDOW_MS = 3 * 3_600_000L
+private const val ENSURE_INTERVAL_MS = 10 * 60_000L
 private val TIME_HEADER_H = 36.dp
 
 /** Lays a single line out as if rotated a quarter turn; pair with [rotate] (-90°) so it reads bottom to top. */
@@ -106,6 +107,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val startup by controller.startup.collectAsState()
     val focus = remember { FocusRequester() }
     val ensuredFor = remember { arrayOfNulls<Any>(1) }
+    val lastEnsureMs = remember { LongArray(1) }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var windowStart by remember { mutableLongStateOf(gridFloor(now)) }
@@ -154,12 +156,14 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
         // Scrolling the time window only needs new blocks; top-up and the blocking "updating" state are for data changes.
         val dataKey = listOf(rows, revision, attempt)
         val dataChanged = ensuredFor[0] != dataKey || blocks.isEmpty()
+        // Keep extending schedules for untuned channels while the guide stays open.
+        val topUpDue = dataChanged || now - lastEnsureMs[0] >= ENSURE_INTERVAL_MS
         if (dataChanged) loading = true
         loadError = null
         now = System.currentTimeMillis()
         try {
             val (b, i) = withContext(Dispatchers.IO) {
-                if (dataChanged) schedule.ensure(now)
+                if (topUpDue) schedule.ensure(now)
                 val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
                 val mapped = rows.associate { row ->
                     val entries = all[row.id].orEmpty()
@@ -179,6 +183,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             blocks = b
             items = i
             ensuredFor[0] = dataKey
+            if (topUpDue) lastEnsureMs[0] = now
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
