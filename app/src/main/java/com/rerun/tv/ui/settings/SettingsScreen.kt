@@ -58,13 +58,11 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val lineupBusy = update.busy
     val syncStatus = localStatus ?: update.error ?: update.message
     var signingOut by remember { mutableStateOf(false) }
-    val eastWest by remember(app.settings) { app.settings.flag(Settings.EAST_WEST, false) }.collectAsState(false)
     val musicOn by remember(app.settings) { app.settings.flag(Settings.MUSIC, false) }.collectAsState(false)
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
     val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
-    val shownEastWest = update.eastWest ?: eastWest
     val shownMusic = update.music ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 2, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 1, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -157,18 +155,6 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             BasicText("LINEUP", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton(
-                    "East and West",
-                    {
-                        if (!lineupBusy) {
-                            localStatus = null
-                            controller.setEastWestEnabled(!shownEastWest)
-                        }
-                    },
-                    modifier = buttonFocus(6, 0),
-                    selected = shownEastWest,
-                    sub = if (shownEastWest) "on" else "off",
-                )
-                TvButton(
                     "Music",
                     {
                         if (!lineupBusy) {
@@ -176,13 +162,13 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             controller.setMusicEnabled(!shownMusic)
                         }
                     },
-                    modifier = buttonFocus(6, 1),
+                    modifier = buttonFocus(6, 0),
                     selected = shownMusic,
                     sub = if (shownMusic) "on - Plex audio libraries" else "off - Plex audio libraries",
                 )
             }
             BasicText(
-                "West plays the same schedule 3 hours later and adds -W to the name. A new West feed is off air until East has been on for 3 hours. Music uses audio tracks from your included Plex music libraries, with a channel for each genre that has 4 hours. Include music libraries in Manage libraries. Subtitles stay off until you turn them on.",
+                "Music uses audio tracks from your included Plex music libraries, with a channel for each genre that has 4 hours. Include music libraries in Manage libraries. Subtitles stay off until you turn them on.",
                 style = Retro.Caption,
             )
             BasicText(

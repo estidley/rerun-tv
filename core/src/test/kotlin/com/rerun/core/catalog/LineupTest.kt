@@ -10,7 +10,6 @@ import com.rerun.core.model.Rules
 import com.rerun.core.movie
 import com.rerun.core.schedule.ChannelState
 import com.rerun.core.schedule.EntryKind
-import com.rerun.core.schedule.ScheduleEntry
 import com.rerun.core.schedule.Scheduler
 import com.rerun.core.track
 import java.time.Instant
@@ -28,16 +27,15 @@ class LineupTest {
         val legacy = template.copy(name = "My Anime", number = 777, kidsSafe = true,
             rules = Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()))
         val library = listOf(episode("anime", "New Anime", genres = setOf("Anime"), durationMs = 4 * HOUR))
-        val plan = Lineup.plan(library, listOf(StoredChannel(legacy, true)), eastWest = true, music = false)
+        val plan = Lineup.plan(library, listOf(StoredChannel(legacy, true)), music = false)
         val east = plan.channels.single { it.def.id == "toonami" }
         assertEquals(legacy.copy(rules = template.rules, kidsSafe = false), east.def)
         assertFalse(east.dormant)
         assertEquals(4 * HOUR, east.poolMs)
-        assertEquals(template.rules, plan.channels.single { it.def.id == "toonami:w" }.def.rules)
-        val refreshed = Lineup.plan(library, plan.channels.map { StoredChannel(it.def, it.builtIn) }, true, false)
+        val refreshed = Lineup.plan(library, plan.channels.map { StoredChannel(it.def, it.builtIn) }, false)
         assertEquals(east, refreshed.channels.single { it.def.id == "toonami" })
         val edited = legacy.copy(rules = Rules(genres = setOf("Comedy")))
-        assertEquals(edited, Lineup.plan(library, listOf(StoredChannel(edited, true)), false, false)
+        assertEquals(edited, Lineup.plan(library, listOf(StoredChannel(edited, true)), false)
             .channels.single { it.def.id == "toonami" }.def)
     }
 
@@ -57,37 +55,38 @@ class LineupTest {
         assertEquals(setOf("decade:tv:1980", "decade:music:1990"), enabled.map { it.id }.toSet())
         assertEquals(listOf("decade:tv:1980"), Lineup.channels(library, music = false)
             .filter { it.id.startsWith("decade:") }.map { it.id })
-        val plan = Lineup.plan(library, emptyList(), eastWest = false, music = true)
+        val plan = Lineup.plan(library, emptyList(), music = true)
         assertEquals(enabled.toSet(), plan.channels.filter { it.def.id.startsWith("decade:") }.map { it.def }.toSet())
         assertTrue(plan.channels.filter { it.def.id.startsWith("decade:") }.all { !it.dormant })
     }
 
     @Test
-    fun decadeRefreshPreservesEditsAndRemovesUnqualifiedStockAndWest() {
+    fun decadeRefreshPreservesEditsAndRemovesUnqualifiedStock() {
         val library = listOf(
             episode("tv", "Show", durationMs = 24 * HOUR, year = 1985),
             track("music", durationMs = 12 * HOUR).copy(year = 1985),
         )
-        val initial = Lineup.plan(library, emptyList(), eastWest = true, music = true)
+        val initial = Lineup.plan(library, emptyList(), music = true)
         val decades = initial.channels.filter { it.def.id.startsWith("decade:") }
-        assertEquals(4, decades.size)
+        assertEquals(2, decades.size)
         val existing = decades.map { StoredChannel(it.def, true) }
-        val refreshed = Lineup.plan(library, existing, eastWest = true, music = true)
+        val refreshed = Lineup.plan(library, existing, music = true)
         assertEquals(decades, refreshed.channels.filter { it.def.id.startsWith("decade:") })
-        val removed = Lineup.plan(emptyList(), existing, eastWest = true, music = true)
+        val removed = Lineup.plan(emptyList(), existing, music = true)
         assertTrue(removed.deleteIds.containsAll(decades.map { it.def.id }))
-        val musicOff = Lineup.plan(library, existing, eastWest = true, music = false)
+        val musicOff = Lineup.plan(library, existing, music = false)
         assertTrue(musicOff.channels.none { it.def.id.startsWith("decade:music:") })
         val tv = decades.first { it.def.id == "decade:tv:1980" }.def
         val edited = tv.copy(name = "My Eighties", rules = Rules(kinds = setOf(MediaKind.TRACK)))
-        val kept = Lineup.plan(library, listOf(StoredChannel(edited, true)), eastWest = false, music = true)
+        val kept = Lineup.plan(library, listOf(StoredChannel(edited, true)), music = true)
         assertEquals(edited, kept.channels.first { it.def.id == tv.id }.def)
         assertEquals(12 * HOUR, kept.channels.first { it.def.id == tv.id }.poolMs)
-        val dormant = Lineup.plan(emptyList(), listOf(StoredChannel(edited, true)), false, true)
+        assertTrue(kept.channels.first { it.def.id == tv.id }.dormant)
+        val dormant = Lineup.plan(emptyList(), listOf(StoredChannel(edited, true)), true)
         assertTrue(dormant.channels.first { it.def.id == tv.id }.dormant)
         val collision = Lineup.plan(library, listOf(StoredChannel(
             ChannelDef("custom:reserved", tv.number, "Mine", ChannelKind.CUSTOM, Rules()), false,
-        )), true, true)
+        )), true)
         assertEquals(collision.channels.size, collision.channels.map { it.def.number }.toSet().size)
     }
 
@@ -99,18 +98,17 @@ class LineupTest {
     )
 
     @Test
-    fun adsStationNeedsOnlyOneClipAndDoesNotGetAWestFeedOrUseAReservedNumber() {
+    fun adsStationNeedsOnlyOneClipAndDoesNotUseAReservedNumber() {
         val custom = ChannelDef("custom:one", 998, "Custom", ChannelKind.CUSTOM, Rules())
         val existing = listOf(StoredChannel(custom, false))
-        val enabled = Lineup.plan(emptyList(), existing, eastWest = true, music = false, adsPoolMs = 15_000)
+        val enabled = Lineup.plan(emptyList(), existing, music = false, adsPoolMs = 15_000)
         val ads = enabled.channels.single { it.def.id == Lineup.ADS_ID }
         assertEquals("Buy Me Maybe", ads.def.name)
         assertFalse(ads.dormant)
         assertEquals(15_000, ads.poolMs)
         assertNotEquals(998, ads.def.number)
         assertNotEquals(Lineup.RESTART_NUMBER, ads.def.number)
-        assertTrue(enabled.channels.none { it.def.id == Lineup.westId(Lineup.ADS_ID) })
-        val disabled = Lineup.plan(emptyList(), listOf(StoredChannel(ads.def, true)), false, false)
+        val disabled = Lineup.plan(emptyList(), listOf(StoredChannel(ads.def, true)), false)
         assertTrue(Lineup.ADS_ID in disabled.deleteIds)
     }
 
@@ -137,7 +135,7 @@ class LineupTest {
             }
         }
         assertEquals("Dinky Channel", defs.first { it.id == "disney" }.name)
-        assertEquals("Laughing Stock", defs.first { it.id == "comedy" }.name)
+        assertEquals("Laugh Track", defs.first { it.id == "comedy" }.name)
         assertEquals("True-ish", defs.first { it.id == "opt:docs" }.name)
         assertEquals("Canned Laughter", defs.first { it.id == "opt:sitcom" }.name)
         assertEquals("Sob Story", defs.first { it.id == "opt:dramedy" }.name)
@@ -149,16 +147,65 @@ class LineupTest {
     @Test
     fun chooseNameKeepsARenameAndReplacesStock() {
         assertEquals("Dinky Channel", Catalog.chooseName("disney", "Disney Channel", "Dinky Channel"))
-        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Wonderland", "Dinky Channel"))
-        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Wonderland-W", "Dinky Channel"))
-        assertEquals("Slimelodeon", Catalog.chooseName("nick", "Kid Castle", "Slimelodeon"))
-        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Dinky Channel E", "Dinky Channel"))
-        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Dinky Channel-W", "Dinky Channel"))
         assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club", "Dinky Channel"))
-        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club W", "Dinky Channel"))
+        assertEquals("Castle Club W", Catalog.chooseName("disney", "Castle Club W", "Dinky Channel"))
         assertEquals("Laughing Stock", Catalog.chooseName("comedy", "The Chuckle", "Laughing Stock"))
         assertEquals("True-ish", Catalog.chooseName("opt:docs", "The Reel", "True-ish"))
         assertEquals("Fright Night", Catalog.chooseName("horror", "Horror", "Fright Night"))
+        assertEquals("Ted's TV", Catalog.chooseName("tbs", "Laugh Track", "Ted's TV"))
+        assertEquals("Laugh Track", Catalog.chooseName("comedy", "Laughing Stock", "Laugh Track"))
+        assertEquals("Remote Control", Catalog.chooseName("mtv", "The Video Channel", "Remote Control"))
+        assertEquals("My Superstation", Catalog.chooseName("tbs", "My Superstation", "Ted's TV"))
+    }
+
+    @Test
+    fun tbsDocumentariesStayOnTedsTvAndComedyAloneFeedsLaughTrack() {
+        val defs = Catalog.builtInChannels().associateBy { it.id }
+        val documentary = movie("history", genres = setOf("Documentary"), studio = "TBS")
+        val comedy = movie("funny", genres = setOf("Comedy"), studio = "Other")
+        assertEquals("Ted's TV", defs.getValue("tbs").name)
+        assertEquals(listOf(documentary), com.rerun.core.resolve.Resolver.pool(defs.getValue("tbs"), listOf(documentary, comedy)))
+        assertEquals(listOf(comedy), com.rerun.core.resolve.Resolver.pool(defs.getValue("comedy"), listOf(documentary, comedy)))
+        val old = defs.getValue("tbs").copy(name = "Laugh Track")
+        val refreshed = Lineup.plan(listOf(documentary.copy(durationMs = 4 * HOUR)),
+            listOf(StoredChannel(old, true)), music = false)
+        assertEquals("Ted's TV", refreshed.channels.first { it.def.id == "tbs" }.def.name)
+    }
+
+    @Test
+    fun allPredefinedChannelsKeepTheirMinimumUnlessExplicitlyOverridden() {
+        val defs = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels()
+        for (def in defs) {
+            val required = Lineup.minimumContentMs(def)
+            assertTrue(required >= 4 * HOUR, def.id)
+            for (edited in listOf(def, def.copy(name = "My station"))) {
+                assertTrue(Lineup.isDormant(edited, required - 1), def.id)
+                assertFalse(Lineup.isDormant(edited, required), def.id)
+                assertFalse(Lineup.isDormant(edited.copy(minimumContentHours = 1), HOUR), def.id)
+                assertTrue(Lineup.isDormant(edited.copy(minimumContentHours = 0), 0), def.id)
+                assertFalse(Lineup.isDormant(edited.copy(minimumContentHours = 0), MIN), def.id)
+            }
+        }
+        val movieDef = Lineup.movieChannels()[1].copy(name = "Small movie night")
+        val below = Lineup.plan(listOf(movie("m", durationMs = 4 * HOUR)),
+            listOf(StoredChannel(movieDef, true)), false)
+        assertTrue(below.channels.first { it.def.id == movieDef.id }.dormant)
+        val override = Lineup.plan(listOf(movie("m", durationMs = HOUR)),
+            listOf(StoredChannel(movieDef.copy(minimumContentHours = 1), true)), false)
+        assertFalse(override.channels.first { it.def.id == movieDef.id }.dormant)
+    }
+
+    @Test
+    fun decadeOverridesSurviveRefreshButDoNotBypassTheMusicSwitch() {
+        val tracks = listOf(track("t", durationMs = HOUR))
+        val stock = Lineup.channels(listOf(track("big", durationMs = 12 * HOUR)), true)
+            .first { it.id == "decade:music:1990" }
+        val def = stock.copy(minimumContentHours = 1)
+        val on = Lineup.plan(tracks, listOf(StoredChannel(def, true)), true)
+        assertFalse(on.channels.first { it.def.id == def.id }.dormant)
+        val off = Lineup.plan(tracks, listOf(StoredChannel(def, true)), false)
+        assertTrue(off.channels.first { it.def.id == def.id }.dormant)
+        assertEquals(1, off.channels.first { it.def.id == def.id }.def.minimumContentHours)
     }
 
     @Test
@@ -216,81 +263,32 @@ class LineupTest {
     }
 
     @Test
-    fun westIsTheSameScheduleThreeHoursLater() {
-        val entries = listOf(
-            ScheduleEntry("disney", 1_000, 5_000, EntryKind.PROGRAM, "ep"),
-            ScheduleEntry("disney", 5_000, 9_000, EntryKind.FILLER, null),
-        )
-        val shifted = Lineup.shift(entries, "disney:w", Lineup.WEST_LAG_MS)
-        assertEquals(1_000 + Lineup.WEST_LAG_MS, shifted[0].startMs)
-        assertEquals(5_000 + Lineup.WEST_LAG_MS, shifted[0].endMs)
-        assertEquals("ep", shifted[0].itemKey)
-        assertEquals("disney:w", shifted[1].channelId)
-        assertEquals(EntryKind.FILLER, shifted[1].kind)
-        assertEquals(3 * HOUR, Lineup.WEST_LAG_MS)
-    }
-
-    @Test
-    fun newWestFeedLeavesTheFirstThreeHoursEmpty() {
-        val now = 10_000_000L
-        val east = listOf(ScheduleEntry("disney", now, now + 30 * MIN, EntryKind.PROGRAM, "ep"))
-        val shifted = Lineup.shift(east, "disney:w", Lineup.WEST_LAG_MS)
-        assertTrue(shifted.none { it.startMs <= now && now < it.endMs })
-        assertEquals(now + Lineup.WEST_LAG_MS, shifted.first().startMs)
-    }
-
-    @Test
-    fun eastWestNamesAndNumbers() {
-        val shows = List(8) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
-        val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel"), builtIn = true)
-        val on = Lineup.plan(shows, listOf(stored), eastWest = true, music = false)
-        val east = on.channels.first { it.def.id == "disney" }
-        val west = on.channels.first { it.def.id == "disney:w" }
-        assertEquals("Dinky Channel", east.def.name)
-        assertEquals("Dinky Channel-W", west.def.name)
-        assertEquals(101 + Lineup.WEST_NUMBER_OFFSET, west.def.number)
-        assertEquals(east.def.rules, west.def.rules)
-        assertFalse(east.dormant)
-        assertFalse(west.dormant)
-
-        val off = Lineup.plan(
-            shows,
-            listOf(StoredChannel(east.def, true), StoredChannel(west.def, true)),
-            eastWest = false,
-            music = false,
-        )
-        assertEquals("Dinky Channel", off.channels.first { it.def.id == "disney" }.def.name)
-        assertTrue(off.channels.none { it.def.id == "disney:w" })
-        assertTrue("disney:w" in off.deleteIds)
-    }
-
-    @Test
-    fun renamedChannelKeepsItsNameOnBothFeeds() {
+    fun renamedChannelKeepsItsNameAndHasOneSchedule() {
         val shows = List(8) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
         val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Castle Club"), true)
-        val plan = Lineup.plan(shows, listOf(stored), eastWest = true, music = false)
+        val plan = Lineup.plan(shows, listOf(stored), music = false)
         assertEquals("Castle Club", plan.channels.first { it.def.id == "disney" }.def.name)
-        assertEquals("Castle Club-W", plan.channels.first { it.def.id == "disney:w" }.def.name)
+        assertEquals(1, plan.channels.count { it.def.rules == stored.def.rules })
+        assertTrue(plan.channels.none { it.def.id.endsWith(":w") })
     }
 
     @Test
-    fun dormantChannelsSkipTheWestFeed() {
-        val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel E"), true)
-        val plan = Lineup.plan(emptyList(), listOf(stored), eastWest = true, music = false)
-        val east = plan.channels.first { it.def.id == "disney" }
-        assertEquals("Dinky Channel", east.def.name)
-        assertTrue(east.dormant)
-        assertTrue(plan.channels.none { Lineup.isWest(it.def.id) })
+    fun dormantChannelsKeepTheirStockName() {
+        val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel"), true)
+        val plan = Lineup.plan(emptyList(), listOf(stored), music = false)
+        val channel = plan.channels.first { it.def.id == "disney" }
+        assertEquals("Dinky Channel", channel.def.name)
+        assertTrue(channel.dormant)
     }
 
     @Test
     fun stockExtraIsDeletedAndAnEditIsKept() {
         val drama = Lineup.optionalThemes().first { it.id == "opt:drama" }
-        val stock = Lineup.plan(emptyList(), listOf(StoredChannel(drama, true)), eastWest = false, music = false)
+        val stock = Lineup.plan(emptyList(), listOf(StoredChannel(drama, true)), music = false)
         assertTrue("opt:drama" in stock.deleteIds)
         assertTrue(stock.channels.none { it.def.id == "opt:drama" })
 
-        val edited = Lineup.plan(emptyList(), listOf(StoredChannel(drama.copy(name = "My Dramas"), true)), eastWest = false, music = false)
+        val edited = Lineup.plan(emptyList(), listOf(StoredChannel(drama.copy(name = "My Dramas"), true)), music = false)
         val kept = edited.channels.first { it.def.id == "opt:drama" }
         assertEquals("My Dramas", kept.def.name)
         assertTrue(kept.dormant)
@@ -301,9 +299,9 @@ class LineupTest {
     fun musicSwitchDropsStockStations() {
         val songs = List(8) { track("j$it", genre = "Jazz", durationMs = 30 * MIN) }
         val station = Lineup.musicTemplates(songs).single()
-        val off = Lineup.plan(songs, listOf(StoredChannel(station, true)), eastWest = false, music = false)
+        val off = Lineup.plan(songs, listOf(StoredChannel(station, true)), music = false)
         assertTrue(station.id in off.deleteIds)
-        val on = Lineup.plan(songs, listOf(StoredChannel(station, true)), eastWest = false, music = true)
+        val on = Lineup.plan(songs, listOf(StoredChannel(station, true)), music = true)
         assertTrue(on.channels.any { it.def.id == station.id && !it.dormant })
         assertFalse(station.id in on.deleteIds)
     }
@@ -313,15 +311,14 @@ class LineupTest {
         val drama = Lineup.optionalThemes().first { it.id == "opt:drama" }
         val edited = drama.copy(rules = Rules(genres = setOf("Comedy")))
         val library = listOf(movie("m", genres = setOf("Comedy"), durationMs = 4 * HOUR))
-        val plan = Lineup.plan(library, listOf(StoredChannel(edited, true)), eastWest = true, music = false)
+        val plan = Lineup.plan(library, listOf(StoredChannel(edited, true)), music = false)
         assertFalse(plan.channels.first { it.def.id == drama.id }.dormant)
-        assertTrue(plan.channels.any { it.def.id == Lineup.westId(drama.id) })
     }
 
     @Test
     fun numberOnlyEditsAreNotDeleted() {
         val drama = Lineup.optionalThemes().first { it.id == "opt:drama" }.copy(number = 450)
-        val plan = Lineup.plan(emptyList(), listOf(StoredChannel(drama, true)), eastWest = false, music = false)
+        val plan = Lineup.plan(emptyList(), listOf(StoredChannel(drama, true)), music = false)
         assertEquals(450, plan.channels.first { it.def.id == drama.id }.def.number)
         assertFalse(drama.id in plan.deleteIds)
     }
@@ -330,7 +327,7 @@ class LineupTest {
     fun renamedMusicStationSurvivesTheLastTrackBeingRemoved() {
         val songs = listOf(track("t", durationMs = 4 * HOUR))
         val renamed = Lineup.musicTemplates(songs).single().copy(name = "My Jazz")
-        val plan = Lineup.plan(emptyList(), listOf(StoredChannel(renamed, true)), eastWest = true, music = true)
+        val plan = Lineup.plan(emptyList(), listOf(StoredChannel(renamed, true)), music = true)
         assertEquals("My Jazz", plan.channels.first { it.def.id == renamed.id }.def.name)
         assertTrue(plan.channels.first { it.def.id == renamed.id }.dormant)
         assertFalse(renamed.id in plan.deleteIds)
@@ -348,7 +345,7 @@ class LineupTest {
     }
 
     @Test
-    fun customChannelGetsAWestTwin() {
+    fun customAndHiddenChannelsKeepTheirIdentity() {
         val library = listOf(movie("d", genres = setOf("Drama"), durationMs = 4 * HOUR))
         val custom = StoredChannel(
             ChannelDef("custom:abcd", 420, "Mine", ChannelKind.CUSTOM, Rules(genres = setOf("Drama"))),
@@ -358,13 +355,11 @@ class LineupTest {
             ChannelDef("custom:hide", 421, "Secret", ChannelKind.CUSTOM, Rules(genres = setOf("Drama")), hidden = true),
             builtIn = false,
         )
-        val plan = Lineup.plan(library, listOf(custom, hidden), eastWest = true, music = false)
-        val west = plan.channels.first { it.def.id == "custom:abcd:w" }
-        assertEquals("Mine-W", west.def.name)
-        assertEquals(920, west.def.number)
+        val plan = Lineup.plan(library, listOf(custom, hidden), music = false)
         assertEquals("Mine", plan.channels.first { it.def.id == "custom:abcd" }.def.name)
-        assertTrue(plan.channels.none { it.def.id == "custom:hide:w" })
         assertEquals("Secret", plan.channels.first { it.def.id == "custom:hide" }.def.name)
+        assertTrue(plan.channels.first { it.def.id == "custom:hide" }.def.hidden)
+        assertTrue(plan.channels.none { it.def.id.endsWith(":w") })
     }
 
     @Test
@@ -373,7 +368,7 @@ class LineupTest {
             ChannelDef(Lineup.RESTART_ID, Lineup.RESTART_NUMBER, "From the Top", ChannelKind.CUSTOM, Rules(), hidden = true),
             builtIn = true,
         )
-        val plan = Lineup.plan(emptyList(), listOf(restart), eastWest = true, music = true)
+        val plan = Lineup.plan(emptyList(), listOf(restart), music = true)
         assertFalse(Lineup.RESTART_ID in plan.deleteIds)
         assertTrue(plan.channels.none { it.def.id == Lineup.RESTART_ID })
     }
@@ -385,7 +380,7 @@ class LineupTest {
             movie("kid", durationMs = 4 * HOUR, genres = setOf("Children"), rating = "TV-Y"),
         ) + List(8) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") } +
             List(8) { track("j$it", genre = "Jazz", durationMs = 30 * MIN) }
-        val plan = Lineup.plan(library, emptyList(), eastWest = true, music = true)
+        val plan = Lineup.plan(library, emptyList(), music = true)
         assertEquals(emptyList(), Catalog.validateNumbers(plan.channels.map { it.def }))
         assertTrue(plan.channels.any { it.def.id == "opt:news" })
         assertTrue(plan.channels.any { it.def.id == "movies:3" })

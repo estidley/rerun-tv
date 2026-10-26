@@ -114,7 +114,6 @@ class LibrarySync(
 
             emit(SyncProgress("Saving", items.size, items.size))
             schedule.refreshChannels(
-                eastWest = settings.isOn(Settings.EAST_WEST),
                 music = settings.isOn(Settings.MUSIC),
                 items = items,
                 selectedLibraries = selectedLibraries,
@@ -144,7 +143,6 @@ class LibrarySync(
     suspend fun refreshChannels() = mutex.withLock {
         if (settings.serverBase() == null) return@withLock
         schedule.refreshChannels(
-            eastWest = settings.isOn(Settings.EAST_WEST),
             music = settings.isOn(Settings.MUSIC),
         )
     }
