@@ -52,6 +52,9 @@ import com.rerun.tv.player.Phase
 import com.rerun.tv.player.TunerState
 import com.rerun.tv.player.CLIP_FADE_MS
 import com.rerun.tv.ui.TvController
+import com.rerun.tv.ui.Screen
+import com.rerun.tv.ui.common.TvButton
+import androidx.compose.foundation.layout.Row
 import com.rerun.tv.ui.StartupState
 import com.rerun.tv.ui.LineupUpdate
 import com.rerun.tv.ui.crt.VerticalRoll
@@ -61,7 +64,7 @@ import kotlinx.coroutines.delay
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
+fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier, touchControls: Boolean = false) {
     val state by controller.engine.state.collectAsState()
     val bannerUntil by controller.bannerUntil.collectAsState()
     val channels by controller.channels.collectAsState()
@@ -135,6 +138,9 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
         }
 
         PlayerOverlays(state, bannerUntil)
+        if (touchControls && visibleUntil(bannerUntil)) {
+            TouchControlBar(controller, Modifier.align(Alignment.TopStart).padding(32.dp))
+        }
     }
 }
 
@@ -238,4 +244,46 @@ private fun visibleUntil(deadlineMs: Long): Boolean {
         visible = false
     }
     return visible
+}
+
+/**
+ * Touch buttons for remote actions that have no simple gesture (long presses on the remote).
+ * Shown with the info banner, and only on touchscreen devices.
+ */
+@Composable
+internal fun TouchControlBar(controller: TvController, modifier: Modifier = Modifier) {
+    // Buttons that stay on the player keep the banner (and this bar) up for the next press.
+    fun staying(action: () -> Unit): () -> Unit = { action(); controller.showBanner() }
+    TouchControlBar(
+        onGuide = { controller.go(Screen.Guide) },
+        onChannelUp = staying(controller::channelUp),
+        onChannelDown = staying(controller::channelDown),
+        onLastChannel = staying(controller::lastChannel),
+        onStartOver = staying(controller::startEpisodeOver),
+        onAudio = { controller.go(Screen.AudioTracks) },
+        onCrt = staying(controller::cycleCrt),
+        modifier = modifier,
+    )
+}
+
+@Composable
+internal fun TouchControlBar(
+    onGuide: () -> Unit,
+    onChannelUp: () -> Unit,
+    onChannelDown: () -> Unit,
+    onLastChannel: () -> Unit,
+    onStartOver: () -> Unit,
+    onAudio: () -> Unit,
+    onCrt: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(modifier.testTag("touch-controls"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        TvButton("Guide", onGuide)
+        TvButton("CH ▲", onChannelUp, Modifier.semantics { contentDescription = "Channel up" })
+        TvButton("CH ▼", onChannelDown, Modifier.semantics { contentDescription = "Channel down" })
+        TvButton("Last channel", onLastChannel)
+        TvButton("Start over", onStartOver)
+        TvButton("Audio", onAudio)
+        TvButton("CRT", onCrt)
+    }
 }
