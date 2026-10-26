@@ -26,7 +26,9 @@ class TmdbParseTest {
     fun readsOriginCountry() {
         assertEquals("US", TmdbParse.originCountry("""{"id":54,"name":"Disney Channel","origin_country":"US"}"""))
         assertNull(TmdbParse.originCountry("""{"id":54,"origin_country":""}"""))
-        assertNull(TmdbParse.originCountry("oops"))
+        for (bad in listOf("oops", "{}")) {
+            assertFailsWith<IllegalArgumentException> { TmdbParse.originCountry(bad) }
+        }
     }
 
     @Test

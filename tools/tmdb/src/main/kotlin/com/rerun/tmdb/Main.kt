@@ -155,7 +155,13 @@ private class Tmdb(private val token: String, private val apiBase: String, priva
     fun inCountry(type: String, entries: List<TmdbSource>, country: String): List<TmdbSource> =
         entries.filter { e ->
             val origin = countries.getOrPut("$type:${e.id}") {
-                api("/3/$type/${e.id}")?.let(TmdbParse::originCountry)
+                api("/3/$type/${e.id}")?.let {
+                    try {
+                        TmdbParse.originCountry(it)
+                    } catch (_: IllegalArgumentException) {
+                        fail("TMDB sent an invalid $type detail response. Previous network lists were kept; try again later.")
+                    }
+                }
             }
             country == "ANY" || origin.equals(country, ignoreCase = true)
         }
@@ -164,6 +170,7 @@ private class Tmdb(private val token: String, private val apiBase: String, priva
         val ids = LinkedHashSet<Long>()
         val extra = if (kind == "tv") "&include_null_first_air_dates=true" else ""
         var page = 1
+        var totalPages = -1
         while (true) {
             val text = api("/3/discover/$kind?$param=$id&include_adult=false&sort_by=popularity.desc&page=$page$extra")
                 ?: fail("TMDB discovery was unavailable. Previous network lists were kept; try again later.")
@@ -175,6 +182,10 @@ private class Tmdb(private val token: String, private val apiBase: String, priva
             if (p.page != page || (p.ids.isEmpty() && (p.totalPages > page || page > 1 || p.totalPages > 1))) {
                 fail("TMDB sent incomplete discovery pages. Previous network lists were kept; try again later.")
             }
+            if (totalPages >= 0 && p.totalPages != totalPages) {
+                fail("TMDB changed its discovery page count mid-refresh. Previous network lists were kept; try again later.")
+            }
+            totalPages = p.totalPages
             ids += p.ids
             if (p.ids.isEmpty() || page >= minOf(p.totalPages, maxPages)) break
             page++
