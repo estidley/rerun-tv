@@ -235,9 +235,24 @@ object ComicCatalog {
         val k = key(if (item.kind == MediaKind.EPISODE) item.showTitle ?: item.title else item.title)
         return aliases[k] ?: k
     }
-    private fun entries(item: MediaItem, catalog: Map<String, List<Entry>>): List<Entry> =
-        catalog[title(item)].orEmpty().filter { it.kind == item.kind &&
+    /** Series whose names are shared with unrelated shows, so an episode needs explicit Marvel/DC metadata. */
+    private val sharedSeriesTitles = setOf("The Defenders", "Human Target", "Wonder Woman", "Aquaman", "Shazam!", "Birds of Prey").mapTo(HashSet(), ::key)
+
+    private fun explicitFranchise(item: MediaItem): Boolean {
+        val studio = item.studio?.trim()?.lowercase().orEmpty()
+        val tags = (item.labels + item.collections).map { it.trim().lowercase() }
+        return studio == "marvel" || studio.startsWith("marvel ") || studio.startsWith("dc ") || studio == "dc" ||
+            tags.any { it == "marvel" || it == "mcu" || it.startsWith("marvel ") || it == "dc" || it == "dcu" || it == "dceu" || it.startsWith("dc ") }
+    }
+
+    private fun ambiguousEpisode(item: MediaItem) =
+        item.kind == MediaKind.EPISODE && title(item) in sharedSeriesTitles && !explicitFranchise(item)
+
+    private fun entries(item: MediaItem, catalog: Map<String, List<Entry>>): List<Entry> {
+        if (ambiguousEpisode(item)) return emptyList()
+        return catalog[title(item)].orEmpty().filter { it.kind == item.kind &&
             (item.kind == MediaKind.EPISODE || item.year == null || it.year == item.year) }
+    }
 
     fun matches(item: MediaItem, franchise: String): Boolean {
         if (item.kind == MediaKind.TRACK) return false
@@ -247,10 +262,10 @@ object ComicCatalog {
         return when (franchise.trim().lowercase()) {
             MARVEL -> studio == "marvel" || studio.startsWith("marvel ") ||
                 tags.any { it == "marvel" || it == "mcu" || it.startsWith("marvel ") } ||
-                entries(item, marvelEntries).isNotEmpty() || (item.kind == MediaKind.EPISODE && title(item) in marvelShows)
+                entries(item, marvelEntries).isNotEmpty() || (item.kind == MediaKind.EPISODE && !ambiguousEpisode(item) && title(item) in marvelShows)
             DC -> studio in setOf("dc", "dc comics", "dc entertainment", "dc films", "dc studios", "dc animation") ||
                 tags.any { it == "dc" || it == "dcu" || it == "dceu" || it.startsWith("dc ") || it == "detective comics" } ||
-                entries(item, dcEntries).isNotEmpty() || (item.kind == MediaKind.EPISODE && title(item) in dcShows) ||
+                entries(item, dcEntries).isNotEmpty() || (item.kind == MediaKind.EPISODE && !ambiguousEpisode(item) && title(item) in dcShows) ||
                 (item.kind == MediaKind.MOVIE && Regex("(?i)^(batman|superman|justice league|teen titans|suicide squad|wonder woman|green lantern|justice society|constantine|deathstroke|catwoman)[:/]")
                     .containsMatchIn(item.title))
             else -> false
