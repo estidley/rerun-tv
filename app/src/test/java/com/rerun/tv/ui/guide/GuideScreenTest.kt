@@ -423,6 +423,10 @@ class GuideScreenTest {
         }
         val grid = compose.onNodeWithTag("guide-grid").fetchSemanticsNode().boundsInRoot
         val first = compose.onNodeWithTag("guide-row:test:0").fetchSemanticsNode().boundsInRoot
+        compose.onNode(
+            androidx.compose.ui.test.hasContentDescription("A long channel name 0") and
+                hasAnyAncestor(hasTestTag("guide-channel:test:0")),
+        ).assertExists()
         val expected = guideRows(grid.height / density - 36f, 50, 0)
         val last = compose.onNodeWithTag("guide-row:test:${expected.visibleCount - 1}").fetchSemanticsNode().boundsInRoot
         assertEquals(grid.bottom, last.bottom, 1f)

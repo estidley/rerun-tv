@@ -6,7 +6,7 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
-Channel identities use stable IDs, independent of user-renamed display text. `ChannelIcon` loads bundled lossless WebP artwork in guide rows, channel management and playback OSD/info. The 102 SVG masters/wordmarks live under `design/channel-icons`; a pinned Sharp generator produces 256 px transparent Android drawables and a static resource map. Unknown music/custom channels use explicit fallback art.
+Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. `ChannelIcon` retains square artwork in channel management and playback OSD/info. The 102 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music/custom channels use explicit fallback art.
 
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 

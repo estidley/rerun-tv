@@ -44,7 +44,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,7 +69,7 @@ import com.rerun.tv.ui.ClockWatch
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.RerunWordmark
-import com.rerun.tv.ui.common.ChannelIcon
+import com.rerun.tv.ui.common.ChannelWordmark
 import com.rerun.tv.ui.player.clockDate
 import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.player.clockFormatSettings
@@ -328,7 +327,7 @@ fun GuideScreen(
                 }
                 val scale = GuideDensity.from(density).textScale
                 val iconDp = (layout.rowHeight - 8f).coerceIn(48f, 120f * scale)
-                val channelW = (iconDp + 34f + 20f).dp
+                val channelW = (iconDp * 400f / 270f + 34f + 20f).dp
                 val timelineW = maxWidth - channelW
                 val pxPerMs = timelineW.value / WINDOW_MS
                 Box(Modifier.fillMaxSize()) {
@@ -411,8 +410,7 @@ private fun GuideRow(
                     modifier = Modifier.vertical().rotate(-90f),
                 )
             }
-            // The icon art carries the channel identity; the name shows in the detail panel for the focused row.
-            ChannelIcon(ch.id, size = iconDp.dp, modifier = Modifier.semantics { contentDescription = ch.name })
+            ChannelWordmark(ch.id, ch.name, modifier = Modifier.weight(1f).height(iconDp.dp))
         }
         Box(Modifier.width(timelineW).fillMaxHeight()) {
             if (skeleton) {
