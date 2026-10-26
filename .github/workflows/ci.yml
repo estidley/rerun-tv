@@ -55,7 +55,8 @@ jobs:
           $sdkManager = Get-ChildItem -Path (Join-Path $sdkRoot 'cmdline-tools') -Filter sdkmanager.bat -Recurse | Select-Object -First 1
           if (-not $sdkManager) { throw 'sdkmanager was not found on the runner' }
           (1..100 | ForEach-Object { 'y' }) | & $sdkManager.FullName --licenses | Out-Null
-          & $sdkManager.FullName 'platforms;android-37'
+          & $sdkManager.FullName --list 2>&1 | Select-String 'platforms;android-3[67]'
+          & $sdkManager.FullName 'platforms;android-37.0'
           if ($LASTEXITCODE -ne 0) { throw 'Android platform installation failed' }
           # AGP installs its required build-tools revision from the licensed SDK.
       - name: Set up Gradle and validate wrapper
