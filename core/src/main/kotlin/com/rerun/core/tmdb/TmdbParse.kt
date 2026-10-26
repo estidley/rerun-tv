@@ -37,8 +37,9 @@ object TmdbParse {
         return entries.filter { it.name.lowercase() in wanted }
     }
 
-    /** `origin_country` from `/network/{id}` or `/company/{id}`; blank becomes null. */
-    fun originCountry(text: String): String? = obj(text)?.str("origin_country")?.trim()?.takeIf { it.isNotEmpty() }
+    /** `origin_country` from `/network/{id}` or `/company/{id}`; blank becomes null. A malformed detail response throws. */
+    fun originCountry(text: String): String? =
+        requireNotNull(obj(text)?.takeIf { it.long("id") != null }) { "Invalid detail response" }.str("origin_country")?.trim()?.takeIf { it.isNotEmpty() }
 
     fun discoverPage(text: String): DiscoverPage {
         val o = requireNotNull(obj(text)) { "Invalid discovery response" }
