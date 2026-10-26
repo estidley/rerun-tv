@@ -49,9 +49,7 @@ Set-RerunJdk
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same checks plus PowerShell verification. Cursor Bugbot
-reviews PRs; address its findings. Baseline on `main`: 345 JVM tests, 0 failures, 26
-pre-existing lint findings.
+CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; address its findings.
 
 ## Build steps
 
