@@ -66,6 +66,12 @@ import com.rerun.tv.ui.common.ChannelIcon
 import com.rerun.tv.ui.player.clockTime
 import com.rerun.tv.ui.player.describe
 import com.rerun.tv.ui.theme.Retro
+import com.rerun.tv.ui.touch.GuideTouchAction
+import com.rerun.tv.ui.touch.TouchControls
+import com.rerun.tv.ui.touch.guideTouchScroll
+import com.rerun.tv.ui.touch.guideTouchTap
+import com.rerun.tv.ui.touch.rememberTouchControlsEnabled
+import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -84,6 +90,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val update by controller.lineupUpdate.collectAsState()
     val startup by controller.startup.collectAsState()
     val focus = remember { FocusRequester() }
+    val touch = rememberTouchControlsEnabled()
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var windowStart by remember { mutableLongStateOf(gridFloor(now)) }
@@ -183,6 +190,25 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
         if (focusTime < windowStart) windowStart = maxOf(gridFloor(System.currentTimeMillis()), windowStart - GRID_MS)
     }
 
+    // Touch: the first tap selects a cell like moving focus, tapping the selection is OK.
+    fun tapCell(rowIndex: Int, block: GuideBlock?) {
+        if (updating) return
+        val channel = rows.getOrNull(rowIndex) ?: return
+        val selected = rowIndex == focusRow && (block == null || (focusTime >= block.startMs && focusTime < block.endMs))
+        when (TouchControls.guideTap(selected)) {
+            GuideTouchAction.SELECT -> {
+                focusRow = rowIndex
+                focusTime = maxOf(block?.startMs ?: 0L, System.currentTimeMillis())
+            }
+            GuideTouchAction.WATCH -> { controller.go(Screen.Player); controller.tuneTo(channel.id) }
+        }
+    }
+
+    // Touch: a long press matches the remote's Menu button.
+    fun editChannel(rowIndex: Int) {
+        if (!updating) rows.getOrNull(rowIndex)?.let { controller.go(Screen.Editor(it.id)) }
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -214,23 +240,24 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 Spacer(Modifier.width(24.dp))
                 BasicText(clockTime(now), style = Retro.Title.copy(color = Retro.Yellow))
                 Spacer(Modifier.weight(1f))
-                HeaderButton("CHANNELS", header && headerIndex == 0)
+                HeaderButton("CHANNELS", header && headerIndex == 0, Modifier.guideTouchTap(touch, { controller.go(Screen.Channels) }))
                 Spacer(Modifier.width(16.dp))
-                HeaderButton("SETTINGS", header && headerIndex == 1)
+                HeaderButton("SETTINGS", header && headerIndex == 1, Modifier.guideTouchTap(touch, { controller.go(Screen.Settings) }))
             }
             Spacer(Modifier.height(12.dp))
             DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem))
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 if (updating || loadError != null || rows.isEmpty()) {
-                    Column(Modifier.align(Alignment.Center).testTag("guide-status")) {
+                    Column(Modifier.align(Alignment.Center).testTag("guide-status").guideTouchTap(touch, { if (loadError != null) attempt++ })) {
                         BasicText(
                             if (updating) "Updating guide..." else loadError ?: "No channels yet. Open Settings and run a library sync.",
                             style = Retro.Title,
                         )
                         BasicText(
                             if (updating) "Elapsed: ${elapsedSeconds}s"
-                            else if (loadError != null) "Press OK to retry, or UP for Settings." else "Press UP for Settings.",
+                            else if (loadError != null) { if (touch) "Tap to retry, or tap SETTINGS." else "Press OK to retry, or UP for Settings." }
+                            else if (touch) "Tap SETTINGS." else "Press UP for Settings.",
                             style = Retro.Body,
                         )
                         if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
@@ -240,7 +267,13 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 val timelineW = maxWidth - CHANNEL_W
                 val pxPerMs = timelineW.value / WINDOW_MS
                 val layout = guideRows((maxHeight - TIME_HEADER_H).value, rows.size, focusRow, GuideDensity.from(density))
-                Column(Modifier.fillMaxSize().clipToBounds().testTag("guide-grid")) {
+                Column(
+                    Modifier.fillMaxSize().clipToBounds().testTag("guide-grid").guideTouchScroll(
+                        touch,
+                        onRows = { move(it) },
+                        onTime = { steps -> repeat(abs(steps)) { moveTime(steps > 0) } },
+                    ),
+                ) {
                     TimeHeader(windowStart, timelineW)
                     rows.drop(layout.firstIndex).take(layout.visibleCount).forEachIndexed { i, ch ->
                         val rowIndex = layout.firstIndex + i
@@ -252,6 +285,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                                 Modifier.width(CHANNEL_W).fillMaxHeight()
                                     .background(channelColor).border(2.dp, Retro.Cyan)
                                     .testTag("guide-channel:${ch.id}")
+                                    .guideTouchTap(touch, { tapCell(rowIndex, null) }, { editChannel(rowIndex) })
                                     .padding(horizontal = 12.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -269,7 +303,10 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                                     val x = ((b.startMs - windowStart) * pxPerMs).dp
                                     val w = ((b.endMs - b.startMs) * pxPerMs).dp
                                     val sel = rowIndex == focusRow && focusTime >= b.startMs && focusTime < b.endMs
-                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel, rowColor)
+                                    Cell(
+                                        b, b.itemKey?.let { items[it] }, x, w, sel, rowColor,
+                                        Modifier.guideTouchTap(touch, { tapCell(rowIndex, b) }, { editChannel(rowIndex) }),
+                                    )
                                 }
                                 val nowX = ((now - windowStart) * pxPerMs).dp
                                 if (now in windowStart until windowStart + WINDOW_MS) {
@@ -282,8 +319,12 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             }
             update.error?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Yellow)) }
             BasicText(
-                if (updating) "◀▶ Channels / Settings   OK open   BACK return"
-                else "▲▼ channels   ◀▶ time   OK watch   ☰ edit channel   BACK return",
+                when {
+                    touch && updating -> "Tap CHANNELS or SETTINGS   BACK return"
+                    touch -> "Swipe to browse   Tap to select, tap again to watch   Hold to edit channel   BACK return"
+                    updating -> "◀▶ Channels / Settings   OK open   BACK return"
+                    else -> "▲▼ channels   ◀▶ time   OK watch   ☰ edit channel   BACK return"
+                },
                 style = Retro.Caption,
             )
         }
@@ -291,9 +332,9 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
 }
 
 @Composable
-private fun HeaderButton(text: String, focused: Boolean) {
+private fun HeaderButton(text: String, focused: Boolean, modifier: Modifier = Modifier) {
     Box(
-        Modifier.background(if (focused) Retro.GuideBlueLight else Retro.GuideBlueDeep.copy(alpha = 0.4f))
+        modifier.background(if (focused) Retro.GuideBlueLight else Retro.GuideBlueDeep.copy(alpha = 0.4f))
             .border(2.dp, if (focused) Retro.Yellow else Retro.Border.copy(alpha = 0.4f))
             .padding(horizontal = 18.dp, vertical = 6.dp),
     ) { BasicText(text, style = Retro.Body.copy(shadow = null)) }
@@ -319,7 +360,7 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp) {
 }
 
 @Composable
-private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean, rowColor: Color) {
+private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Boolean, rowColor: Color, modifier: Modifier = Modifier) {
     val title = block.title
     val label = when {
         block.offAir -> "Off Air"
@@ -330,6 +371,7 @@ private fun Cell(block: GuideBlock, item: MediaItem?, x: Dp, w: Dp, selected: Bo
     }
     Box(
         Modifier.offset(x = x).width(w).fillMaxHeight()
+            .then(modifier)
             .semantics { this.selected = selected }
             .background(if (selected) Retro.Yellow else rowColor)
             .border(1.dp, if (selected) Retro.White else Retro.Border.copy(alpha = 0.6f))

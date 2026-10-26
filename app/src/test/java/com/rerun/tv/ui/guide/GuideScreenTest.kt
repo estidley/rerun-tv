@@ -1,6 +1,11 @@
 package com.rerun.tv.ui.guide
 
 import android.app.Application
+import android.content.pm.PackageManager
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.performTouchInput
+import org.robolectric.Shadows.shadowOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.toPixelMap
@@ -100,6 +105,29 @@ class GuideScreenTest {
     @After
     fun tearDown() {
         controller.dispose()
+    }
+
+    @Test
+    fun touchSelectsAChannelThenWatchesItOnTheSecondTap() = runBlocking<Unit> {
+        shadowOf(RuntimeEnvironment.getApplication().packageManager)
+            .setSystemFeature(PackageManager.FEATURE_TOUCHSCREEN, true)
+        val now = System.currentTimeMillis()
+        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(
+            mapOf("test:2" to listOf(ScheduleEntry("test:2", now - 60_000, now + 600_000, EntryKind.PROGRAM, null))),
+        )
+        compose.setContent { GuideScreen(controller, schedule) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-channel:test:2").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Swipe to browse", substring = true).assertExists()
+
+        compose.onNodeWithTag("guide-channel:test:2").performTouchInput { click() }
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasAnyAncestor(hasTestTag("guide-row:test:2")) and isSelected()).fetchSemanticsNodes().size == 1
+        }
+        assertNotEquals(Screen.Player, controller.screen.value)
+
+        compose.onNodeWithTag("guide-channel:test:2").performTouchInput { click() }
+        compose.waitForIdle()
+        assertEquals(Screen.Player, controller.screen.value)
     }
 
     @Test

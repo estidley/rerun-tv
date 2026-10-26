@@ -4,8 +4,11 @@ import android.content.pm.PackageManager
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -108,29 +111,36 @@ fun Modifier.playerTouchControls(enabled: Boolean, onAction: (PlayerTouchAction)
 }
 
 /** Guide browsing: drag up/down moves the row selection, drag left/right moves through time. */
-fun Modifier.guideTouchScroll(enabled: Boolean, onRows: (Int) -> Unit, onTime: (Int) -> Unit): Modifier {
-    if (!enabled) return this
-    return pointerInput(onRows, onTime) {
-        val rowStep = TouchControls.GUIDE_ROW_STEP_DP.dp.toPx()
-        val timeStep = TouchControls.GUIDE_TIME_STEP_DP.dp.toPx()
-        var dy = 0f
-        var dx = 0f
-        detectDragGestures(onDragStart = { dx = 0f; dy = 0f }) { change, amount ->
-            change.consume()
-            dy += amount.y
-            dx += amount.x
-            val rows = TouchControls.dragSteps(dy, rowStep)
-            if (rows.steps != 0) { onRows(rows.steps); dy = rows.remainder }
-            val time = TouchControls.dragSteps(dx, timeStep)
-            if (time.steps != 0) { onTime(time.steps); dx = time.remainder }
+fun Modifier.guideTouchScroll(enabled: Boolean, onRows: (Int) -> Unit, onTime: (Int) -> Unit): Modifier =
+    if (!enabled) this else composed {
+        val rows by rememberUpdatedState(onRows)
+        val time by rememberUpdatedState(onTime)
+        pointerInput(Unit) {
+            val rowStep = TouchControls.GUIDE_ROW_STEP_DP.dp.toPx()
+            val timeStep = TouchControls.GUIDE_TIME_STEP_DP.dp.toPx()
+            var dy = 0f
+            var dx = 0f
+            detectDragGestures(onDragStart = { dx = 0f; dy = 0f }) { change, amount ->
+                change.consume()
+                dy += amount.y
+                dx += amount.x
+                val rowSteps = TouchControls.dragSteps(dy, rowStep)
+                if (rowSteps.steps != 0) { rows(rowSteps.steps); dy = rowSteps.remainder }
+                val timeSteps = TouchControls.dragSteps(dx, timeStep)
+                if (timeSteps.steps != 0) { time(timeSteps.steps); dx = timeSteps.remainder }
+            }
         }
     }
-}
 
 /** Tap and long-press on a guide element. */
-fun Modifier.guideTouchTap(enabled: Boolean, key: Any?, onTap: () -> Unit, onLongPress: (() -> Unit)? = null): Modifier {
-    if (!enabled) return this
-    return pointerInput(key) {
-        detectTapGestures(onTap = { onTap() }, onLongPress = onLongPress?.let { { _: Offset -> it() } })
+fun Modifier.guideTouchTap(enabled: Boolean, onTap: () -> Unit, onLongPress: (() -> Unit)? = null): Modifier =
+    if (!enabled) this else composed {
+        val tap by rememberUpdatedState(onTap)
+        val longPress by rememberUpdatedState(onLongPress)
+        pointerInput(onLongPress != null) {
+            detectTapGestures(
+                onTap = { tap() },
+                onLongPress = if (onLongPress != null) { _ -> longPress?.invoke() } else null,
+            )
+        }
     }
-}
