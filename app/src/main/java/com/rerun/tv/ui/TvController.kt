@@ -428,7 +428,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             if (returnTo == Lineup.RESTART_ID) return@launch
             val snap = engine.state.value
             val item = snap.item
-            val restartable = item != null && (item.kind == MediaKind.EPISODE || item.kind == MediaKind.MOVIE) &&
+            val restartable = returnTo != Lineup.ADS_ID &&
+                item != null && (item.kind == MediaKind.EPISODE || item.kind == MediaKind.MOVIE) &&
                 snap.located?.entry?.kind == EntryKind.PROGRAM && snap.channel?.id == returnTo
             if (!restartable || item == null) {
                 engine.notify("Start over works while a show or movie is playing.")

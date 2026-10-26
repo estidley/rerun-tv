@@ -152,6 +152,8 @@ Station changes retain configurable static/roll effects. Same-station clips fade
 replacement, hold black while loading, and fade in on the first frame (or music readiness).
 Load/fade time is included in wall-clock seeking; menu muting survives replacement.
 Start-over alone begins at zero and returns to the prior station when the one-shot ends.
+The separate ad-only station is not eligible for start-over; its clips stay in the ad catalog,
+and a rejected request displays the normal notification without interrupting playback.
 Pending start-over work validates the tune generation before switching, so rollover or retuning
 cannot restart an obsolete program. Action messages remain visible during filler and Off Air.
 Rollover callbacks relocate playback against current wall time, including after clock rollback.

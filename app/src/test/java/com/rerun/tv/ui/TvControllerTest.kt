@@ -90,6 +90,29 @@ class TvControllerTest {
     }
 
     @Test
+    fun startOverRejectsMovieClipsOnTheAdStationWithoutChangingPlayback() = runBlocking<Unit> {
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"ad","title":"Commercial","duration":30000}]}}""",
+        ).single()
+        val entry = com.rerun.core.schedule.ScheduleEntry(
+            Lineup.ADS_ID, 0, 30_000, com.rerun.core.schedule.EntryKind.PROGRAM, item.key,
+        )
+        `when`(engine.state).thenReturn(MutableStateFlow(com.rerun.tv.player.TunerState(
+            channel = ChannelRow.of(Lineup.adsChannel, true, false), item = item, tuneId = 1,
+            located = com.rerun.core.schedule.Located(entry, 0, null),
+        )))
+        controller.tuneTo(Lineup.ADS_ID)
+        clearInvocations(engine, repo)
+        controller.startEpisodeOver()
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine).notify("Start over works while a show or movie is playing.")
+        verify(repo, never()).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
+        verify(engine, never()).armReturn(anyString())
+        verify(engine, never()).tune(anyString())
+        assertEquals(Lineup.ADS_ID, controller.currentChannelId())
+    }
+
+    @Test
     fun startOverForAnUnchangedMovieTuneSwitchesToTheHiddenChannel() = runBlocking<Unit> {
         val item = com.rerun.core.plex.PlexParse.movies(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
