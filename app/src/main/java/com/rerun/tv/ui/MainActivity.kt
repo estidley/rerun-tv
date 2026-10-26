@@ -9,7 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,6 +39,12 @@ import com.rerun.tv.ui.settings.LibrarySettingsScreen
 import com.rerun.tv.ui.settings.SubtitleLanguageScreen
 import com.rerun.tv.ui.theme.ColorTheme
 import com.rerun.tv.ui.theme.ProvideColorTheme
+import com.rerun.tv.ui.touch.PlayerTouchAction
+import com.rerun.tv.ui.touch.playerTouchControls
+import com.rerun.tv.ui.touch.rememberTouchControlsEnabled
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : ComponentActivity() {
     private lateinit var controller: TvController
@@ -49,9 +58,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideSystemBars()
         val app = application as RerunApp
         controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
         setContent { RerunRoot(controller, onPoweredOff = { finish() }, onPlayerKeyEvent = ::handlePlayerKeyEvent) }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Some devices bring the bars back after dialogs, the keyboard or another app; hide them again.
+        if (hasFocus) hideSystemBars()
+    }
+
+    /** Full screen like a TV on phones and tablets. TV devices have no system bars to hide. */
+    private fun hideSystemBars() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     override fun onStart() {
@@ -141,6 +165,8 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
     val fx by controller.effects.collectAsState()
     val colorTheme by controller.colorTheme.collectAsState()
     val playerFocus = remember { FocusRequester() }
+    val touch = rememberTouchControlsEnabled()
+    val onPlayerTouch = remember(controller) { { action: PlayerTouchAction -> performPlayerTouch(controller, action) } }
     BackHandler(enabled = screen == Screen.Player) { controller.backFromPlayer() }
     LaunchedEffect(screen) {
         if (screen == Screen.Player) playerFocus.requestFocus()
@@ -156,12 +182,14 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides canvas) {
     ProvideColorTheme(ColorTheme.from(colorTheme)) { ProvideCrtLevel(level) { Box(
         Modifier.fillMaxSize().background(Color.Black)
+            // Keep controls and overlays clear of phone camera cutouts. TVs report no cutout, so this is a no-op there.
+            .windowInsetsPadding(WindowInsets.displayCutout)
             .onPreviewKeyEvent { onPlayerKeyEvent(it.nativeKeyEvent) }
             .focusRequester(playerFocus).focusable(enabled = screen == Screen.Player),
     ) {
         when (val s = screen) {
             Screen.Onboarding -> OnboardingScreen(controller)
-            Screen.Player -> PlayerScreen(controller)
+            Screen.Player -> PlayerScreen(controller, Modifier.playerTouchControls(touch, onPlayerTouch), touchControls = touch)
             Screen.Guide -> GuideScreen(controller)
             Screen.Channels -> ChannelManager(controller)
             is Screen.Editor -> ChannelEditor(controller, s.channelId)
@@ -176,4 +204,17 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
         if (fx.power) PowerTransition(on = !exiting, onOffDone = onPoweredOff)
         else if (exiting) androidx.compose.runtime.LaunchedEffect(Unit) { onPoweredOff() }
     } } } }
+}
+
+/** Touch equivalents of the player's remote buttons. Remote key handling stays in [MainActivity]. */
+internal fun performPlayerTouch(controller: TvController, action: PlayerTouchAction) {
+    when (action) {
+        PlayerTouchAction.TOGGLE_BANNER ->
+            if (controller.bannerUntil.value > System.currentTimeMillis()) controller.hideBanner() else controller.showBanner()
+        PlayerTouchAction.CHANNEL_UP -> controller.channelUp()
+        PlayerTouchAction.CHANNEL_DOWN -> controller.channelDown()
+        PlayerTouchAction.LAST_CHANNEL -> controller.lastChannel()
+        PlayerTouchAction.SHOW_INFO -> controller.showBanner()
+        PlayerTouchAction.OPEN_GUIDE -> controller.go(Screen.Guide)
+    }
 }

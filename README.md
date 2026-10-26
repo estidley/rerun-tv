@@ -26,7 +26,8 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 - **Normalize loudness:** optional and off by default in Settings > Audio. Requests Plex audio normalization for both programs and ads whose selected audio stream supports it, using audio transcoding while allowing video copy. Requires a recent Plex server (1.43.4+), Plex Pass, and **Analyze audio tracks for loudness** under Plex Server > Library, including the commercials library. Music stations are unchanged. Unanalyzed tracks, Dolby Vision, video conversion (including HDR-to-SDR), and selected subtitles (including text) currently skip normalization and show a warning; volume consistency is not guaranteed when either source is ineligible. This third-party integration still needs live Plex/TV validation; it does not change Plex's saved track selections or initiate analysis.
 - **HDR compatibility:** Auto HDR checks the connected display and HDR decoder before direct playback. Select Convert HDR to SDR in Settings if your TV flashes or shows incorrect colors even when it reports HDR support; Prefer native HDR opts out of capability-based conversion. Conversion requests H.264 8-bit video with video remuxing disabled, and requires **Enable HDR tone mapping** in Plex Server > Transcoder and the server owner's Plex Pass. Server hardware must keep up; some Dolby Vision formats require an SDR version. Detected HDR playback errors retry once using SDR conversion. These settings apply to episodes, movies, and ad clips.
 - **Adaptive guide:** opening the guide selects the current station and its currently airing program after loading. Whole rows fill the available guide area when there are enough channels. Larger displays can show more rows; shorter lineups keep readable row heights. Each channel cell shows a vertical channel number and the channel's illustrated wordmark, without duplicate name text. The focused channel's current name appears in the program panel, and alternating row colors make the grid easier to follow.
-- **Locale formats:** every time and date follows the device locale (12/24-hour clock, date order). The guide shows the date by the clock and in the header. The playback info banner shows Up Next right-aligned with its start time and a countdown.`n- **Theme colors:** Settings offers Standard blue, 70s earth tones, and 50s diner colors. The choice applies immediately to the guide, menus, and overlays and is saved between sessions.
+- **Locale formats:** every time and date follows the device locale (12/24-hour clock, date order). The guide shows the date by the clock and in the header. The playback info banner shows Up Next right-aligned with its start time and a countdown.
+- **Theme colors:** Settings offers Standard blue, 70s earth tones, and 50s diner colors. The choice applies immediately to the guide, menus, and overlays and is saved between sessions.
 - **Retro typography:** VT323 stays on display headings and channel-number overlays; Barlow Semi Condensed gives menus, guide listings, descriptions and help text a clearer broadcast-style companion.
 - **Guide layout:** choose Compact, Default (the default), or Large in Settings. All fill the guide area when enough channels exist; Large uses a taller program panel, bigger text and fewer rows. Channel cells show a vertical number and an illustrated wordmark; the program panel shows the date, time range and the Plex description (fetched for the focused program only; metadata GET, no watch-history updates). Movies in the grid show their year, e.g. "WarGames (1983)". Earlier Comfortable/Large choices migrate to Compact/Default.
 - **Manage libraries:** change your included libraries from Settings without signing out. Library pickers show `+` for included libraries and `x` for excluded libraries, with text labels in every theme. Save and sync continues if you leave the screen, updates the selection only after a successful fetch, and rebuilds the guide. Playback is reconciled with the new selection without closing menus; background completion waits until the app resumes before starting playback.
@@ -120,6 +121,20 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 Channels and Settings sit at the top of the guide: press ▲ from the first row.
 
+## Touch controls (phones and tablets)
+
+Rerun also runs on Android phones and tablets, full screen in landscape. Touch controls turn on only when the device has a touchscreen and is not running as a TV, so TV remotes work exactly as above. With TalkBack, double-tap the video for the banner and touch buttons, or use the actions menu for Channel up, Channel down, Last channel and Open guide.
+
+| Touch | Watching | Guide |
+|---|---|---|
+| Swipe up / down | Channel up / down | Drag to move between channels |
+| Swipe left | Last channel | Drag to move through time |
+| Swipe right | Info banner | — |
+| Tap | Show / hide the info banner and touch buttons | Select a program; tap it again to tune in |
+| Hold | Guide | Edit that channel |
+| Back gesture | Guide | Back to TV. Go back again right away to exit. |
+
+While the banner is up, touch buttons cover the remote's hold actions: Guide, CH ▲, CH ▼, Last channel, Start over, Audio and CRT. In the guide, tap CHANNELS or SETTINGS at the top. Settings and other menus respond to taps.
 ## Commercials (optional)
 
 `tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Choose that library as the ad source during setup or in Settings. Rerun plays clips that fit between shows, seeking to the current ad position when you tune into a break. Clip choices are stable for a given channel, break, and catalog; consecutive repeats are avoided when another clip fits. Ads never appear as guide entries: each program's displayed time includes its following break, ending when the next program starts. Disabled ads, empty catalogs, and remaining gaps too short for a clip show an "Up Next" card. Times with no schedule say Off Air.

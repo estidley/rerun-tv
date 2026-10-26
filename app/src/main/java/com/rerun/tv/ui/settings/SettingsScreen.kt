@@ -283,7 +283,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             )
 
             BasicText("ABOUT", style = Retro.GuideNumber)
-            BasicText("Rerun 0.3 · plays your own Plex library like 90s cable. Nothing you watch is reported to Plex.", style = Retro.Caption)
+            BasicText("Rerun ${com.rerun.tv.BuildConfig.VERSION_NAME} · plays your own Plex library like 90s cable. Nothing you watch is reported to Plex.", style = Retro.Caption)
             BasicText("VT323 font © The VT323 Project Authors, SIL Open Font License 1.1.", style = Retro.Caption)
         }
     }

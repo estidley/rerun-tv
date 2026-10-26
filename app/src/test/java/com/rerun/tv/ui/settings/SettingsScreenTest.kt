@@ -122,6 +122,12 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun aboutShowsTheInstalledVersion() {
+        compose.onNodeWithText("Rerun ${com.rerun.tv.BuildConfig.VERSION_NAME} · ", substring = true).assertExists()
+        compose.onNodeWithText("Rerun 0.", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun regionalFeedOptionIsAbsent() {
         compose.onNodeWithText("East and West").assertDoesNotExist()
     }
