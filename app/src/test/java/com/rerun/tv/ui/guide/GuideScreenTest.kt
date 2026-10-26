@@ -109,6 +109,51 @@ class GuideScreenTest {
     }
 
     @Test
+    fun timeHeaderRefreshesFormattingWithoutAdvancingTheWindow() {
+        val context = RuntimeEnvironment.getApplication()
+        val originalContext = com.rerun.tv.ui.player.clockContext
+        val originalLocale = java.util.Locale.getDefault()
+        val originalZone = java.util.TimeZone.getDefault()
+        val originalHour = android.provider.Settings.System.getString(context.contentResolver, android.provider.Settings.System.TIME_12_24)
+        val fixedNow = java.time.Instant.parse("2026-10-26T13:10:00Z").toEpochMilli()
+        val start = com.rerun.core.schedule.gridFloor(fixedNow)
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            com.rerun.tv.ui.player.clockContext = context
+            android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, "12")
+            compose.setContent { GuideScreen(controller, schedule, clock = { fixedNow }) }
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+            }
+            val initialLabel = com.rerun.tv.ui.player.clockTime(start)
+            compose.onNodeWithText(initialLabel).assertExists()
+            compose.mainClock.autoAdvance = false
+            compose.runOnIdle {
+                android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, "24")
+            }
+            compose.mainClock.advanceTimeBy(30_100)
+            compose.waitForIdle()
+            val hourLabel = com.rerun.tv.ui.player.clockTime(start)
+            assertNotEquals(initialLabel, hourLabel)
+            compose.onNodeWithText(hourLabel).assertExists()
+            compose.onNodeWithText(initialLabel).assertDoesNotExist()
+            compose.runOnIdle { java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT+02:00")) }
+            compose.mainClock.advanceTimeBy(30_100)
+            compose.waitForIdle()
+            val zoneLabel = com.rerun.tv.ui.player.clockTime(start)
+            assertNotEquals(hourLabel, zoneLabel)
+            compose.onNodeWithText(zoneLabel).assertExists()
+            compose.onNodeWithText(hourLabel).assertDoesNotExist()
+        } finally {
+            com.rerun.tv.ui.player.clockContext = originalContext
+            java.util.Locale.setDefault(originalLocale)
+            java.util.TimeZone.setDefault(originalZone)
+            android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, originalHour)
+        }
+    }
+
+    @Test
     fun rowsFillTheGridAlternateColorsAndUpdateWithTheme() = assertGuideRendering()
 
     @Test
@@ -298,10 +343,6 @@ class GuideScreenTest {
         `when`(sync.sync()).thenReturn(flow {
             emit(SyncProgress("Music", 1, 2))
             finish.await()
-            channels.value = listOf(ChannelRow.of(
-                ChannelDef("music:jazz", 2000, "Jazz", ChannelKind.MUSIC, Rules()),
-                builtIn = true, dormant = false,
-            ))
             emit(SyncProgress("Done", 2, 2, true))
         })
         controller.setMusicEnabled(true)
@@ -318,8 +359,14 @@ class GuideScreenTest {
         }
         compose.runOnIdle {
             assertEquals(Screen.Settings, controller.screen.value)
-            finish.complete(Unit)
+            channels.value = listOf(ChannelRow.of(
+                ChannelDef("music:jazz", 2000, "Jazz", ChannelKind.MUSIC, Rules()),
+                builtIn = true, dormant = false,
+            ))
         }
+        compose.waitUntil(10_000) { controller.channels.value.singleOrNull()?.id == "music:jazz" }
+        compose.waitForIdle()
+        compose.runOnIdle { finish.complete(Unit) }
         compose.waitUntil(10_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
         }

@@ -73,6 +73,8 @@ import com.rerun.tv.ui.common.RerunWordmark
 import com.rerun.tv.ui.common.ChannelIcon
 import com.rerun.tv.ui.player.clockDate
 import com.rerun.tv.ui.player.clockTime
+import com.rerun.tv.ui.player.clockFormatSettings
+import com.rerun.tv.ui.player.ClockFormatSettings
 import com.rerun.tv.ui.player.describe
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.Dispatchers
@@ -138,6 +140,7 @@ fun GuideScreen(
     val clockWatch = remember { ClockWatch() }
 
     var now by remember { mutableLongStateOf(clock()) }
+    var timeFormat by remember { mutableStateOf(clockFormatSettings()) }
     var windowStart by rememberSaveable { mutableLongStateOf(gridFloor(now)) }
     var focusRow by rememberSaveable { mutableIntStateOf(0) }
     var focusTime by rememberSaveable { mutableLongStateOf(now) }
@@ -159,6 +162,7 @@ fun GuideScreen(
             // A clock or time-zone change is noticed here, lazily, instead of through a broadcast receiver.
             val jumped = clockWatch.changed()
             now = clock()
+            timeFormat = clockFormatSettings()
             windowStart = if (jumped) gridFloor(now) else maxOf(windowStart, gridFloor(now))
             focusTime = if (jumped) now else maxOf(focusTime, now)
             if (jumped) clockEpoch++
@@ -329,7 +333,7 @@ fun GuideScreen(
                 val pxPerMs = timelineW.value / WINDOW_MS
                 Box(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize().clipToBounds().testTag(if (updating) "guide-skeleton" else "guide-grid")) {
-                        TimeHeader(windowStart, timelineW, channelW)
+                        TimeHeader(windowStart, timelineW, channelW, timeFormat)
                         for (rowIndex in layout.firstIndex until minOf(rows.size, layout.firstIndex + layout.visibleCount)) {
                             val ch = rows[rowIndex]
                             GuideRow(
@@ -446,7 +450,7 @@ private fun HeaderButton(text: String, focused: Boolean) {
 }
 
 @Composable
-private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp) {
+private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp, timeFormat: ClockFormatSettings) {
     Row(Modifier.height(TIME_HEADER_H)) {
         Box(
             Modifier.width(channelW).fillMaxHeight().background(Retro.GuideBlueDeep)
@@ -456,7 +460,7 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp) {
             BasicText(clockDate(windowStart), style = Retro.GuideCell.copy(color = Retro.Cyan), maxLines = 1)
         }
         val cols = (WINDOW_MS / GRID_MS).toInt()
-        val labels = remember(windowStart) { List(cols) { clockTime(windowStart + it * GRID_MS) } }
+        val labels = remember(windowStart, timeFormat) { List(cols) { clockTime(windowStart + it * GRID_MS) } }
         for (i in 0 until cols) {
             Box(Modifier.width(timelineW / cols).fillMaxHeight().background(Retro.GuideBlueDeep).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
                 BasicText(labels[i], style = Retro.GuideCell.copy(color = Retro.Yellow))

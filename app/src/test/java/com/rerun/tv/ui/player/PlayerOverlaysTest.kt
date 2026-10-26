@@ -59,6 +59,8 @@ class PlayerOverlaysTest {
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Coming up").assertDoesNotExist()
     }
 
     @Test

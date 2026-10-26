@@ -59,6 +59,14 @@ fun describe(item: MediaItem?): String = when {
 @Volatile
 var clockContext: android.content.Context? = null
 
+internal data class ClockFormatSettings(val locale: Locale, val use24Hour: Boolean?, val zoneId: String)
+
+internal fun clockFormatSettings() = ClockFormatSettings(
+    Locale.getDefault(),
+    clockContext?.let { android.text.format.DateFormat.is24HourFormat(it) },
+    java.util.TimeZone.getDefault().id,
+)
+
 private class LocaleFormats(val locale: Locale, val use24Hour: Boolean?) {
     val time = SimpleDateFormat(
         android.text.format.DateFormat.getBestDateTimePattern(locale, if (use24Hour == true) "Hmm" else if (use24Hour == false) "hmm a" else "jmm"),

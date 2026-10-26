@@ -155,6 +155,9 @@ Start-over alone begins at zero and returns to the prior station when the one-sh
 
 ## Performance contracts and validation limits
 
+The guide checks device locale, 12/24-hour preference and time zone on its 30-second tick.
+Time-axis labels invalidate on formatting changes even when the schedule window does not advance.
+
 Scheduler candidate indexes and reused lineup calculations preserve deterministic output.
 Stock decade qualification aggregates duration by media kind/decade in one metadata pass and
 reuses totals for unchanged rules, including renamed/renumbered stations. Edited rules/time blocks
