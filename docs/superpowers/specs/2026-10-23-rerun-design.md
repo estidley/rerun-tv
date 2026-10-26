@@ -76,6 +76,8 @@ The full icon set is bundled in `app/src/main/res/drawable-nodpi`; only physical
 
 ## Scheduling and ads
 
+This section describes shipped behavior. An approved replacement (local quarter-hour grid, saved ad breaks, gap fillers, episode runs, time-zone setting) is specified in [scheduling v2](2026-10-26-scheduling-v2-design.md) and planned in [the v2 plan](../plans/2026-10-26-scheduling-v2.md).
+
 - Ordinary active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.
 - Additional stock decade stations require 24 hours of TV episodes or 12 hours of music tracks
   in the decade, alongside existing genre stations. Music decades honor the Music switch.

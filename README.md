@@ -173,7 +173,7 @@ Set-RerunJdk
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
 ```
 
-Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design reference](docs/superpowers/specs/2026-10-23-rerun-design.md). Delivered scope and outstanding device checks: [PR readiness](docs/superpowers/plans/2026-10-23-rerun-phase1-core-tv.md).
+Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design reference](docs/superpowers/specs/2026-10-23-rerun-design.md). Delivered scope and outstanding device checks: [PR readiness](docs/superpowers/plans/2026-10-23-rerun-phase1-core-tv.md). Planned scheduling v2 (not yet shipped): [design](docs/superpowers/specs/2026-10-26-scheduling-v2-design.md) and [plan/handoff](docs/superpowers/plans/2026-10-26-scheduling-v2.md).
 
 ### Continuous integration
 
