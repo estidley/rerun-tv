@@ -7,13 +7,13 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 
 ## Delivered
 
-- Approved 1990s channel artwork: 102 icon/wordmark pairs, locally bundled Android renders, stable-ID/West-feed lookup and dynamic fallbacks in guide, channel manager and playback overlays.
+- Approved 1990s channel artwork: 102 icon/wordmark pairs, locally bundled Android renders, stable-ID lookup and dynamic fallbacks in guide, channel manager and playback overlays.
 
 - Shared TMDB network snapshot bundled by token-free builds; local refresh override, validated `:tmdb:publishSnapshot` promotion and credential-free `:tmdb:check` CI verification.
 
 - Marvelous TV, Marvelous Movies, Marvelous Timeline, Detective Club TV and Detective Pictures; persisted mixed-media universe ordering, season positions and explicit franchise metadata/tag matching.
 
-- Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged. Stale future schedules are repaired without replacing the current airing; West remirrors East.
+- Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged. Stale future schedules are repaired without replacing the current airing.
 
 - Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.

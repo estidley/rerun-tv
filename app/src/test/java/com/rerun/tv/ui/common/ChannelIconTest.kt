@@ -28,12 +28,9 @@ class ChannelIconTest {
         }
     }
 
-    @Test fun westAndDynamicIdsResolveWithoutDependingOnDisplayNames() {
-        assertEquals(channelIconResource("toonami"), channelIconResource(Lineup.westId("toonami")))
-        assertEquals(channelIconResource("marvel:timeline"), channelIconResource("marvel:timeline:w"))
+    @Test fun dynamicIdsResolveWithoutDependingOnDisplayNames() {
         assertEquals(R.drawable.channel_ads, channelIconResource(Lineup.ADS_ID))
         assertEquals(R.drawable.channel_music_generic, channelIconResource("music:progressive-rock"))
-        assertEquals(R.drawable.channel_music_generic, channelIconResource("music:progressive-rock:w"))
         assertEquals(R.drawable.channel_custom_generic, channelIconResource("custom:my-favorites"))
     }
 
