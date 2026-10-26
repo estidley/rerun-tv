@@ -68,6 +68,7 @@ data class TunerState(
     val located: Located? = null,
     val item: MediaItem? = null,
     val nextItem: MediaItem? = null,
+    val nextStartMs: Long? = null,
     /** When nothing is on yet, the wall-clock time the next entry starts. */
     val holdUntilMs: Long? = null,
     val phase: Phase = Phase.TUNING,
@@ -290,11 +291,12 @@ class TunerEngine(
                     hdrFallback = false
                     audioFallback = false
                 }
-                val nextItem = loc.next?.let { n ->
-                    if (n.kind == EntryKind.PROGRAM) channelItem(channelId, n.itemKey)
-                    else entries.firstOrNull { it.startMs >= n.endMs && it.kind == EntryKind.PROGRAM }?.let { channelItem(channelId, it.itemKey) }
+                val nextProgram = loc.next?.let { n ->
+                    if (n.kind == EntryKind.PROGRAM) n
+                    else entries.firstOrNull { it.startMs >= n.endMs && it.kind == EntryKind.PROGRAM }
                 }
-                _state.value = _state.value.copy(located = loc, item = item, nextItem = nextItem)
+                val nextItem = nextProgram?.let { channelItem(channelId, it.itemKey) }
+                _state.value = _state.value.copy(located = loc, item = item, nextItem = nextItem, nextStartMs = nextProgram?.startMs)
                 scheduleRollover(channelId, if (loc.entry.kind == EntryKind.FILLER && loc.entry.startMs > now)
                     loc.entry.startMs else ad?.endMs ?: loc.entry.endMs)
 

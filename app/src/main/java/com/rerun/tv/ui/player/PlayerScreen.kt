@@ -226,6 +226,7 @@ internal fun BoxScope.PlayerOverlays(state: TunerState, bannerUntil: Long) {
             if (entry?.kind == EntryKind.PROGRAM) state.item else null,
             entry?.takeIf { it.kind == EntryKind.PROGRAM }?.endMs,
             state.nextItem,
+            state.nextStartMs,
         )
     }
 }

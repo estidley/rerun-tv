@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,7 +81,13 @@ private val TIME_HEADER_H = 36.dp
 
 /** Lays a single line out as if rotated a quarter turn; pair with [rotate] (-90°) so it reads bottom to top. */
 private fun Modifier.vertical(): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints)
+    // Measure along the rotated axis so the available height bounds the text length.
+    val placeable = measurable.measure(
+        Constraints(
+            minWidth = constraints.minHeight, maxWidth = constraints.maxHeight,
+            minHeight = constraints.minWidth, maxHeight = constraints.maxWidth,
+        ),
+    )
     layout(placeable.height, placeable.width) {
         placeable.place(
             x = -(placeable.width / 2 - placeable.height / 2),
@@ -190,7 +197,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val header = updating || rows.isEmpty() || focusRow < 0
 
     var summary by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(focusedItem?.key) {
+    LaunchedEffect(focusedItem?.key, revision) {
         summary = null
         val item = focusedItem ?: return@LaunchedEffect
         delay(300)

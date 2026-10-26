@@ -177,11 +177,14 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     private suspend fun changeLineupFlag(key: String, enabled: Boolean, operation: suspend () -> Unit) {
         val previous = app.settings.isOn(key)
+        val cleanVersion = app.settings.lineupAppVersion()
         try {
             // Persist the dirty marker first so an interrupted rebuild is repaired on the next launch.
             app.settings.invalidateLineupAppVersion()
             app.settings.setFlag(key, enabled)
             operation()
+            // Only a completed rebuild restores the marker; failure or cancellation leaves it invalidated.
+            cleanVersion?.let { app.settings.setLineupAppVersion(it) }
         } catch (e: Exception) {
             withContext(NonCancellable) { app.settings.setFlag(key, previous) }
             throw e
@@ -463,7 +466,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         val token = token ?: return null
         val path = "/library/metadata/${item.key}"
         if (!ServerUri.isLibraryPath(path) || !ServerUri.isAcceptable(base)) return null
-        val cacheKey = "$base|${item.key}"
+        val revision = app.schedule.guideRevision.value
+        val cacheKey = "$base|$token|$revision|${item.key}"
         synchronized(summaries) { summaries[cacheKey] }?.let { return it }
         val text = try {
             withContext(Dispatchers.IO) { PlexParse.summary(app.plex.get(base, path, token)) }
@@ -472,7 +476,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         } catch (e: Exception) {
             null
         } ?: return null
-        synchronized(summaries) { summaries[cacheKey] = text }
+        // A sync or edit during the fetch invalidates the revision; don't cache the stale response.
+        if (app.schedule.guideRevision.value == revision) synchronized(summaries) { summaries[cacheKey] = text }
         return text
     }
 

@@ -100,6 +100,23 @@ class TvControllerTest {
     }
 
     @Test
+    fun musicToggleRestoresTheCleanVersionMarkerOnlyAfterSuccess() = runBlocking<Unit> {
+        `when`(settings.isSignedIn).thenReturn(true)
+        `when`(settings.lineupAppVersion()).thenReturn("3:100")
+        `when`(settings.isOn(Settings.MUSIC, false)).thenReturn(false)
+        `when`(repo.active()).thenReturn(listOf(channel("east")))
+        controller.setMusicEnabled(false)
+        repeat(50) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (!controller.lineupUpdate.value.busy) return@repeat
+            Thread.sleep(20)
+        }
+        assertFalse(controller.lineupUpdate.value.busy)
+        verify(settings).invalidateLineupAppVersion()
+        verify(settings).setLineupAppVersion("3:100")
+    }
+
+    @Test
     fun editingOpensTheSelectedChannel() {
         controller.go(Screen.Editor("custom:one"))
         assertEquals(Screen.Editor("custom:one"), controller.screen.value)

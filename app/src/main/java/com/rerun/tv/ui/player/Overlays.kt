@@ -99,7 +99,7 @@ fun ChannelOsd(channel: ChannelRow?, modifier: Modifier = Modifier) {
 
 /** Bottom info bar: what's on, how long is left, what's next. */
 @Composable
-fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: MediaItem?, modifier: Modifier = Modifier) {
+fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: MediaItem?, nextStartMs: Long? = endsMs, modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxWidth()
@@ -127,14 +127,14 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
             }
             if (next != null) {
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(endsMs) {
+                LaunchedEffect(nextStartMs) {
                     while (true) { now = System.currentTimeMillis(); delay(15_000) }
                 }
                 Spacer(Modifier.width(24.dp))
                 Column(Modifier.widthIn(max = 420.dp), horizontalAlignment = Alignment.End) {
                     BasicText("UP NEXT", style = Retro.Caption.copy(color = Retro.Yellow), maxLines = 1)
                     BasicText(describe(next), style = Retro.Body.copy(color = Retro.Cyan, textAlign = TextAlign.End), maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    endsMs?.let { BasicText(upNextTiming(it, now), style = Retro.Caption, maxLines = 1) }
+                    nextStartMs?.let { BasicText(upNextTiming(it, now), style = Retro.Caption, maxLines = 1) }
                 }
             }
         }
