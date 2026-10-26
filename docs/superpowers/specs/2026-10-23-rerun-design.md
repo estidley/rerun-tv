@@ -37,27 +37,36 @@ diagnostics; HTTP token attachment follows the trusted Plex host policy.
 
 ## Scheduling and ads
 
-- Active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.
+- Ordinary active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.
 - Additional stock decade stations require 24 hours of TV episodes or 12 hours of music tracks
   in the decade, alongside existing genre stations. Music decades honor the Music switch.
   Decades span 1900s-2090s; unknown years and items under one minute do not qualify.
   Episode/track year uses the existing Plex show/album fallback. Movies do not count toward TV decades.
   IDs and preferred numbers are stable (`decade:tv:<year>`, 1100+; `decade:music:<year>`, 3000+).
-  Ordinary collision resolution, East/West mirroring, editing and schedule preservation apply.
+  Ordinary collision resolution, editing and schedule preservation apply.
   Unedited stations below their threshold are removed; edited definitions retain the existing
-  four-hour activation policy, or remain dormant with their settings intact.
+  default station minimum, or an explicit persisted `minimumContentHours` override (0–168).
+  Renames/rule edits do not implicitly lower the minimum. Empty pools stay dormant and Music
+  remains capability/settings gated. Save, refresh and editor previews share the same minimum policy;
+  nullable overrides live in the existing channel JSON without a Room schema change.
+- The [complete cable dial](../../channel-lineup.md) documents all predefined names and rules.
+  Laugh Track is the Comedy-genre station; the former TBS station is Ted's TV, still matching
+  network/studio TBS. Remote Control replaces The Video Channel for mixed MTV programming.
+  Recognized old names migrate by channel ID without changing rules, numbers or locked entries.
 - Schedules extend approximately 48 hours and top up below 24 hours. Epoch times are UTC; time blocks use the device zone.
 - Movies use a shuffled deck; shows preserve episode pointers. Music plays back to back.
 - Video padding ends at the next half-hour boundary and becomes a filler entry.
 - Routine top-ups do not reshuffle existing entries. Changing included libraries rebuilds schedules;
   missing items and removed channels invalidate affected playback. Channel edits rebuild the future after the current entry.
-- West mirrors East three hours later, not an independent shuffle. New West feeds can initially be Off Air.
+- Each channel owns one schedule; there are no regional delayed feeds. Room migration 2-to-3
+  removes legacy West channels/entries/state and their setting, maps the last-tuned feed to its
+  original channel, and normalizes old feed-name suffixes without rebuilding original schedules.
 - Ads are chosen deterministically at playback time from the persisted catalog, seek to the current
   break position, and never extend the program deadline. Short/unfillable remainders show Up Next.
 - A nonempty enabled ad catalog also creates **Buy Me Maybe**, a generated commercials-only station.
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
   It shuffles clips back-to-back without the ordinary minimum-duration/four-hour threshold, tail
-  skipping, padding, or a West feed. Items stay in the ad table, not the main library. Catalog
+  skipping or padding. Items stay in the ad table, not the main library. Catalog
   changes invalidate only its schedule; disabling ads or emptying the catalog removes it.
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
@@ -68,9 +77,11 @@ diagnostics; HTTP token attachment follows the trusted Plex host policy.
 
 Startup starts in loading state for an existing sign-in, awaits the automatic saved-lineup refresh,
 then queries active channels. Only a successful settled empty result displays no-channel guidance.
-Failures have their own message. Missing connection/initial-sync configuration returns to onboarding.
+The loading card uses the existing beret wordmark and an indeterminate animated spinner.
+Failures and confirmed empty states retain the wordmark but not the spinner. Missing
+connection/initial-sync configuration returns to onboarding.
 
-Music, East/West, re-sync, ad catalog and included-library updates are controller-owned and survive screen navigation.
+Music, re-sync, ad catalog and included-library updates are controller-owned and survive screen navigation.
 Guide rebuilding hides rows behind progress/elapsed time and permits only Channels and Settings controls.
 Failed flag updates restore the previous value; failed imports preserve selections until commit.
 Playback reconciliation preserves open menus. Completing a scan after activity stop does not tune;
@@ -106,7 +117,7 @@ Stock decade qualification aggregates duration by media kind/decade in one metad
 reuses totals for unchanged rules, including renamed/renumbered stations. Edited rules/time blocks
 fall back to normal resolution. It retains no per-decade item lists and generates no genre/decade
 cross-product. Forty bounded candidates limit growth; qualifying stations still incur normal
-schedule generation/storage costs, and optional West feeds mirror rather than shuffle independently.
+schedule generation/storage costs.
 Library list/map readers share a coalesced off-Main snapshot; invalidation prevents stale publication.
 Parsed playback metadata is cached in memory for at most 16 items and 60 seconds, scoped to server,
 credentials and guide revision. Display capability is checked live; remote track defaults can take

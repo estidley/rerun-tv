@@ -9,12 +9,19 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
@@ -40,6 +55,7 @@ import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.StartupState
 import com.rerun.tv.ui.LineupUpdate
 import com.rerun.tv.ui.crt.VerticalRoll
+import com.rerun.tv.ui.common.RerunWordmark
 import com.rerun.tv.ui.theme.Retro
 import kotlinx.coroutines.delay
 
@@ -133,7 +149,40 @@ internal fun StartupMessage(startup: StartupState, update: LineupUpdate, channel
     }
     if (message != null) {
         Box(Modifier.fillMaxSize().background(Retro.GuideBlue), contentAlignment = Alignment.Center) {
-            BasicText(message, style = Retro.Title)
+            Column(
+                modifier = Modifier.padding(48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(28.dp),
+            ) {
+                RerunWordmark()
+                if (startup.loading || update.busy) StartupSpinner()
+                BasicText(message, style = Retro.Body.copy(textAlign = TextAlign.Center))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StartupSpinner() {
+    val trackColor = Retro.Border
+    val spinnerColor = Retro.Yellow
+    val motion = rememberInfiniteTransition(label = "startup-spinner")
+    val angle = motion.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1_000, easing = LinearEasing)),
+        label = "startup-spinner-angle",
+    )
+    Canvas(
+        Modifier.size(48.dp).padding(4.dp).semantics {
+            contentDescription = "Loading channels"
+            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+        }.testTag("startup-spinner"),
+    ) {
+        val stroke = 4.dp.toPx()
+        drawCircle(trackColor, style = Stroke(stroke))
+        rotate(angle.value) {
+            drawArc(spinnerColor, -90f, 100f, useCenter = false, style = Stroke(stroke, cap = StrokeCap.Round))
         }
     }
 }

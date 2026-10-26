@@ -36,6 +36,11 @@ class CodecTest {
             kidsSafe = false, hidden = true, movieEveryMs = 3_600_000,
         )
         assertEquals(def, ChannelCodec.decode(ChannelCodec.encode(def)))
+        for (hours in listOf(0, 1, 24, 168)) {
+            val overridden = def.copy(minimumContentHours = hours)
+            assertEquals(overridden, ChannelCodec.decode(ChannelCodec.encode(overridden)))
+        }
+        assertEquals(null, ChannelCodec.decode(ChannelCodec.encode(def)).minimumContentHours)
     }
 
     @Test

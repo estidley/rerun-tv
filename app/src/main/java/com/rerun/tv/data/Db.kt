@@ -293,7 +293,7 @@ interface SettingDao {
 
 @Database(
     entities = [ItemRow::class, AdRow::class, ChannelRow::class, EntryRow::class, StateRow::class, SettingRow::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class RerunDb : RoomDatabase() {
@@ -315,9 +315,37 @@ abstract class RerunDb : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Retire delayed feeds without touching the original channels or locked schedules.
+                db.execSQL("DELETE FROM entries WHERE channelId LIKE '%:w'")
+                db.execSQL("DELETE FROM states WHERE channelId LIKE '%:w'")
+                db.execSQL("DELETE FROM channels WHERE id LIKE '%:w'")
+                db.execSQL("DELETE FROM settings WHERE `key` = 'opt_east_west'")
+                db.execSQL(
+                    "UPDATE settings SET value = substr(value, 1, length(value) - 2) " +
+                        "WHERE `key` = 'last_channel' AND value LIKE '%:w'",
+                )
+                db.query("SELECT id, defJson FROM channels").use { rows ->
+                    while (rows.moveToNext()) {
+                        val def = ChannelCodec.decode(rows.getString(1))
+                        val name = when {
+                            def.name.endsWith("-W") || def.name.endsWith(" E") || def.name.endsWith(" W") ->
+                                def.name.dropLast(2)
+                            else -> continue
+                        }
+                        db.execSQL(
+                            "UPDATE channels SET name = ?, defJson = ? WHERE id = ?",
+                            arrayOf(name, ChannelCodec.encode(def.copy(name = name)), rows.getString(0)),
+                        )
+                    }
+                }
+            }
+        }
+
         fun open(context: Context): RerunDb =
             Room.databaseBuilder(context, RerunDb::class.java, "rerun.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

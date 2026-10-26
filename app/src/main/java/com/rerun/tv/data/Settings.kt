@@ -184,7 +184,6 @@ class Settings(context: Context, private val dao: SettingDao) {
     }
 
     companion object {
-        const val EAST_WEST = "opt_east_west"
         const val MUSIC = "opt_music"
         const val SUBTITLES = "opt_subtitles"
         const val DEVICE_PREFS = "rerun_device"

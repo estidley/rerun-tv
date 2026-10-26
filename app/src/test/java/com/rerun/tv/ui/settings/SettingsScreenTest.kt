@@ -13,8 +13,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.pressKey
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.LibrarySync
@@ -41,10 +39,6 @@ import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import kotlin.coroutines.Continuation
-import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [35], qualifiers = "w1920dp-h1080dp-mdpi")
@@ -53,8 +47,6 @@ class SettingsScreenTest {
     private lateinit var settings: Settings
     private lateinit var sync: LibrarySync
     private lateinit var controller: TvController
-    private lateinit var refresh: Continuation<Unit>
-    private val eastWest = MutableStateFlow(false)
     private val music = MutableStateFlow(false)
     private val showSettings = mutableStateOf(true)
 
@@ -72,14 +64,13 @@ class SettingsScreenTest {
         `when`(settings.lastSyncMs()).thenReturn(0L)
         `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
-        `when`(settings.flag(Settings.EAST_WEST, false)).thenReturn(eastWest)
         `when`(settings.flag(Settings.MUSIC, false)).thenReturn(music)
         doAnswer {
             if (it.getArgument<String>(0) == Settings.MUSIC) music.value = it.getArgument(1)
             Unit
         }.`when`(settings).setFlag(anyString(), anyBoolean())
         `when`(settings.isOn(anyString(), anyBoolean())).thenAnswer {
-            if (it.getArgument<String>(0) == Settings.MUSIC) music.value else eastWest.value
+            it.getArgument<String>(0) == Settings.MUSIC && music.value
         }
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
@@ -88,12 +79,6 @@ class SettingsScreenTest {
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         controller = spy(TvController(app, mock(TunerEngine::class.java)))
-        doAnswer {
-            @Suppress("UNCHECKED_CAST")
-            val continuation = it.rawArguments.last() as Continuation<Unit>
-            refresh = continuation
-            COROUTINE_SUSPENDED
-        }.`when`(sync).refreshChannels()
         compose.setContent {
             if (showSettings.value) SettingsScreen(controller, app) else BasicText("Guide")
         }
@@ -103,29 +88,24 @@ class SettingsScreenTest {
     fun tearDown() = controller.dispose()
 
     @Test
-    fun eastWestChangesBeforeRefreshCompletesAndIgnoresRepeatedClicks() = runBlocking<Unit> {
-        compose.onNodeWithText("East and West")
-            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            .performScrollTo().performClick()
-        compose.onNodeWithText("■ East and West").performScrollTo().assertIsDisplayed().performClick()
-        verify(settings, times(1)).setFlag(Settings.EAST_WEST, true)
-        compose.runOnIdle {
-            eastWest.value = true
-            refresh.resume(Unit)
-        }
-        compose.onNodeWithText("■ East and West").performScrollTo().assertIsDisplayed()
+    fun musicChangesBeforeSyncCompletesAndIgnoresRepeatedClicks() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
+        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
+        `when`(sync.sync()).thenReturn(flow {
+            emit(SyncProgress("Music", 1, 2))
+            finish.await()
+        })
+        compose.onNodeWithText("Music").performScrollTo().performClick()
+        compose.onNodeWithText("■ Music").performScrollTo().assertIsDisplayed().performClick()
+        verify(settings, times(1)).setFlag(Settings.MUSIC, true)
+        compose.runOnIdle { finish.complete(Unit) }
+        compose.onNodeWithText("■ Music").performScrollTo().assertIsDisplayed()
     }
 
     @Test
-    fun failedRefreshRestoresTheToggleAndShowsTheError() = runBlocking<Unit> {
-        compose.onNodeWithText("East and West")
-            .performSemanticsAction(SemanticsActions.RequestFocus) { it() }
-            .performScrollTo().performClick()
-        compose.onNodeWithText("■ East and West").performScrollTo().assertIsDisplayed()
-        compose.runOnIdle { refresh.resumeWithException(IllegalStateException("test failure")) }
-        compose.onNodeWithText("East and West").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Lineup failed: test failure").performScrollTo().assertIsDisplayed()
-        verify(settings).setFlag(Settings.EAST_WEST, false)
+    fun regionalFeedOptionIsAbsent() {
+        compose.onNodeWithText("East and West").assertDoesNotExist()
     }
 
     @Test
@@ -134,7 +114,7 @@ class SettingsScreenTest {
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
             "Compact", "■ Comfortable", "Large", "Subtitles", "Subtitle language: Automatic",
-            "East and West", "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
+            "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
             "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )
         for ((index, label) in labels.withIndex()) {
