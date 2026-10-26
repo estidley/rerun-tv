@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlin.math.abs
@@ -89,9 +90,9 @@ object TouchControls {
 @Composable
 fun rememberTouchControlsEnabled(): Boolean {
     val context = LocalContext.current
-    return remember(context) {
-        val television = (context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
-            Configuration.UI_MODE_TYPE_TELEVISION
+    val uiMode = LocalConfiguration.current.uiMode
+    return remember(context, uiMode) {
+        val television = (uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
         !television && context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
     }
 }
