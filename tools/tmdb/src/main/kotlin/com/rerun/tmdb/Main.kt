@@ -41,7 +41,7 @@ fun main(args: Array<String>) {
         require(input.isFile) { "Run :tmdb:run to create the local snapshot before publishing." }
         val sanitized = SnapshotPublisher.validate(input.readText()).toJson()
         val target = File(opts.out)
-        target.parentFile.mkdirs()
+        target.parentFile?.mkdirs()
         val temporary = File(target.path + ".tmp")
         temporary.writeText(sanitized)
         Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)

@@ -97,15 +97,25 @@ class NetworkReference(val channels: List<ChannelReference>, val generated: Stri
             return runCatching { stream.use { parse(it.readBytes().decodeToString()) } }.getOrDefault(EMPTY)
         }
 
-        /** Reads [toJson] output. A newer or unreadable file gives [EMPTY] rather than an error. */
-        fun parse(text: String): NetworkReference {
+        /** Reads [toJson] output. A newer, unreadable or partly malformed file gives [EMPTY] rather than an error. */
+        fun parse(text: String): NetworkReference = try {
+            parseStrict(text)
+        } catch (_: MalformedReference) {
+            EMPTY
+        }
+
+        private class MalformedReference : RuntimeException()
+
+        private fun malformed(): Nothing = throw MalformedReference()
+
+        private fun parseStrict(text: String): NetworkReference {
             val root = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return EMPTY
             val version = (root["version"] as? JsonPrimitive)?.longOrNull ?: return EMPTY
             if (version != VERSION.toLong()) return EMPTY
-            val channels = (root["channels"] as? JsonArray).orEmpty().mapNotNull { e ->
-                val o = e as? JsonObject ?: return@mapNotNull null
+            val channels = (root["channels"] as? JsonArray ?: malformed()).map { e ->
+                val o = e as? JsonObject ?: malformed()
                 ChannelReference(
-                    channelId = o.str("id") ?: return@mapNotNull null,
+                    channelId = o.str("id") ?: malformed(),
                     realName = o.str("realName").orEmpty(),
                     networks = o.sources("networks"),
                     companies = o.sources("companies"),
@@ -123,11 +133,11 @@ class NetworkReference(val channels: List<ChannelReference>, val generated: Stri
         private fun JsonObject.str(k: String): String? = (this[k] as? JsonPrimitive)?.contentOrNull
 
         private fun JsonObject.ids(k: String): Set<Long> =
-            (this[k] as? JsonArray).orEmpty().mapNotNullTo(HashSet()) { (it as? JsonPrimitive)?.longOrNull }
+            (this[k] as? JsonArray).orEmpty().mapTo(HashSet()) { (it as? JsonPrimitive)?.longOrNull ?: malformed() }
 
-        private fun JsonObject.sources(k: String): List<TmdbSource> = (this[k] as? JsonArray).orEmpty().mapNotNull { e ->
-            val o = e as? JsonObject ?: return@mapNotNull null
-            val id = (o["id"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+        private fun JsonObject.sources(k: String): List<TmdbSource> = (this[k] as? JsonArray).orEmpty().map { e ->
+            val o = e as? JsonObject ?: malformed()
+            val id = (o["id"] as? JsonPrimitive)?.longOrNull ?: malformed()
             TmdbSource(id, o.str("name").orEmpty())
         }
     }

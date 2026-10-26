@@ -374,6 +374,18 @@ class LineupTest {
     }
 
     @Test
+    fun toonukiOwnsAnimeSoTheDuplicateStockStationIsRetiredButEditsSurvive() {
+        val anime = Rules(genres = setOf("Anime"))
+        val library = listOf(episode("anime", "Show", genres = setOf("Anime"), durationMs = 4 * HOUR))
+        val stock = StoredChannel(ChannelDef("opt:anime", 328, "Import Toons", ChannelKind.THEME, anime), true)
+        val retired = Lineup.plan(library, listOf(stock), music = false)
+        assertTrue("opt:anime" in retired.deleteIds)
+        assertTrue(retired.channels.none { it.def.rules == anime && it.def.id != "toonami" })
+        val renamed = StoredChannel(stock.def.copy(name = "My Anime"), true)
+        val kept = Lineup.plan(library, listOf(renamed), music = false)
+        assertEquals("My Anime", kept.channels.single { it.def.id == "opt:anime" }.def.name)
+    }
+    @Test
     fun fullLineupNumbersAreUnique() {
         val library = listOf(
             movie("m", durationMs = 48 * HOUR, genres = setOf("Drama", "News")),
