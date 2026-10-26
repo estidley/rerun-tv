@@ -55,14 +55,24 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // Full screen like a TV on phones and tablets. TV devices have no system bars to hide.
+        hideSystemBars()
+        val app = application as RerunApp
+        controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
+        setContent { RerunRoot(controller, onPoweredOff = { finish() }, onPlayerKeyEvent = ::handlePlayerKeyEvent) }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Some devices bring the bars back after dialogs, the keyboard or another app; hide them again.
+        if (hasFocus) hideSystemBars()
+    }
+
+    /** Full screen like a TV on phones and tablets. TV devices have no system bars to hide. */
+    private fun hideSystemBars() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             hide(WindowInsetsCompat.Type.systemBars())
         }
-        val app = application as RerunApp
-        controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
-        setContent { RerunRoot(controller, onPoweredOff = { finish() }, onPlayerKeyEvent = ::handlePlayerKeyEvent) }
     }
 
     override fun onStart() {
