@@ -68,6 +68,16 @@ class TvControllerTest {
     fun tearDown() = controller.dispose()
 
     @Test
+    fun startOverWithNothingRestartableTellsTheViewer() {
+        `when`(engine.state).thenReturn(MutableStateFlow(com.rerun.tv.player.TunerState()))
+        controller.tuneTo("east")
+        controller.startEpisodeOver()
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine, timeout(2_000)).notify(anyString())
+        verify(engine, never()).armReturn(anyString())
+    }
+
+    @Test
     fun editingTheAdStationOpensItsCatalogSettings() {
         controller.go(Screen.Editor(Lineup.ADS_ID))
         assertEquals(Screen.AdLibrary, controller.screen.value)

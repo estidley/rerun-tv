@@ -49,6 +49,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.ArgumentMatchers.anyBoolean
+import org.mockito.ArgumentMatchers.anyCollection
 import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito.*
@@ -61,6 +62,9 @@ import org.robolectric.annotation.GraphicsMode
 @Config(application = Application::class, sdk = [35], qualifiers = "w1920dp-h1080dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class GuideScreenTest {
+    // A fixed instant mid-grid-slot keeps tests from straddling a :00/:30 boundary.
+    private val baseNow = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L + 10 * 60_000L
+
     @get:Rule val compose = createComposeRule()
     private lateinit var controller: TvController
     private lateinit var schedule: ScheduleRepo
@@ -93,7 +97,7 @@ class GuideScreenTest {
             )
         }
         `when`(schedule.activeChannels()).thenReturn(channels)
-        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(emptyMap())
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(emptyMap())
         controller = TvController(app, mock(TunerEngine::class.java))
     }
 
@@ -115,10 +119,10 @@ class GuideScreenTest {
 
     @Test
     fun openingAndReopeningSelectsTheCurrentStationAndProgramAfterLoading() = runBlocking<Unit> {
-        val now = System.currentTimeMillis()
+        val now = baseNow
         val showGuide = mutableStateOf(true)
         val release = java.util.concurrent.CountDownLatch(1)
-        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(
             listOf("test:30", "test:40").associateWith { id ->
                 listOf(
                     ScheduleEntry(id, now - 60_000, now + 600_000, EntryKind.PROGRAM, null),
@@ -129,10 +133,10 @@ class GuideScreenTest {
         doAnswer {
             check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
             Unit
-        }.`when`(schedule).ensure(anyLong())
+        }.`when`(schedule).ensure(anyCollection(), anyLong())
         controller.tuneTo("test:30", sound = false)
         try {
-            compose.setContent { if (showGuide.value) GuideScreen(controller, schedule) }
+            compose.setContent { if (showGuide.value) GuideScreen(controller, schedule, clock = { baseNow }) }
             compose.onNodeWithText("Updating guide...").assertExists()
         } finally {
             release.countDown()
@@ -177,7 +181,7 @@ class GuideScreenTest {
     @Test
     fun emptyGuideCanOpenSettingsAndChannelsWithTheRemote() {
         compose.runOnIdle { channels.value = emptyList() }
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.onRoot().performKeyInput {
             pressKey(Key.DirectionUp)
             pressKey(Key.DirectionRight)
@@ -194,7 +198,7 @@ class GuideScreenTest {
 
     @Test
     fun removingAllChannelsLeavesSettingsReachable() {
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
         compose.runOnIdle { channels.value = emptyList() }
         compose.onRoot().performKeyInput {
@@ -207,8 +211,8 @@ class GuideScreenTest {
 
     @Test
     fun adStationGuideDisplaysHourlyBlocksInsteadOfIndividualAds() = runBlocking<Unit> {
-        val start = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L
-        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(mapOf(
+        val start = Math.floorDiv(baseNow, 3_600_000L) * 3_600_000L
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
             com.rerun.core.catalog.Lineup.ADS_ID to (0 until 480).map {
                 ScheduleEntry(
                     com.rerun.core.catalog.Lineup.ADS_ID, start + it * 30_000L,
@@ -219,7 +223,7 @@ class GuideScreenTest {
         compose.runOnIdle {
             channels.value = listOf(ChannelRow.of(com.rerun.core.catalog.Lineup.adsChannel, true, false))
         }
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("Buy Me Maybe").fetchSemanticsNodes().size >= 4
         }
@@ -236,18 +240,18 @@ class GuideScreenTest {
 
     @Test
     fun musicGuideDisplaysStationHoursInsteadOfIndividualSongs() = runBlocking<Unit> {
-        val start = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L
+        val start = Math.floorDiv(baseNow, 3_600_000L) * 3_600_000L
         val entries = (0 until 80).map {
             ScheduleEntry("music:blues", start + it * 180_000L, start + (it + 1) * 180_000L, EntryKind.PROGRAM, "song:$it")
         }
-        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(mapOf("music:blues" to entries))
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf("music:blues" to entries))
         compose.runOnIdle {
             channels.value = listOf(ChannelRow.of(
                 ChannelDef("music:blues", 2000, "Blues", ChannelKind.MUSIC, Rules()),
                 builtIn = true, dormant = false,
             ))
         }
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("Blues Music").fetchSemanticsNodes().size >= 3
         }
@@ -256,20 +260,20 @@ class GuideScreenTest {
 
     @Test
     fun scheduleRevisionReloadsEvenWhenChannelsHaveNotChanged() {
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.waitUntil(10_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
         }
         clearInvocations(schedule)
         compose.runOnIdle { revision.value++ }
         compose.waitUntil(10_000) {
-            mockingDetails(schedule).invocations.any { it.method.name == "allEntries" }
+            mockingDetails(schedule).invocations.any { it.method.name == "entriesFor" }
         }
     }
 
     @Test
     fun clockTicksDoNotReloadAnUnchangedGuide() = runBlocking<Unit> {
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.waitUntil(10_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
         }
@@ -277,15 +281,15 @@ class GuideScreenTest {
         compose.mainClock.autoAdvance = false
         compose.mainClock.advanceTimeBy(90_000)
         compose.waitForIdle()
-        verify(schedule, never()).ensure(anyLong())
-        verify(schedule, never()).allEntries(anyLong(), anyLong())
+        verify(schedule, never()).ensure(anyCollection(), anyLong())
+        verify(schedule, never()).entriesFor(anyCollection(), anyLong(), anyLong())
     }
 
     @Test
     fun guideWaitsForMusicScanAndShowsProgressBeforeLoadingTheNewLineup() = runBlocking<Unit> {
         val finish = CompletableDeferred<Unit>()
-        val start = com.rerun.core.schedule.gridFloor(System.currentTimeMillis())
-        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(mapOf(
+        val start = com.rerun.core.schedule.gridFloor(baseNow)
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
             "music:jazz" to listOf(ScheduleEntry("music:jazz", start, start + 4 * 3_600_000L, EntryKind.PROGRAM, "track")),
         ))
         `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
@@ -299,11 +303,11 @@ class GuideScreenTest {
             emit(SyncProgress("Done", 2, 2, true))
         })
         controller.setMusicEnabled(true)
-        compose.setContent { GuideScreen(controller, schedule) }
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.onNodeWithText("Updating guide...").assertExists()
         compose.onNodeWithText("Music 1/2").assertExists()
         compose.onNodeWithTag("guide-grid").assertDoesNotExist()
-        verify(schedule, never()).ensure(anyLong())
+        verify(schedule, never()).ensure(anyCollection(), anyLong())
         compose.onRoot().performKeyInput {
             pressKey(Key.DirectionDown)
             pressKey(Key.Menu)
@@ -317,7 +321,7 @@ class GuideScreenTest {
         compose.waitUntil(10_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
         }
-        verify(schedule).ensure(anyLong())
+        verify(schedule).ensure(anyCollection(), anyLong())
         compose.onAllNodesWithText("Jazz Music")[0].assertExists()
     }
 
@@ -327,9 +331,9 @@ class GuideScreenTest {
         doAnswer {
             check(release.await(10, java.util.concurrent.TimeUnit.SECONDS))
             Unit
-        }.`when`(schedule).ensure(anyLong())
+        }.`when`(schedule).ensure(anyCollection(), anyLong())
         try {
-            compose.setContent { GuideScreen(controller, schedule) }
+            compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
             compose.onNodeWithText("Updating guide...").assertExists()
             compose.onNodeWithText("Elapsed: 0s").assertExists()
             compose.onNodeWithTag("guide-grid").assertDoesNotExist()
@@ -361,11 +365,11 @@ class GuideScreenTest {
         val density = minOf(metrics.widthPixels / 1920f, metrics.heightPixels / 1080f).coerceAtMost(1f)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(density)) {
-                ProvideColorTheme(theme.value) { GuideScreen(controller, schedule) }
+                ProvideColorTheme(theme.value) { GuideScreen(controller, schedule, clock = { baseNow }) }
             }
         }
         compose.waitUntil(10_000) {
-            compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-row:test:0"))
+            compose.onAllNodes(androidx.compose.ui.test.hasTestTag("guide-grid"))
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val grid = compose.onNodeWithTag("guide-grid").fetchSemanticsNode().boundsInRoot

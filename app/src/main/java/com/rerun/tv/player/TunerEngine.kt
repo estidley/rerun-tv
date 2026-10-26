@@ -216,6 +216,11 @@ class TunerEngine(
     }
 
     /** Remember which channel to restore when the start-over episode ends. */
+    /** Surfaces a one-off message on the current tune; the next tune clears it. */
+    fun notify(text: String) {
+        _state.value = _state.value.copy(message = text)
+    }
+
     fun armReturn(channelId: String) {
         restartReturn = channelId
         restartFresh = true
@@ -416,7 +421,12 @@ class TunerEngine(
     /** Linear channels follow wall time; start-over returns on playback end, not a metadata timer. */
     private fun scheduleRollover(channelId: String, endMs: Long) {
         if (channelId == Lineup.RESTART_ID) return
-        val r = Runnable { tune(channelId) }
+        lateinit var r: Runnable
+        r = Runnable {
+            // A wall-clock change can fire this early; wait out the remainder instead of retuning mid-program.
+            val left = endMs - clock()
+            if (left > 1_000) handler.postDelayed(r, left) else tune(channelId)
+        }
         rollover = r
         handler.postDelayed(r, (endMs - clock()).coerceAtLeast(0))
     }

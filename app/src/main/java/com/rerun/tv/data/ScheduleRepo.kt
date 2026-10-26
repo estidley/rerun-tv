@@ -183,6 +183,13 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         for (row in db.channels().active()) topUp(row, nowMs)
     }
 
+    /** Tops up only the given channels, so the guide does not resolve pools for rows nobody is looking at. */
+    suspend fun ensure(channelIds: Collection<String>, nowMs: Long) = mutex.withLock {
+        db.entries().pruneBefore(nowMs - KEEP_PAST_MS)
+        val ids = channelIds.toList()
+        if (ids.isNotEmpty()) for (row in db.channels().byIds(ids)) topUp(row, nowMs)
+    }
+
     /** Tops up a single channel (used right before tuning to it). */
     suspend fun ensure(channelId: String, nowMs: Long) = mutex.withLock {
         db.channels().byId(channelId)?.let { topUp(it, nowMs) }
@@ -196,7 +203,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
                 number = Lineup.RESTART_NUMBER,
                 name = "From the Top",
                 kind = ChannelKind.CUSTOM,
-                rules = Rules(kinds = setOf(MediaKind.EPISODE)),
+                rules = Rules(kinds = setOf(item.kind)),
                 hidden = true,
             )
             db.channels().upsert(ChannelRow.of(def, builtIn = true, dormant = false, poolMs = item.durationMs))
@@ -226,8 +233,10 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
 
     /** Include the preceding program when the guide window starts during its ad break. */
-    suspend fun allEntries(fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
-        (db.entries().programsBeforeBreak(fromMs) + db.entries().rangeAll(fromMs, toMs))
+    suspend fun entriesFor(channelIds: Collection<String>, fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
+        val ids = channelIds.toList()
+        if (ids.isEmpty()) return@withTransaction emptyMap()
+        (db.entries().programsBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs))
             .distinctBy { it.channelId to it.startMs }
             .map { it.toEntry() }.groupBy { it.channelId }
     }

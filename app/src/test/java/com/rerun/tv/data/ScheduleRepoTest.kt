@@ -344,7 +344,7 @@ class ScheduleRepoTest {
             "east", filler.endMs, now + 1_920_000, com.rerun.core.schedule.EntryKind.PROGRAM, "next",
         )
         db.entries().insertAll(listOf(program, filler, next).map(EntryRow::of))
-        val entries = repo.allEntries(now, next.endMs).getValue("east")
+        val entries = repo.entriesFor(listOf("east"), now, next.endMs).getValue("east")
         assertEquals(listOf(program, filler, next), entries)
         assertEquals(listOf(
             com.rerun.core.schedule.GuideBlock(now, filler.endMs, "show"),

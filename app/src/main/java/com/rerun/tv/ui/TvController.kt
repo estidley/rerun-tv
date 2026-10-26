@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
 
 data class Effects(
@@ -73,6 +74,7 @@ sealed interface Screen {
 
 /** App-level state and remote-control actions. One per activity. */
 private const val SUMMARY_CAPACITY = 64
+private const val SUMMARY_TIMEOUT_MS = 5_000L
 
 class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -423,13 +425,23 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             val returnTo = currentId ?: return@launch
             if (returnTo == Lineup.RESTART_ID) return@launch
             val snap = engine.state.value
-            val item = snap.item ?: return@launch
-            if (item.kind != MediaKind.EPISODE) return@launch
-            if (snap.located?.entry?.kind != EntryKind.PROGRAM) return@launch
-            if (snap.channel?.id != returnTo) return@launch
+            val item = snap.item
+            val restartable = item != null && (item.kind == MediaKind.EPISODE || item.kind == MediaKind.MOVIE) &&
+                snap.located?.entry?.kind == EntryKind.PROGRAM && snap.channel?.id == returnTo
+            if (!restartable || item == null) {
+                engine.notify("Start over works while a show or movie is playing.")
+                return@launch
+            }
             channelBeforeRestart = previousId
-            app.schedule.airFromStart(item, System.currentTimeMillis())
-            if (currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
+            try {
+                app.schedule.airFromStart(item, System.currentTimeMillis())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                engine.notify("Couldn't start over: ${e.message}")
+                return@launch
+            }
+            if (currentId != returnTo) return@launch
             engine.armReturn(returnTo)
             tuneTo(Lineup.RESTART_ID)
         }
@@ -470,7 +482,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         val cacheKey = "$base|$token|$revision|${item.key}"
         synchronized(summaries) { summaries[cacheKey] }?.let { return it }
         val text = try {
-            withContext(Dispatchers.IO) { PlexParse.summary(app.plex.get(base, path, token)) }
+            withContext(Dispatchers.IO) { fetchSummary(base, path, token) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -479,6 +491,15 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         // A sync or edit during the fetch invalidates the revision; don't cache the stale response.
         if (app.schedule.guideRevision.value == revision) synchronized(summaries) { summaries[cacheKey] = text }
         return text
+    }
+
+    // withTimeoutOrNull, not withTimeout: its cancellation exception would be rethrown by the caller's catch.
+    private suspend fun fetchSummary(base: String, path: String, token: String): String? {
+        repeat(2) {
+            val body = withTimeoutOrNull(SUMMARY_TIMEOUT_MS) { app.plex.get(base, path, token) }
+            if (body != null) return PlexParse.summary(body)
+        }
+        return null
     }
 
     fun dispose() {

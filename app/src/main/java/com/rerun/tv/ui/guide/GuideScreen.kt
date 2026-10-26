@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,7 +64,9 @@ import com.rerun.core.schedule.gridFloor
 import com.rerun.core.schedule.guideBlocks
 import com.rerun.core.schedule.hourlyGuideBlocks
 import com.rerun.tv.RerunApp
+import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.data.ScheduleRepo
+import com.rerun.tv.ui.ClockWatch
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.RerunWordmark
@@ -79,6 +83,26 @@ import kotlinx.coroutines.withContext
 private const val WINDOW_MS = 3 * 3_600_000L
 private const val ENSURE_INTERVAL_MS = 10 * 60_000L
 private val TIME_HEADER_H = 36.dp
+
+/** Bookkeeping for what the guide has already loaded; plain fields so updating them never recomposes. */
+private class LoadMarks {
+    var dataKey: Any? = null
+    var window = 0L
+    var lastEnsureMs = 0L
+    var ids: Set<String> = emptySet()
+}
+
+/** Grows the preloaded row range only when the viewport nears its edge, so scrolling a row rarely reloads. */
+internal fun wantRange(current: IntRange, first: Int, count: Int, size: Int): IntRange {
+    if (size <= 0) return IntRange.EMPTY
+    val last = (first + count - 1).coerceAtMost(size - 1)
+    val margin = count.coerceAtLeast(1)
+    val slack = margin / 2
+    val ok = !current.isEmpty() && current.last <= size - 1 &&
+        (first >= current.first + slack || current.first == 0) &&
+        (last <= current.last - slack || current.last == size - 1)
+    return if (ok) current else (first - margin).coerceAtLeast(0)..(last + margin).coerceAtMost(size - 1)
+}
 
 /** Lays a single line out as if rotated a quarter turn; pair with [rotate] (-90°) so it reads bottom to top. */
 private fun Modifier.vertical(): Modifier = layout { measurable, constraints ->
@@ -99,36 +123,46 @@ private fun Modifier.vertical(): Modifier = layout { measurable, constraints ->
 
 /** 90s cable-guide grid: channels down the side, half-hours across, a cyan now-line. */
 @Composable
-fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.instance.schedule) {
+fun GuideScreen(
+    controller: TvController,
+    schedule: ScheduleRepo = RerunApp.instance.schedule,
+    clock: () -> Long = System::currentTimeMillis,
+) {
     val rows by controller.channels.collectAsState()
     val density by controller.guideDensity.collectAsState()
     val revision by schedule.guideRevision.collectAsState()
     val update by controller.lineupUpdate.collectAsState()
     val startup by controller.startup.collectAsState()
     val focus = remember { FocusRequester() }
-    val ensuredFor = remember { arrayOfNulls<Any>(1) }
-    val lastEnsureMs = remember { LongArray(1) }
+    val marks = remember { LoadMarks() }
+    val clockWatch = remember { ClockWatch() }
 
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var windowStart by remember { mutableLongStateOf(gridFloor(now)) }
-    var focusRow by remember { mutableIntStateOf(0) }
-    var focusTime by remember { mutableLongStateOf(now) }
-    var headerIndex by remember { mutableIntStateOf(0) }
+    var now by remember { mutableLongStateOf(clock()) }
+    var windowStart by rememberSaveable { mutableLongStateOf(gridFloor(now)) }
+    var focusRow by rememberSaveable { mutableIntStateOf(0) }
+    var focusTime by rememberSaveable { mutableLongStateOf(now) }
+    var headerIndex by rememberSaveable { mutableIntStateOf(0) }
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
+    // Rows near the viewport; only these get schedules topped up and blocks built.
+    var want by remember { mutableStateOf(IntRange.EMPTY) }
+    var clockEpoch by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     val updating = loading || update.busy || startup.loading
     var loadError by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
-    var selectCurrentOnOpen by remember { mutableStateOf(true) }
+    var selectCurrentOnOpen by rememberSaveable { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         while (true) {
+            // A clock or time-zone change is noticed here, lazily, instead of through a broadcast receiver.
+            val jumped = clockWatch.changed()
+            now = clock()
+            windowStart = if (jumped) gridFloor(now) else maxOf(windowStart, gridFloor(now))
+            focusTime = if (jumped) now else maxOf(focusTime, now)
+            if (jumped) clockEpoch++
             delay(30_000)
-            now = System.currentTimeMillis()
-            windowStart = maxOf(windowStart, gridFloor(now))
-            focusTime = maxOf(focusTime, now)
         }
     }
     LaunchedEffect(updating) {
@@ -147,28 +181,37 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     LaunchedEffect(updating, rows) {
         if (!updating && loadError == null && rows.isNotEmpty() && selectCurrentOnOpen) {
             focusRow = rows.indexOfFirst { it.id == controller.currentChannelId() }.coerceAtLeast(0)
-            focusTime = System.currentTimeMillis()
+            focusTime = clock()
             selectCurrentOnOpen = false
         }
     }
-    LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading) {
+    LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading, want, clockEpoch) {
         if (update.busy || startup.loading) return@LaunchedEffect
-        // Scrolling the time window only needs new blocks; top-up and the blocking "updating" state are for data changes.
-        val dataKey = listOf(rows, revision, attempt)
-        val dataChanged = ensuredFor[0] != dataKey || blocks.isEmpty()
-        // Keep extending schedules for untuned channels while the guide stays open.
-        val topUpDue = dataChanged || now - lastEnsureMs[0] >= ENSURE_INTERVAL_MS
+        if (rows.isEmpty()) { loading = false; return@LaunchedEffect }
+        // Stay in the loading state until the layout reports which rows are on screen.
+        if (want.isEmpty()) return@LaunchedEffect
+        val ids = rows.slice(want.first..minOf(want.last, rows.lastIndex)).map { it.id }
+        val dataKey = listOf(rows, revision, attempt, clockEpoch)
+        val dataChanged = marks.dataKey != dataKey
+        val reset = dataChanged || marks.window != windowStart
+        // Keep extending schedules for nearby untuned channels while the guide stays open.
+        val topUpDue = dataChanged || now - marks.lastEnsureMs >= ENSURE_INTERVAL_MS
+        val missing = if (reset) ids else ids.filter { it !in marks.ids }
+        val toBuild = if (topUpDue) ids else missing
+        if (toBuild.isEmpty()) return@LaunchedEffect
         if (dataChanged) loading = true
         loadError = null
-        now = System.currentTimeMillis()
+        now = clock()
         try {
             val (b, i) = withContext(Dispatchers.IO) {
-                if (topUpDue) schedule.ensure(now)
-                val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
-                val mapped = rows.associate { row ->
-                    val entries = all[row.id].orEmpty()
-                    row.id to when {
-                        row.id == Lineup.ADS_ID ->
+                if (topUpDue) schedule.ensure(ids, now) else schedule.ensure(missing, now)
+                val all = schedule.entriesFor(toBuild, windowStart, windowStart + WINDOW_MS)
+                val byId = rows.associateBy { it.id }
+                val mapped = toBuild.associateWith { id ->
+                    val row = byId.getValue(id)
+                    val entries = all[id].orEmpty()
+                    when {
+                        id == Lineup.ADS_ID ->
                             hourlyGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, row.name)
                         row.def.kind == ChannelKind.MUSIC -> {
                             val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
@@ -180,10 +223,12 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
                 mapped to keys.mapNotNull { k -> schedule.item(k)?.let { k to it } }.toMap()
             }
-            blocks = b
-            items = i
-            ensuredFor[0] = dataKey
-            if (topUpDue) lastEnsureMs[0] = now
+            blocks = if (reset) b else blocks + b
+            items = if (reset) i else items + i
+            marks.ids = if (reset) toBuild.toSet() else marks.ids + toBuild
+            marks.dataKey = dataKey
+            marks.window = windowStart
+            if (topUpDue) marks.lastEnsureMs = now
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -197,7 +242,9 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     BackHandler { controller.closeGuideWithBack() }
 
     val focusedChannel = rows.getOrNull(focusRow)
-    val focusedBlock = focusedChannel?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
+    val focusedBlock = remember(blocks, focusedChannel?.id, focusTime) {
+        focusedChannel?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
+    }
     val focusedItem = focusedBlock?.itemKey?.let { items[it] }
     val header = updating || rows.isEmpty() || focusRow < 0
 
@@ -216,10 +263,10 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
 
     fun moveTime(forward: Boolean) {
         val b = focusedBlock
-        val minTime = maxOf(System.currentTimeMillis(), gridFloor(System.currentTimeMillis()))
+        val minTime = maxOf(clock(), gridFloor(clock()))
         focusTime = if (forward) (b?.endMs ?: (focusTime + GRID_MS)) else maxOf(minTime, (b?.startMs ?: focusTime) - 1)
         if (focusTime >= windowStart + WINDOW_MS - GRID_MS) windowStart += GRID_MS
-        if (focusTime < windowStart) windowStart = maxOf(gridFloor(System.currentTimeMillis()), windowStart - GRID_MS)
+        if (focusTime < windowStart) windowStart = maxOf(gridFloor(clock()), windowStart - GRID_MS)
     }
 
     Box(
@@ -261,71 +308,56 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem), summary, GuideDensity.from(density))
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-                if (updating || loadError != null || rows.isEmpty()) {
+                if (loadError != null || rows.isEmpty()) {
                     Column(Modifier.align(Alignment.Center).testTag("guide-status")) {
+                        BasicText(loadError ?: "No channels yet. Open Settings and run a library sync.", style = Retro.Title)
                         BasicText(
-                            if (updating) "Updating guide..." else loadError ?: "No channels yet. Open Settings and run a library sync.",
-                            style = Retro.Title,
-                        )
-                        BasicText(
-                            if (updating) "Elapsed: ${elapsedSeconds}s"
-                            else if (loadError != null) "Press OK to retry, or UP for Settings." else "Press UP for Settings.",
+                            if (loadError != null) "Press OK to retry, or UP for Settings." else "Press UP for Settings.",
                             style = Retro.Body,
                         )
-                        if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
                     }
                     return@BoxWithConstraints
                 }
                 val layout = guideRows((maxHeight - TIME_HEADER_H).value, rows.size, focusRow, GuideDensity.from(density))
+                LaunchedEffect(layout.firstIndex, layout.visibleCount, rows.size) {
+                    want = wantRange(want, layout.firstIndex, layout.visibleCount, rows.size)
+                }
                 val scale = GuideDensity.from(density).textScale
-                val iconDp = (layout.rowHeight - 16f).coerceIn(40f, 72f * scale)
-                val channelW = (iconDp + 34f + 100f * scale + 24f).dp
+                val iconDp = (layout.rowHeight - 8f).coerceIn(48f, 120f * scale)
+                val channelW = (iconDp + 34f + 20f).dp
                 val timelineW = maxWidth - channelW
                 val pxPerMs = timelineW.value / WINDOW_MS
-                Column(Modifier.fillMaxSize().clipToBounds().testTag("guide-grid")) {
-                    TimeHeader(windowStart, timelineW, channelW)
-                    rows.drop(layout.firstIndex).take(layout.visibleCount).forEachIndexed { i, ch ->
-                        val rowIndex = layout.firstIndex + i
-                        val rowColor = if (rowIndex % 2 == 0) Retro.GuideBlue else Retro.AlternateRow
-                        val channelColor = if (rowIndex % 2 == 0) Retro.GuideBlueDeep else Retro.GuideBlueLight
-                        val rowSize = if (layout.fillViewport) Modifier.weight(1f) else Modifier.height(layout.rowHeight.dp)
-                        Row(rowSize.fillMaxWidth().background(rowColor).testTag("guide-row:${ch.id}")) {
-                            Row(
-                                Modifier.width(channelW).fillMaxHeight()
-                                    .background(channelColor).border(2.dp, Retro.Cyan)
-                                    .testTag("guide-channel:${ch.id}")
-                                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(Modifier.width(34.dp), contentAlignment = Alignment.Center) {
-                                    BasicText(
-                                        ch.number.toString(),
-                                        style = Retro.ChannelNumber.copy(fontSize = (22f * scale).sp),
-                                        maxLines = 1,
-                                        modifier = Modifier.vertical().rotate(-90f),
-                                    )
-                                }
-                                ChannelIcon(ch.id, size = iconDp.dp)
-                                Spacer(Modifier.width(8.dp))
-                                BasicText(
-                                    ch.name,
-                                    style = Retro.GuideCell.copy(fontSize = Retro.GuideCell.fontSize * scale * 0.85f),
-                                    maxLines = layout.channelNameLines,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            Box(Modifier.width(timelineW).fillMaxHeight()) {
-                                for (b in blocks[ch.id].orEmpty()) {
-                                    val x = ((b.startMs - windowStart) * pxPerMs).dp
-                                    val w = ((b.endMs - b.startMs) * pxPerMs).dp
-                                    val sel = rowIndex == focusRow && focusTime >= b.startMs && focusTime < b.endMs
-                                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel, rowColor, scale)
-                                }
-                                val nowX = ((now - windowStart) * pxPerMs).dp
-                                if (now in windowStart until windowStart + WINDOW_MS) {
-                                    Box(Modifier.offset(x = nowX).width(3.dp).fillMaxHeight().background(Retro.Cyan))
-                                }
-                            }
+                Box(Modifier.fillMaxSize()) {
+                    Column(Modifier.fillMaxSize().clipToBounds().testTag(if (updating) "guide-skeleton" else "guide-grid")) {
+                        TimeHeader(windowStart, timelineW, channelW)
+                        for (rowIndex in layout.firstIndex until minOf(rows.size, layout.firstIndex + layout.visibleCount)) {
+                            val ch = rows[rowIndex]
+                            GuideRow(
+                                ch = ch,
+                                rowIndex = rowIndex,
+                                blocks = if (updating) emptyList() else blocks[ch.id].orEmpty(),
+                                items = items,
+                                selectedTime = if (rowIndex == focusRow) focusTime else Long.MIN_VALUE,
+                                windowStart = windowStart,
+                                now = now,
+                                channelW = channelW,
+                                timelineW = timelineW,
+                                pxPerMs = pxPerMs,
+                                iconDp = iconDp,
+                                scale = scale,
+                                skeleton = updating,
+                                modifier = if (layout.fillViewport) Modifier.weight(1f) else Modifier.height(layout.rowHeight.dp),
+                            )
+                        }
+                    }
+                    if (updating) {
+                        Column(
+                            Modifier.align(Alignment.Center).background(Retro.GuideBlueDeep.copy(alpha = 0.9f)).padding(24.dp)
+                                .testTag("guide-status"),
+                        ) {
+                            BasicText("Updating guide...", style = Retro.Title)
+                            BasicText("Elapsed: ${elapsedSeconds}s", style = Retro.Body)
+                            if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
                         }
                     }
                 }
@@ -340,6 +372,70 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     }
 }
 
+@Composable
+private fun GuideRow(
+    ch: ChannelRow,
+    rowIndex: Int,
+    blocks: List<GuideBlock>,
+    items: Map<String, MediaItem>,
+    selectedTime: Long,
+    windowStart: Long,
+    now: Long,
+    channelW: Dp,
+    timelineW: Dp,
+    pxPerMs: Float,
+    iconDp: Float,
+    scale: Float,
+    skeleton: Boolean,
+    modifier: Modifier,
+) {
+    val rowColor = if (rowIndex % 2 == 0) Retro.GuideBlue else Retro.AlternateRow
+    val channelColor = if (rowIndex % 2 == 0) Retro.GuideBlueDeep else Retro.GuideBlueLight
+    Row(modifier.fillMaxWidth().background(rowColor).testTag("guide-row:${ch.id}")) {
+        Row(
+            Modifier.width(channelW).fillMaxHeight()
+                .background(channelColor).border(2.dp, Retro.Cyan)
+                .testTag("guide-channel:${ch.id}")
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(34.dp), contentAlignment = Alignment.Center) {
+                BasicText(
+                    ch.number.toString(),
+                    style = Retro.ChannelNumber.copy(fontSize = (22f * scale).sp),
+                    maxLines = 1,
+                    modifier = Modifier.vertical().rotate(-90f),
+                )
+            }
+            // The icon art carries the channel identity; the name shows in the detail panel for the focused row.
+            ChannelIcon(ch.id, size = iconDp.dp, modifier = Modifier.semantics { contentDescription = ch.name })
+        }
+        Box(Modifier.width(timelineW).fillMaxHeight()) {
+            if (skeleton) {
+                // Static placeholders: infinite animations would stall Compose tests that use a manual clock.
+                val widths = listOf(0.3f, 0.45f, 0.25f)
+                var x = 0f
+                for (frac in widths) {
+                    Box(
+                        Modifier.offset(x = (timelineW.value * x).dp).width((timelineW.value * frac).dp).fillMaxHeight()
+                            .padding(3.dp).background(Retro.GuideBlueDeep.copy(alpha = 0.5f)),
+                    )
+                    x += frac
+                }
+            } else {
+                for (b in blocks) {
+                    val x = ((b.startMs - windowStart) * pxPerMs).dp
+                    val w = ((b.endMs - b.startMs) * pxPerMs).dp
+                    val sel = selectedTime >= b.startMs && selectedTime < b.endMs
+                    Cell(b, b.itemKey?.let { items[it] }, x, w, sel, rowColor, scale)
+                }
+                if (now in windowStart until windowStart + WINDOW_MS) {
+                    Box(Modifier.offset(x = ((now - windowStart) * pxPerMs).dp).width(3.dp).fillMaxHeight().background(Retro.Cyan))
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun HeaderButton(text: String, focused: Boolean) {
     Box(
