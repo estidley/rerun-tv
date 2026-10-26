@@ -48,17 +48,16 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
-        with:
-          packages: platform-tools
-
       - name: Install Android platform
         run: |
-          sdkmanager 'platforms;android-37.0'
+          $sdkRoot = $env:ANDROID_HOME
+          if (-not $sdkRoot) { $sdkRoot = $env:ANDROID_SDK_ROOT }
+          $sdkManager = Get-ChildItem -Path (Join-Path $sdkRoot 'cmdline-tools') -Filter sdkmanager.bat -Recurse | Select-Object -First 1
+          if (-not $sdkManager) { throw 'sdkmanager was not found on the runner' }
+          (1..100 | ForEach-Object { 'y' }) | & $sdkManager.FullName --licenses | Out-Null
+          & $sdkManager.FullName 'platforms;android-37.0'
           if ($LASTEXITCODE -ne 0) { throw 'Android platform installation failed' }
           # AGP installs its required build-tools revision from the licensed SDK.
-
       - name: Set up Gradle and validate wrapper
         id: gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
