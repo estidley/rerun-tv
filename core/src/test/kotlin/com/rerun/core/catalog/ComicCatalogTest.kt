@@ -61,10 +61,9 @@ class ComicCatalogTest {
         assertEquals(PlayOrder.CHRONOLOGICAL, channel("marvel:timeline").order)
         assertEquals(setOf(MediaKind.MOVIE), channel("dc:movies").rules.kinds)
         for (def in ComicCatalog.channels) assertEquals(def, ChannelCodec.decode(ChannelCodec.encode(def)))
-        val plan = Lineup.plan(library, emptyList(), eastWest = true, music = false)
+        val plan = Lineup.plan(library, emptyList(), music = false)
         for (def in ComicCatalog.channels) {
             assertFalse(plan.channels.single { it.def.id == def.id }.dormant)
-            assertTrue(plan.channels.any { it.def.id == Lineup.westId(def.id) })
         }
         assertEquals(emptyList(), Catalog.validateNumbers(Catalog.builtInChannels()))
     }
@@ -108,14 +107,13 @@ class ComicCatalogTest {
         val def = channel("marvel:movies")
         val custom = def.copy(id = "custom:reserved", name = "My channel", rules = com.rerun.core.model.Rules())
         val library = listOf(movie("film", "Iron Man", year = 2008, durationMs = 4 * HOUR))
-        val plan = Lineup.plan(library, listOf(StoredChannel(custom, false)), eastWest = true, music = false)
+        val plan = Lineup.plan(library, listOf(StoredChannel(custom, false)), music = false)
         assertEquals(plan.channels.size, plan.channels.map { it.def.number }.distinct().size)
         assertEquals(custom, plan.channels.single { it.def.id == custom.id }.def)
         val edited = def.copy(name = "My Marvel", number = 470, rules = def.rules.copy(ratings = setOf("G")))
-        val refreshed = Lineup.plan(library, listOf(StoredChannel(edited, true)), true, false)
+        val refreshed = Lineup.plan(library, listOf(StoredChannel(edited, true)), false)
         assertEquals(edited, refreshed.channels.single { it.def.id == def.id }.def)
         assertTrue(refreshed.channels.single { it.def.id == def.id }.dormant)
-        assertTrue(refreshed.channels.none { it.def.id == Lineup.westId(def.id) })
     }
 
     @Test

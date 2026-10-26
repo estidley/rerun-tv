@@ -35,6 +35,9 @@ class EditingTest {
         val blank = dup.copy(number = 401, name = " ")
         assertTrue(validateDraft(blank, others).any { "name" in it.lowercase() })
         assertEquals(emptyList(), validateDraft(dup.copy(number = 401), others))
+        assertTrue(validateDraft(dup.copy(number = 401, minimumContentHours = -1), others).isNotEmpty())
+        assertTrue(validateDraft(dup.copy(number = 401, minimumContentHours = 169), others).isNotEmpty())
+        assertEquals(emptyList(), validateDraft(dup.copy(number = 401, minimumContentHours = 0), others))
     }
 
     @Test

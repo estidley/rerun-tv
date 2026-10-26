@@ -7,6 +7,7 @@ import com.rerun.core.resolve.Resolver
 import com.rerun.core.track
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class NetworkReferenceTest {
@@ -51,6 +52,11 @@ class NetworkReferenceTest {
         assertTrue(NetworkReference.parse("""{"channels":[]}""").isEmpty)
         assertTrue(NetworkReference.parse("not json").isEmpty)
         assertTrue(NetworkReference.parse("{\"version\":1,").isEmpty)
+        val good = """{"id":"hbo","realName":"HBO","networks":[],"companies":[],"shows":[1],"movies":[]}"""
+        assertFalse(NetworkReference.parse("""{"version":1,"channels":[$good]}""").isEmpty)
+        assertTrue(NetworkReference.parse("""{"version":1,"channels":[$good,{"realName":"No id"}]}""").isEmpty)
+        assertTrue(NetworkReference.parse("""{"version":1,"channels":[$good,"oops"]}""").isEmpty)
+        assertTrue(NetworkReference.parse("""{"version":1,"channels":[{"id":"a","shows":["x"]}]}""").isEmpty)
     }
 
     @Test

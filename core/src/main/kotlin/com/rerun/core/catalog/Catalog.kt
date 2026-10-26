@@ -66,7 +66,7 @@ object Catalog {
         NetworkDef("tnt", "DNT", 112, listOf("TNT"), false,
             realName = "TNT",
         ),
-        NetworkDef("tbs", "TBSP", 113, listOf("TBS"), false,
+        NetworkDef("tbs", "Ted's TV", 113, listOf("TBS"), false,
             realName = "TBS",
         ),
         NetworkDef("fx", "SFX", 114, listOf("FX", "FXX", "FX Networks"), false,
@@ -75,7 +75,7 @@ object Catalog {
         NetworkDef("amc", "PMC", 115, listOf("AMC"), false,
             realName = "AMC",
         ),
-        NetworkDef("mtv", "Music TV", 116, listOf("MTV"), false,
+        NetworkDef("mtv", "Remote Control", 116, listOf("MTV"), false,
             realName = "MTV", tmdbCompanies = listOf("MTV Films"),
         ),
         NetworkDef("comedycentral", "Tragedy Central", 117, listOf("Comedy Central"), false,
@@ -156,7 +156,7 @@ object Catalog {
         val themes = listOf(
             ChannelDef("horror", 301, "Fright Night", ChannelKind.THEME, Rules(genres = setOf("Horror", "Thriller"))),
             ChannelDef("scifi", 302, "The Void", ChannelKind.THEME, Rules(genres = setOf("Science Fiction", "Sci-Fi & Fantasy"))),
-            ChannelDef("comedy", 303, "Laughing Stock", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
+            ChannelDef("comedy", 303, "Laugh Track", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
             ChannelDef("action", 304, "Adrenaline", ChannelKind.THEME, Rules(genres = setOf("Action", "Adventure"))),
             ChannelDef(
                 "family", 305, "The Living Room", ChannelKind.THEME,
@@ -176,21 +176,12 @@ object Catalog {
     /** Previous on-screen names. A refresh may replace these; a name the user typed stays. */
     fun retiredNames(id: String): Set<String> = retired[id].orEmpty()
 
-    /** Drops a managed West suffix, including the older " E" and " W" forms. */
-    fun stripFeed(name: String): String = when {
-        name.endsWith("-W") -> name.dropLast(2)
-        name.endsWith(" E") || name.endsWith(" W") -> name.dropLast(2)
-        else -> name
-    }
-
     /**
-     * Name to store for [id]. Stock names (the current parody, an old brand name, or either
-     * one with an E/W suffix) take [catalogName]. Anything else is a rename and is kept.
+     * Name to store for [id]. Stock names take [catalogName]; personal renames are kept.
      */
     fun chooseName(id: String, stored: String?, catalogName: String): String {
         if (stored.isNullOrBlank()) return catalogName
-        val stripped = stripFeed(stored)
-        return if (stripped == catalogName || stripped in retiredNames(id)) catalogName else stripped
+        return if (stored == catalogName || stored in retiredNames(id)) catalogName else stored
     }
 
     fun validateNumbers(defs: List<ChannelDef>): List<String> =
@@ -212,10 +203,10 @@ object Catalog {
         "syfy" to setOf("SYFY", "Warp Nine"),
         "usa" to setOf("USA", "Coast to Coast"),
         "tnt" to setOf("TNT", "Boomstick"),
-        "tbs" to setOf("TBS", "Laugh Track"),
+        "tbs" to setOf("TBS", "Laugh Track", "TBSP"),
         "fx" to setOf("FX", "The Edge"),
         "amc" to setOf("AMC", "The Marquee"),
-        "mtv" to setOf("MTV", "The Video Channel"),
+        "mtv" to setOf("MTV", "The Video Channel", "Music TV"),
         "comedycentral" to setOf("Comedy Central", "Punchline"),
         "freeform" to setOf("ABC Family", "Family Hour"),
         "paramountnet" to setOf("Paramount Network", "The Mountain"),
@@ -229,7 +220,7 @@ object Catalog {
         "hbo" to setOf("HBO", "The Premium"),
         "horror" to setOf("Horror"),
         "scifi" to setOf("Sci-Fi"),
-        "comedy" to setOf("Comedy", "The Chuckle"),
+        "comedy" to setOf("Comedy", "The Chuckle", "Laughing Stock"),
         "opt:docs" to setOf("The Reel"),
         "opt:news" to setOf("The Bulletin"),
         "action" to setOf("Action"),

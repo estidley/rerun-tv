@@ -42,7 +42,6 @@ import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.ChannelRow
-import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -63,7 +62,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
     var library by remember { mutableStateOf<List<MediaItem>?>(null) }
     var numberText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var poolHours by remember { mutableStateOf("") }
+    var poolMs by remember { mutableStateOf<Long?>(null) }
     val first = remember { FocusRequester() }
 
     BackHandler { controller.go(Screen.Channels) }
@@ -90,8 +89,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
     LaunchedEffect(draft?.rules, draft?.blocks, library) {
         val d = draft ?: return@LaunchedEffect
         val contents = library ?: return@LaunchedEffect
-        val ms = withContext(Dispatchers.Default) { Resolver.pool(d, contents).sumOf { it.durationMs } }
-        poolHours = "%.1f hours of content".format(ms / 3_600_000.0) + if (ms < Resolver.DORMANT_MS) "  (needs 4 to go on the air)" else ""
+        poolMs = withContext(Dispatchers.Default) { Resolver.pool(d, contents).sumOf { it.durationMs } }
     }
 
     val d = draft
@@ -102,6 +100,12 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             return@TvFrame
         }
         fun update(r: Rules) { draft = d.copy(rules = r) }
+        val minimum = Lineup.minimumContentMs(d) / 3_600_000L
+        val poolHours = poolMs?.let { ms ->
+            "%.1f hours of content".format(ms / 3_600_000.0) +
+                if (ms <= 0) "  (needs playable content)"
+                else if (ms < Lineup.minimumContentMs(d)) "  (needs $minimum to go on the air)" else ""
+        } ?: "Checking content..."
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -134,6 +138,23 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                     chipRow(listOf("Kids-safe", "Hidden")) { label ->
                         if (label == "Kids-safe") TvButton(label, { draft = d.copy(kidsSafe = !d.kidsSafe) }, selected = d.kidsSafe)
                         else TvButton(label, { draft = d.copy(hidden = !d.hidden) }, selected = d.hidden)
+                    }
+                }
+            }
+            item {
+                Section("Minimum programming") {
+                    BasicText(
+                        "Default: ${Lineup.minimumContentMs(d.copy(minimumContentHours = null)) / 3_600_000L} hours. " +
+                            "An override allows a smaller pool to repeat more often; an empty pool stays off air.",
+                        style = Retro.Caption,
+                    )
+                    chipRow(listOf<Int?>(null, 0, 1, 4, 12, 24, 48)) { hours ->
+                        val label = when (hours) {
+                            null -> "Channel default"
+                            0 -> "No minimum"
+                            else -> "$hours hours"
+                        }
+                        TvButton(label, { draft = d.copy(minimumContentHours = hours) }, selected = d.minimumContentHours == hours)
                     }
                 }
             }
@@ -174,14 +195,9 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                                 val toSave = draft ?: return@launch
                                 val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
                                 if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
-                                val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
-                                val ms = withContext(Dispatchers.Default) { Resolver.pool(toSave, contents).sumOf { it.durationMs } }
                                 app.schedule.saveChannel(
-                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false, dormant = ms < Resolver.DORMANT_MS, poolMs = ms),
+                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false),
                                 )
-                                if (!Lineup.isWest(toSave.id) && app.settings.isOn(Settings.EAST_WEST)) {
-                                    app.sync.refreshChannels()
-                                }
                                 app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
                                 controller.reconcileChannels()
                                 controller.go(Screen.Channels)

@@ -126,4 +126,5 @@ data class ChannelDef(
     val kidsSafe: Boolean = false,
     val hidden: Boolean = false,
     val movieEveryMs: Long = 6 * 3_600_000L,
+    val minimumContentHours: Int? = null,
 )

@@ -61,6 +61,10 @@ class ChannelEditorTest {
         compose.onNodeWithText("401").performTextReplacement("402")
         compose.waitForIdle()
         assertEquals(before, scans.get())
+        compose.onNodeWithText("No minimum").performClick()
+        compose.onNodeWithText("3.0 hours of content").assertExists()
+        assertEquals(before, scans.get())
+        compose.onNodeWithText("Channel default").performClick()
         compose.onAllNodesWithText("Comedy")[0].performClick()
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("8.0 hours of content").fetchSemanticsNodes().isNotEmpty()

@@ -18,15 +18,21 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
-- East/West feeds, genre music stations, Off Air and Up Next states, hidden episode start-over.
+- Genre music stations, Off Air and Up Next states, hidden episode start-over.
+- Single-schedule channels; removed East/West option with an explicit data-preserving upgrade
+  that retires saved West feeds and restores the last channel to its original station.
 - Content-driven TV/music decade stations at 24/12 hours respectively, using a single qualification
   aggregation pass and no genre/decade cross-product.
+- Reviewed cable-era identities and rules: Ted's TV for TBS, Comedy-only Laugh Track and
+  MTV-inspired Remote Control. Shared minimum-programming guards with explicit editor overrides,
+  preserved personal edits and backward-compatible channel JSON.
 - Persistent ad library, deterministic gap-filling playback, and program guide cells that include breaks.
 - Buy Me Maybe commercials-only station while an enabled ad catalog contains clips; back-to-back playback without a minimum library size and hourly guide blocks instead of individual ad listings.
 - TV remote navigation, adaptive guide, display themes/density, CRT/effects and margined Settings.
 - Guide opening selects the currently airing station/program; RR launcher artwork and locally bundled Barlow Semi Condensed complement VT323 display text.
 - Navigation-safe scans, guide progress/elapsed time and restricted update controls.
-- Startup loading/error/confirmed-empty states; no premature Settings/sync prompt during restore.
+- Startup loading/error/confirmed-empty states; beret wordmark and animated loading spinner,
+  with no premature Settings/sync prompt during restore.
 - Foreground-only playback reconciliation, including library changes completed after screen navigation.
 - Audio language/per-airing selection, subtitles, HDR compatibility controls and optional Plex normalization.
 - Same-station fade-through-black, retaining static/roll only for station changes.
@@ -47,8 +53,10 @@ The suite includes regression coverage for:
 - Same-station fades, cancellation during fade, menu mute and wall-clock offsets.
 - Ad station lifecycle, short-clip playback and hourly guide grouping without changing clip boundaries.
 - Current-program guide focus, music conversion fallback and readable/display typography roles across themes.
-- Decade eligibility boundaries, media/year isolation, Music/East-West switches, edits, number collisions,
+- Decade eligibility boundaries, media/year isolation, Music switch, edits, number collisions,
   persisted schedule retention/removal, and a 40,000-item workload checking bounded library passes.
+- TBS documentary/comedy separation, stock-name migration, renamed-channel threshold guards,
+  persisted overrides, empty pools and editor previews without unnecessary rescans.
 
 Local JVM benchmark medians from the first optimization pass:
 
@@ -70,12 +78,16 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 
 - [ ] Refresh TMDB lists with a real token, inspect network/company coverage, rebuild, and verify multi-network memberships and preserved user channel names on TV.
 - [ ] Update an installed signed build with saved channels: loading/updating appears until restore settles; genuinely empty and failed states remain distinct.
+- [ ] Upgrade with a saved West feed selected: its original channel resumes, no delayed-feed rows
+  remain, and original channel edits, schedules and unrelated settings survive.
 - [ ] Enable Music or save library changes, leave the screen, and confirm final lineup and muted menu playback. Press Home mid-scan; no playback starts until resume.
 - [ ] Tune near program end, observe ads at the break, and confirm the next program starts on schedule.
 - [ ] Enable/sync ads and tune Buy Me Maybe; confirm hourly guide blocks, short clips playing back-to-back, regular sync preserving the station, and disabling ads returning to another station without unmuting menus.
 - [ ] Check RR launcher artwork and readable guide/menu typography at normal TV viewing distance.
+- [ ] Restore an existing lineup: old stock TBS/Comedy/MTV names update without losing personal
+  names or schedules; minimum overrides persist across sync and Music-off keeps music dormant.
 - [ ] Sync a library with qualifying TV/music decades; verify the resulting lineup, hourly music
-  guide blocks, West feeds, refresh duration and guide responsiveness on the largest target library.
+  guide blocks, refresh duration and guide responsiveness on the largest target library.
 - [ ] Confirm fades composite correctly over the real video surface, including program/ad transitions and station changes during fades.
 - [ ] Check audio and subtitle selection with multi-track 4K/HDR media on a live server; audio-only changes should not impose video downscaling limits.
 - [ ] Verify HDR color rendering, tone mapping, fallback errors and Dolby Vision limitations on affected TVs.

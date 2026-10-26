@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
 import com.rerun.core.catalog.Lineup
+import com.rerun.core.model.ChannelKind
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -51,9 +52,13 @@ fun ChannelManager(controller: TvController) {
                     TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = "hidden · ${hours(ch.poolMs)}", leading = { ChannelIcon(ch.id, size = 40.dp) })
                 }
             }
-            item { BasicText("WAITING FOR CONTENT (${dormant.size}) — needs 4 hours", style = Retro.GuideNumber) }
+            item { BasicText("WAITING FOR CONTENT (${dormant.size})", style = Retro.GuideNumber) }
             items(dormant, key = { it.id }) { ch ->
-                TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), enabled = true, sub = hours(ch.poolMs), leading = { ChannelIcon(ch.id, size = 40.dp) })
+                val minimum = Lineup.minimumContentMs(ch.def) / 3_600_000L
+                TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), enabled = true,
+                    leading = { ChannelIcon(ch.id, size = 40.dp) },
+                    sub = "${hours(ch.poolMs)} · minimum $minimum hours" +
+                        if (ch.def.kind == ChannelKind.MUSIC) "; enable Music in Settings" else "")
             }
         }
     }

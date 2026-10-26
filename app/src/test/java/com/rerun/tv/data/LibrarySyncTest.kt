@@ -35,7 +35,6 @@ class LibrarySyncTest {
         `when`(settings.serverBase()).thenReturn(base)
         `when`(settings.serverToken).thenReturn(token)
         `when`(settings.isOn(Settings.MUSIC)).thenReturn(false)
-        `when`(settings.isOn(Settings.EAST_WEST)).thenReturn(false)
         `when`(api.get(base, "/library/sections", token)).thenReturn(
             """{"MediaContainer":{"Directory":[
               {"key":"1","type":"movie","title":"Movies"},
@@ -77,7 +76,7 @@ class LibrarySyncTest {
     fun excludingAnAdLibraryRemovesStaleSchedulesButPreservesUnaffectedChannels() = runBlocking {
         sync.sync().collect()
         val start = System.currentTimeMillis()
-        val channels = listOf("ads-east", "ads-east:w", "regular")
+        val channels = listOf("ads-one", "ads-two", "regular")
         for ((index, id) in channels.withIndex()) {
             db.channels().upsert(ChannelRow.of(
                 com.rerun.core.model.ChannelDef(

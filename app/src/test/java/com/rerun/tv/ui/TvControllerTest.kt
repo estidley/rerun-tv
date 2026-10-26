@@ -100,8 +100,8 @@ class TvControllerTest {
     }
 
     @Test
-    fun editingWestOpensItsSourceChannel() {
-        controller.go(Screen.Editor("custom:one:w"))
+    fun editingOpensTheSelectedChannel() {
+        controller.go(Screen.Editor("custom:one"))
         assertEquals(Screen.Editor("custom:one"), controller.screen.value)
     }
 
@@ -137,28 +137,30 @@ class TvControllerTest {
     }
 
     @Test
-    fun guideAndChannelSurfingKeepWestNextToEastDespiteRenumbering() {
+    fun guideAndChannelSurfingFollowChannelNumbers() {
         fun channel(id: String, number: Int) =
             ChannelRow.of(ChannelDef(id, number, id, ChannelKind.CUSTOM, Rules()), builtIn = false, dormant = false)
         rows.value = listOf(
-            channel("one", 2), channel("two", 4), channel("three", 6),
-            channel("two:w", 504), channel("orphan:w", 800), channel("one:w", 1001),
+            channel("three", 6), channel("one", 2), channel("two", 4),
         )
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(
-            listOf("one", "one:w", "two", "two:w", "three", "orphan:w"),
+            listOf("one", "two", "three"),
             controller.channels.value.map { it.id },
         )
         controller.tuneTo("one", sound = false)
         controller.channelUp()
-        assertEquals("one:w", controller.currentChannelId())
-        controller.channelUp()
         assertEquals("two", controller.currentChannelId())
+        controller.channelUp()
+        assertEquals("three", controller.currentChannelId())
         controller.channelDown()
-        assertEquals("one:w", controller.currentChannelId())
-        rows.value = rows.value.filterNot { Lineup.isWest(it.id) }
+        assertEquals("two", controller.currentChannelId())
+        controller.channelUp()
+        controller.channelUp()
+        assertEquals("one", controller.currentChannelId())
+        rows.value = rows.value.filterNot { it.id == "two" }
         shadowOf(Looper.getMainLooper()).idle()
-        assertEquals(listOf("one", "two", "three"), controller.channels.value.map { it.id })
+        assertEquals(listOf("one", "three"), controller.channels.value.map { it.id })
     }
 
     @Test
@@ -283,7 +285,7 @@ class TvControllerTest {
             finish.await()
         })
         `when`(repo.active()).thenReturn(listOf(channel("east")))
-        controller.tuneTo("east:w", sound = false)
+        controller.tuneTo("removed", sound = false)
         controller.resyncLibrary()
         controller.stop()
         clearInvocations(engine)
@@ -338,11 +340,11 @@ class TvControllerTest {
     }
 
     @Test
-    fun removingWestReturnsToEastWithoutLeavingOrUnmutingSettings() = runBlocking<Unit> {
+    fun removingAChannelChoosesTheFirstActiveChannelWithoutLeavingOrUnmutingSettings() = runBlocking<Unit> {
         val east = ChannelRow.of(ChannelDef("east", 1, "East", ChannelKind.CUSTOM, Rules()), false, false)
         `when`(repo.active()).thenReturn(listOf(east))
         controller.tuneTo("removed-music", sound = false)
-        controller.tuneTo("east:w", sound = false)
+        controller.tuneTo("removed", sound = false)
         controller.go(Screen.Settings)
         clearInvocations(engine)
         controller.reconcileChannels()

@@ -36,6 +36,9 @@ data class Facets(
 fun validateDraft(draft: ChannelDef, others: List<ChannelDef>): List<String> {
     val errors = ArrayList<String>()
     if (draft.name.isBlank()) errors += "Give the channel a name"
+    if (draft.minimumContentHours?.let { it !in 0..168 } == true) {
+        errors += "Minimum content must be 0–168 hours, or use the channel default"
+    }
     if (draft.number !in 1..9999) errors += "Channel number must be 1–9999"
     if (draft.number == Lineup.RESTART_NUMBER && draft.id != Lineup.RESTART_ID) {
         errors += "Channel 999 is reserved for From the Top"

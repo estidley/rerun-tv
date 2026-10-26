@@ -116,7 +116,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
 
     /** Commit library/lineup changes atomically with respect to schedule generation. */
     suspend fun refreshChannels(
-        eastWest: Boolean, music: Boolean, items: List<MediaItem>? = null,
+        music: Boolean, items: List<MediaItem>? = null,
         selectedLibraries: Set<String>? = null,
     ) = mutex.withLock {
         db.withTransaction {
@@ -142,10 +142,10 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             val contents = items ?: db.items().all().map { it.toItem() }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
             val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
-            val planned = Lineup.plan(contents, existing, eastWest, music, adsPoolMs = adsMs)
+            val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs)
             val previousById = existing.associateBy { it.def.id }
             val nowMs = System.currentTimeMillis()
-            for (row in planned.channels.filterNot { Lineup.isWest(it.def.id) }) {
+            for (row in planned.channels) {
                 val previous = previousById[row.def.id]?.def ?: continue
                 val rulesChanged = previous.rules != row.def.rules || previous.blocks != row.def.blocks
                 // Also repair queues left behind by the initial Anime-rule upgrade.
@@ -158,7 +158,6 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
                 if (rulesChanged || staleAnimeQueue) {
                     val current = db.entries().range(row.def.id, nowMs, nowMs + 1).firstOrNull()
                     db.entries().deleteFrom(row.def.id, current?.endMs ?: nowMs)
-                    db.entries().deleteChannel(Lineup.westId(row.def.id))
                 }
             }
             db.channels().upsertAll(
@@ -201,11 +200,8 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
     }
 
     private suspend fun topUp(row: ChannelRow, nowMs: Long) {
+        if (row.dormant || row.hidden) return
         if (row.id == Lineup.RESTART_ID) return
-        if (Lineup.isWest(row.id)) {
-            mirrorWest(row, nowMs)
-            return
-        }
         val last = db.entries().lastEnd(row.id)
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
@@ -218,30 +214,6 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
     }
 
-    /**
-     * West plays East's stored schedule three hours later and does not shuffle its own.
-     * Hours East has not aired stay empty, including the first three hours of a new feed.
-     */
-    private suspend fun mirrorWest(row: ChannelRow, nowMs: Long) {
-        val east = db.channels().byId(Lineup.eastOf(row.id)) ?: return
-        if (Lineup.isWest(east.id)) return
-        topUp(east, nowMs)
-        val eastLast = db.entries().lastEnd(east.id) ?: return
-        val coveredUntil = eastLast + Lineup.WEST_LAG_MS
-        val westLast = db.entries().lastEnd(row.id)
-        if (westLast != null && westLast >= coveredUntil) return
-        val from = nowMs - KEEP_PAST_MS - Lineup.WEST_LAG_MS
-        val shifted = Lineup.shift(
-            db.entries().range(east.id, from, eastLast + 1).map { it.toEntry() },
-            row.id,
-            Lineup.WEST_LAG_MS,
-        ).filter { it.endMs > nowMs - KEEP_PAST_MS }
-        db.withTransaction {
-            db.entries().deleteChannel(row.id)
-            if (shifted.isNotEmpty()) db.entries().insertAll(shifted.map(EntryRow::of))
-        }
-    }
-
     suspend fun entries(channelId: String, fromMs: Long, toMs: Long): List<ScheduleEntry> =
         db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
 
@@ -252,35 +224,27 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             .map { it.toEntry() }.groupBy { it.channelId }
     }
 
-    /**
-     * After a channel is edited: keep what's on now, rebuild everything after it.
-     * West is derived, so an East edit drops the shifted copy and builds it again.
-     */
+    /** After a channel is edited: keep what's on now, rebuild everything after it. */
     suspend fun resetFuture(channelId: String, nowMs: Long) = mutex.withLock {
         db.withTransaction {
-            if (!Lineup.isWest(channelId)) {
-                val current = db.entries().range(channelId, nowMs, nowMs + 1).firstOrNull()
-                db.entries().deleteFrom(channelId, current?.endMs ?: nowMs)
-                db.channels().byId(channelId)?.let { topUp(it, nowMs) }
-            }
-            val west = db.channels().byId(Lineup.westId(channelId)) ?: return@withTransaction
-            db.entries().deleteChannel(west.id)
-            mirrorWest(west, nowMs)
+            val current = db.entries().range(channelId, nowMs, nowMs + 1).firstOrNull()
+            db.entries().deleteFrom(channelId, current?.endMs ?: nowMs)
+            db.channels().byId(channelId)?.let { topUp(it, nowMs) }
         }
         _guideRevision.value++
     }
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {
-        db.withTransaction {
-            db.channels().upsert(row)
-            if (row.hidden && !Lineup.isWest(row.id)) removeChannel(Lineup.westId(row.id))
-        }
+        val def = row.def
+        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, lib().items).sumOf { it.durationMs } }
+        val music = db.settings().get(Settings.MUSIC)?.toBooleanStrictOrNull() ?: false
+        val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music), poolMs)
+        db.channels().upsert(checked)
     }
 
     suspend fun deleteChannel(id: String) = mutex.withLock {
         db.withTransaction {
             removeChannel(id)
-            if (!Lineup.isWest(id)) removeChannel(Lineup.westId(id))
         }
     }
 
