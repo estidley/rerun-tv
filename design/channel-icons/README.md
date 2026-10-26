@@ -2,12 +2,12 @@
 
 102 icons and 102 outlined wordmarks: 60 named channels, 40 supported TV/music decade templates, and music/custom fallbacks. The approved Marvelous family and centered Toonuki artwork are preserved. All SVGs contain standalone vector paths with no external fonts or images.
 
-`manifest.json` maps stable channel IDs to the files. Managed `:w` feeds reuse their East icon. Arbitrary Plex music genres use `music-generic`; unknown/custom channels use `custom-generic`. Channel names remain normal UI text so user renames and West suffixes stay readable.
+`manifest.json` maps stable channel IDs to the files. Arbitrary Plex music genres use `music-generic`; unknown/custom channels use `custom-generic`. Guide wordmarks retain their designed names; the selected channel's current name appears in the program panel, so custom names and user renames stay readable.
 
-The app displays lossless 256 px WebP icons in the guide, channel manager and playback overlays. SVG and wordmark masters stay here for editing and other uses; they are not decoded during TV playback. Regenerate committed Android drawables and the Kotlin resource lookup with:
+The guide displays lossless 400 x 270 WebP renders of the wordmark SVGs, fitted without stretching or cropping. Channel management and playback overlays retain 256 px square icons. SVG masters stay here for editing; they are not decoded during TV playback. Regenerate both sets of committed Android drawables and the Kotlin resource lookups with:
 
 ```powershell
-cd tools/channel-icons
+Set-Location tools\channel-icons
 npm ci
 npm run build
 ```

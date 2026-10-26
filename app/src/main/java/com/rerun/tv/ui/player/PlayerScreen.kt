@@ -71,6 +71,8 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier, touchC
     val fx by controller.effects.collectAsState()
     val startup by controller.startup.collectAsState()
     val update by controller.lineupUpdate.collectAsState()
+    val subtitleSize by controller.subtitleSize.collectAsState()
+    val subtitleColor by controller.subtitleColor.collectAsState()
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -83,6 +85,9 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier, touchC
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     player = controller.engine.player()
                 }
+            },
+            update = { view ->
+                view.subtitleView?.applyAppearance(SubtitleSize.from(subtitleSize), SubtitleColor.from(subtitleColor))
             },
             modifier = Modifier.fillMaxSize(),
         )
@@ -112,36 +117,33 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier, touchC
             }
             Phase.DIFFICULTIES -> {
                 DifficultiesCard()
-                state.message?.let { message ->
-                    BasicText(
-                        message, style = Retro.Body,
-                        modifier = Modifier.align(Alignment.BottomCenter)
-                            .background(Retro.GuideBlueDeep)
-                            .padding(horizontal = 48.dp, vertical = 32.dp),
-                    )
-                }
             }
             Phase.TUNING -> Unit
             Phase.PLAYING -> Unit
         }
         PlaybackTransition(state, fx.static, fx.roll)
-        if (state.phase == Phase.PLAYING && state.message != null) {
-            BasicText(
-                state.message.orEmpty(), style = Retro.Caption,
-                modifier = Modifier.align(Alignment.BottomCenter).background(Retro.GuideBlueDeep)
-                    .padding(horizontal = 48.dp, vertical = 16.dp),
-            )
-        }
 
         if (state.channel == null) {
             StartupMessage(startup, update, channels.isEmpty())
         }
 
         PlayerOverlays(state, bannerUntil)
+        PlaybackMessage(state.message, state.phase)
         if (touchControls && visibleUntil(bannerUntil)) {
             TouchControlBar(controller, Modifier.align(Alignment.TopStart).padding(32.dp))
         }
     }
+}
+
+@Composable
+internal fun BoxScope.PlaybackMessage(message: String?, phase: Phase) {
+    if (message == null) return
+    BasicText(
+        message,
+        style = if (phase == Phase.DIFFICULTIES) Retro.Body else Retro.Caption,
+        modifier = Modifier.align(Alignment.BottomCenter).background(Retro.GuideBlueDeep)
+            .padding(horizontal = 48.dp, vertical = if (phase == Phase.DIFFICULTIES) 32.dp else 16.dp),
+    )
 }
 
 @Composable
@@ -232,6 +234,7 @@ internal fun BoxScope.PlayerOverlays(state: TunerState, bannerUntil: Long) {
             if (entry?.kind == EntryKind.PROGRAM) state.item else null,
             entry?.takeIf { it.kind == EntryKind.PROGRAM }?.endMs,
             state.nextItem,
+            state.nextStartMs,
         )
     }
 }

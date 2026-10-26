@@ -32,6 +32,23 @@ class ChannelIconTest {
         assertEquals(R.drawable.channel_ads, channelIconResource(Lineup.ADS_ID))
         assertEquals(R.drawable.channel_music_generic, channelIconResource("music:progressive-rock"))
         assertEquals(R.drawable.channel_custom_generic, channelIconResource("custom:my-favorites"))
+        assertEquals(R.drawable.channel_wordmark_ads, channelWordmarkResource(Lineup.ADS_ID))
+        assertEquals(R.drawable.channel_wordmark_music_generic, channelWordmarkResource("music:progressive-rock"))
+        assertEquals(R.drawable.channel_wordmark_custom_generic, channelWordmarkResource("custom:my-favorites"))
+    }
+
+    @Test fun everyIconHasAReadableWordmarkWithTheOriginalAspectRatio() {
+        assertEquals(channelIconResources.keys, channelWordmarkResources.keys)
+        val resources = RuntimeEnvironment.getApplication().resources
+        for ((id, resource) in channelWordmarkResources) {
+            assertEquals(resource, channelWordmarkResource(id))
+            val bitmap = BitmapFactory.decodeResource(resources, resource)
+            assertNotNull("Cannot decode wordmark $id", bitmap)
+            assertEquals(400, bitmap.width)
+            assertEquals(270, bitmap.height)
+            assertTrue("Lost wordmark transparency for $id", bitmap.hasAlpha())
+            bitmap.recycle()
+        }
     }
 
     @Test fun allBundledArtDecodesAsTransparent256PixelImages() {

@@ -56,8 +56,10 @@ class TvControllerTest {
         `when`(repo.activeChannels()).thenReturn(rows)
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
-        `when`(settings.guideDensity()).thenReturn(flowOf("COMFORTABLE"))
+        `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
         `when`(settings.subtitleLanguage()).thenReturn(flowOf("auto"))
+        `when`(settings.subtitleSize()).thenReturn(flowOf("MEDIUM"))
+        `when`(settings.subtitleColor()).thenReturn(flowOf("WHITE"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
@@ -66,6 +68,106 @@ class TvControllerTest {
 
     @After
     fun tearDown() = controller.dispose()
+
+    @Test
+    fun summaryRetriesHttpTimeoutAndCachesTheSuccessfulResponse() = runBlocking<Unit> {
+        val api = mock(com.rerun.tv.data.PlexApi::class.java)
+        `when`(app.plex).thenReturn(api)
+        `when`(repo.guideRevision).thenReturn(MutableStateFlow(0L))
+        `when`(settings.serverToken).thenReturn("test-only-placeholder")
+        controller.dispose()
+        `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
+        controller = TvController(app, engine)
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
+        ).single()
+        `when`(api.getWithTimeout("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder", 5_000))
+            .thenAnswer { throw java.io.InterruptedIOException("timeout") }
+            .thenReturn("""{"MediaContainer":{"Metadata":[{"summary":"Description"}]}}""")
+        assertEquals("Description", controller.programSummary(item))
+        assertEquals("Description", controller.programSummary(item))
+        verify(api, times(2)).getWithTimeout("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder", 5_000)
+    }
+
+    @Test
+    fun startOverRejectsMovieClipsOnTheAdStationWithoutChangingPlayback() = runBlocking<Unit> {
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"ad","title":"Commercial","duration":30000}]}}""",
+        ).single()
+        val entry = com.rerun.core.schedule.ScheduleEntry(
+            Lineup.ADS_ID, 0, 30_000, com.rerun.core.schedule.EntryKind.PROGRAM, item.key,
+        )
+        `when`(engine.state).thenReturn(MutableStateFlow(com.rerun.tv.player.TunerState(
+            channel = ChannelRow.of(Lineup.adsChannel, true, false), item = item, tuneId = 1,
+            located = com.rerun.core.schedule.Located(entry, 0, null),
+        )))
+        controller.tuneTo(Lineup.ADS_ID)
+        clearInvocations(engine, repo)
+        controller.startEpisodeOver()
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine).notify("Start over works while a show or movie is playing.")
+        verify(repo, never()).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
+        verify(engine, never()).armReturn(anyString())
+        verify(engine, never()).tune(anyString())
+        assertEquals(Lineup.ADS_ID, controller.currentChannelId())
+    }
+
+    @Test
+    fun startOverForAnUnchangedMovieTuneSwitchesToTheHiddenChannel() = runBlocking<Unit> {
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
+        ).single()
+        val entry = com.rerun.core.schedule.ScheduleEntry("east", 0, 1_800_000, com.rerun.core.schedule.EntryKind.PROGRAM, item.key)
+        `when`(engine.state).thenReturn(MutableStateFlow(com.rerun.tv.player.TunerState(
+            channel = channel("east"), item = item, tuneId = 1,
+            located = com.rerun.core.schedule.Located(entry, 0, null),
+        )))
+        controller.tuneTo("east")
+        controller.startEpisodeOver()
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine).armReturn("east")
+        verify(engine).tune(Lineup.RESTART_ID)
+    }
+
+    @Test
+    fun startOverRejectsAnObsoleteTuneEvenAfterReturningToTheSameChannel() = runBlocking<Unit> {
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
+        ).single()
+        val entry = com.rerun.core.schedule.ScheduleEntry("east", 0, 1_800_000, com.rerun.core.schedule.EntryKind.PROGRAM, item.key)
+        val state = MutableStateFlow(com.rerun.tv.player.TunerState(
+            channel = channel("east"), item = item, tuneId = 1,
+            located = com.rerun.core.schedule.Located(entry, 0, null),
+        ))
+        `when`(engine.state).thenReturn(state)
+        val finish = CompletableDeferred<Unit>()
+        doAnswer {
+            @Suppress("UNCHECKED_CAST")
+            val continuation = it.arguments.last() as Continuation<Unit>
+            (suspend { finish.await() }).startCoroutineUninterceptedOrReturn(continuation)
+        }.`when`(repo).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
+        controller.tuneTo("east")
+        controller.startEpisodeOver()
+        verify(repo).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
+        controller.tuneTo("other")
+        controller.tuneTo("east")
+        state.value = state.value.copy(tuneId = 3)
+        finish.complete(Unit)
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine, never()).armReturn(anyString())
+        verify(engine, never()).tune(Lineup.RESTART_ID)
+        assertEquals("east", controller.currentChannelId())
+    }
+
+    @Test
+    fun startOverWithNothingRestartableTellsTheViewer() {
+        `when`(engine.state).thenReturn(MutableStateFlow(com.rerun.tv.player.TunerState()))
+        controller.tuneTo("east")
+        controller.startEpisodeOver()
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine, timeout(2_000)).notify(anyString())
+        verify(engine, never()).armReturn(anyString())
+    }
 
     @Test
     fun editingTheAdStationOpensItsCatalogSettings() {
@@ -97,6 +199,23 @@ class TvControllerTest {
         controller.resume()
         verify(engine).tune("east")
         verify(engine, never()).setVisible(true)
+    }
+
+    @Test
+    fun musicToggleRestoresTheCleanVersionMarkerOnlyAfterSuccess() = runBlocking<Unit> {
+        `when`(settings.isSignedIn).thenReturn(true)
+        `when`(settings.lineupAppVersion()).thenReturn("3:100")
+        `when`(settings.isOn(Settings.MUSIC, false)).thenReturn(false)
+        `when`(repo.active()).thenReturn(listOf(channel("east")))
+        controller.setMusicEnabled(false)
+        repeat(50) {
+            shadowOf(Looper.getMainLooper()).idle()
+            if (!controller.lineupUpdate.value.busy) return@repeat
+            Thread.sleep(20)
+        }
+        assertFalse(controller.lineupUpdate.value.busy)
+        verify(settings).invalidateLineupAppVersion()
+        verify(settings).setLineupAppVersion("3:100")
     }
 
     @Test
