@@ -54,5 +54,6 @@ Keep PR workflows read-only and secret-free; release signing is not part of CI.
 - Stub newly read suspend settings values explicitly in Mockito fixtures, especially Boolean returns.
 - Compose tests with a manual clock need recomposition and animation frames before asserting output. Keep rollover time and wall-clock time controlled independently.
 - Keep deterministic scheduling fingerprints unchanged for pure performance edits. `PerformanceWorkloadTest` reports local JVM timings, not TV CPU, memory, or frame rate.
+- Scheduling v2 is approved but not implemented: follow the [design spec](docs/superpowers/specs/2026-10-26-scheduling-v2-design.md) and the ordered [plan/handoff](docs/superpowers/plans/2026-10-26-scheduling-v2.md). The invariants above describe shipped behavior until each step lands; update them in the PR that changes them.
 - Update README and the current design/readiness references for behavioral changes. Remove obsolete scaffolding instructions rather than presenting planned features as shipped.
 - Physical TV rendering, HDR/tone mapping, Plex track negotiation/normalization, and resource measurements require live validation; automated checks are not substitutes.
