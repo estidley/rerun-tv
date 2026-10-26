@@ -30,10 +30,10 @@ class PlayerOverlaysTest {
         val state = mutableStateOf(TunerState(channel = channel, phase = Phase.PLAYING))
         compose.mainClock.autoAdvance = false
         compose.setContent { Box { PlayerOverlays(state.value, 0) } }
-        compose.onNodeWithText("TEST CHANNEL").assertExists()
+        compose.onNodeWithText("401").assertExists()
         compose.mainClock.advanceTimeBy(4_000)
         compose.waitForIdle()
-        compose.onNodeWithText("TEST CHANNEL").assertDoesNotExist()
+        compose.onNodeWithText("401").assertDoesNotExist()
         val before = Recomposer.runningRecomposers.value.sumOf { it.changeCount }
         compose.mainClock.advanceTimeBy(10_000)
         compose.waitForIdle()
@@ -42,7 +42,7 @@ class PlayerOverlaysTest {
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(500)
-        compose.onNodeWithText("TEST CHANNEL").assertExists()
+        compose.onNodeWithText("401").assertExists()
     }
 
     @Test
