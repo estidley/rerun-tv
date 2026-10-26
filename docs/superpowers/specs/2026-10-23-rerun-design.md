@@ -166,6 +166,8 @@ retry. An empty lineup during startup or sync shows progress until loading finis
 
 The guide checks device locale, 12/24-hour preference and time zone on its 30-second tick.
 Time-axis labels invalidate on formatting changes even when the schedule window does not advance.
+The focused program panel is also keyed on formatting settings, so its date/time range updates
+without requiring a focus or program change.
 
 Scheduler candidate indexes and reused lineup calculations preserve deterministic output.
 Stock decade qualification aggregates duration by media kind/decade in one metadata pass and

@@ -128,7 +128,7 @@ class GuideScreenTest {
     }
 
     @Test
-    fun timeHeaderRefreshesFormattingWithoutAdvancingTheWindow() {
+    fun timeHeaderAndProgramPanelRefreshFormattingWithoutAdvancingTheWindow() = runBlocking<Unit> {
         val context = RuntimeEnvironment.getApplication()
         val originalContext = com.rerun.tv.ui.player.clockContext
         val originalLocale = java.util.Locale.getDefault()
@@ -136,6 +136,13 @@ class GuideScreenTest {
         val originalHour = android.provider.Settings.System.getString(context.contentResolver, android.provider.Settings.System.TIME_12_24)
         val fixedNow = java.time.Instant.parse("2026-10-26T13:10:00Z").toEpochMilli()
         val start = com.rerun.core.schedule.gridFloor(fixedNow)
+        val end = start + com.rerun.core.schedule.GRID_MS
+        channels.value = listOf(channels.value.first())
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
+            "test:0" to listOf(ScheduleEntry("test:0", start, end, EntryKind.PROGRAM, null)),
+        ))
+        fun panelRange() = "A long channel name 0  ·  ${com.rerun.tv.ui.player.clockDate(start)}  " +
+            "${com.rerun.tv.ui.player.clockTime(start)} – ${com.rerun.tv.ui.player.clockTime(end)}"
         try {
             java.util.Locale.setDefault(java.util.Locale.US)
             java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
@@ -146,7 +153,9 @@ class GuideScreenTest {
                 compose.onAllNodes(hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
             }
             val initialLabel = com.rerun.tv.ui.player.clockTime(start)
+            val initialRange = panelRange()
             compose.onNodeWithText(initialLabel).assertExists()
+            compose.onNodeWithText(initialRange).assertExists()
             compose.mainClock.autoAdvance = false
             compose.runOnIdle {
                 android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, "24")
@@ -157,6 +166,9 @@ class GuideScreenTest {
             assertNotEquals(initialLabel, hourLabel)
             compose.onNodeWithText(hourLabel).assertExists()
             compose.onNodeWithText(initialLabel).assertDoesNotExist()
+            val hourRange = panelRange()
+            compose.onNodeWithText(hourRange).assertExists()
+            compose.onNodeWithText(initialRange).assertDoesNotExist()
             compose.runOnIdle { java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("GMT+02:00")) }
             compose.mainClock.advanceTimeBy(30_100)
             compose.waitForIdle()
@@ -164,6 +176,8 @@ class GuideScreenTest {
             assertNotEquals(hourLabel, zoneLabel)
             compose.onNodeWithText(zoneLabel).assertExists()
             compose.onNodeWithText(hourLabel).assertDoesNotExist()
+            compose.onNodeWithText(panelRange()).assertExists()
+            compose.onNodeWithText(hourRange).assertDoesNotExist()
         } finally {
             com.rerun.tv.ui.player.clockContext = originalContext
             java.util.Locale.setDefault(originalLocale)
