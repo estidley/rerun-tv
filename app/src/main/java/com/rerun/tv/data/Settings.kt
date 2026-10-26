@@ -70,6 +70,8 @@ class Settings(context: Context, private val dao: SettingDao) {
 
     /** Null preserves the all-library behavior for installations predating the picker. */
     suspend fun selectedLibraries(): Set<String>? = dao.get(SELECTED_LIBRARIES)?.let(SetCodec::decode)
+    suspend fun lineupAppVersion(): Long? = dao.get(LINEUP_APP_VERSION)?.toLongOrNull()
+    suspend fun setLineupAppVersion(version: Long) = dao.put(SettingRow(LINEUP_APP_VERSION, version.toString()))
     suspend fun adLibrary(): String? = dao.get(AD_LIBRARY)
     suspend fun adLastSyncMs(): Long = dao.get(AD_LAST_SYNC)?.toLongOrNull() ?: 0
     suspend fun setAdLibrary(key: String?) {
@@ -198,6 +200,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val SELECTED_LIBRARIES = "selected_libraries"
         const val AD_LIBRARY = "ad_library"
         const val AD_LAST_SYNC = "ad_last_sync"
+        const val LINEUP_APP_VERSION = "lineup_app_version"
         const val LAST_SYNC = "last_sync"
         const val LAST_CHANNEL = "last_channel"
         const val CRT_LEVEL = "crt_level"

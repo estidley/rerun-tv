@@ -47,9 +47,13 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
         // An update can rename stock channels and add extras from the library already saved.
         // Music tracks are fetched only after that switch is turned on.
         lineupRefresh = appScope.async {
-            if (db.items().count() > 0 || settings.adLibrary() != null) sync.refreshChannels()
+            if (db.items().count() > 0 || settings.adLibrary() != null) sync.refreshChannelsForAppVersion(appVersion())
         }
     }
+
+    private fun appVersion(): Long = runCatching {
+        androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(packageManager.getPackageInfo(packageName, 0))
+    }.getOrDefault(-1L)
 
     override fun newImageLoader(context: Context): ImageLoader =
         ImageLoader.Builder(context)
