@@ -39,7 +39,9 @@ object Lineup {
 
     /** Toonuki now owns the Anime genre; only a user-edited former Import Toons station is retained. */
     private fun isEditedRetiredAnime(def: ChannelDef): Boolean =
-        def.id == "opt:anime" && (def.name != "Import Toons" || def.rules != Rules(genres = setOf("Anime")))
+        def.id == "opt:anime" && !looksStock(
+            def, ChannelDef("opt:anime", 328, "Import Toons", ChannelKind.THEME, Rules(genres = setOf("Anime"))),
+        )
 
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =

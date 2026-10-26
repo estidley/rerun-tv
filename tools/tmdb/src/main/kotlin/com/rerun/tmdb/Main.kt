@@ -169,7 +169,7 @@ private class Tmdb(private val token: String, private val apiBase: String, priva
             } catch (_: IllegalArgumentException) {
                 fail("TMDB sent an invalid discovery response. Previous network lists were kept; try again later.")
             }
-            if (p.page != page || (p.ids.isEmpty() && p.totalPages > page)) {
+            if (p.page != page || (p.ids.isEmpty() && (p.totalPages > page || page > 1 || p.totalPages > 1))) {
                 fail("TMDB sent incomplete discovery pages. Previous network lists were kept; try again later.")
             }
             ids += p.ids

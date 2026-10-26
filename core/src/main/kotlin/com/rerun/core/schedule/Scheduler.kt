@@ -46,11 +46,12 @@ class Scheduler(private val zone: ZoneId) {
         val run = Run(state)
         val out = ArrayList<ScheduleEntry>()
 
+        val poolKeys by lazy { items.mapTo(HashSet()) { it.key } }
         while (cursor < end) {
             val local = Instant.ofEpochMilli(cursor).atZone(zone)
             val bi = def.blocks.indexOfFirst { it.activeAt(local) }
             val candidates = if (bi >= 0 && blockSets[bi].items.isNotEmpty()) blockSets[bi] else base
-            val item = run.pick(def, candidates)
+            val item = run.pick(def, candidates, poolKeys)
 
             val length = item.durationMs.coerceAtLeast(1L)
             val progEnd = cursor + length
@@ -98,8 +99,8 @@ class Scheduler(private val zone: ZoneId) {
 
         private fun rng(): Random = Random(seed + rngCalls).also { rngCalls++ }
 
-        fun pick(def: ChannelDef, candidates: Candidates): MediaItem {
-            if (def.order == PlayOrder.CHRONOLOGICAL) return pickChronological(candidates)
+        fun pick(def: ChannelDef, candidates: Candidates, poolKeys: Set<String>): MediaItem {
+            if (def.order == PlayOrder.CHRONOLOGICAL) return pickChronological(candidates, poolKeys)
             if (pointers.remove(CHRONOLOGY_KEY) != null) deck.clear()
             if (def.kind == ChannelKind.MUSIC) return pickEpisode(def, candidates)
             val movies = candidates.movies
@@ -112,14 +113,19 @@ class Scheduler(private val zone: ZoneId) {
             return if (wantMovie) pickMovie(def, candidates) else pickEpisode(def, candidates)
         }
 
-        private fun pickChronological(candidates: Candidates): MediaItem {
+        private fun pickChronological(candidates: Candidates, poolKeys: Set<String>): MediaItem {
             if (pointers[CHRONOLOGY_KEY] != 1) {
                 deck.clear()
                 pointers[CHRONOLOGY_KEY] = 1
             }
-            deck.removeAll { it !in candidates.byKey }
-            if (deck.isEmpty()) deck.addAll(candidates.chronology.map { it.key })
-            return candidates.byKey.getValue(deck.removeAt(0))
+            // Entries outside the active time block stay queued so the sequence resumes afterwards.
+            deck.removeAll { it !in poolKeys }
+            var idx = deck.indexOfFirst { it in candidates.byKey }
+            if (idx < 0) {
+                deck.addAll(candidates.chronology.map { it.key })
+                idx = deck.indexOfFirst { it in candidates.byKey }
+            }
+            return candidates.byKey.getValue(deck.removeAt(idx))
         }
 
         private fun pickMovie(def: ChannelDef, candidates: Candidates): MediaItem {

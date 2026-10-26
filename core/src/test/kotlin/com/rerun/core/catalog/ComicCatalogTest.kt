@@ -117,6 +117,13 @@ class ComicCatalogTest {
     }
 
     @Test
+    fun sharedSeriesTitlesNeedExplicitFranchiseMetadata() {
+        val cbs = episode("cbs", "The Defenders")
+        assertFalse(ComicCatalog.matches(cbs, "marvel"))
+        assertTrue(ComicCatalog.matches(episode("mcu", "The Defenders", studio = "Marvel Television"), "marvel"))
+    }
+
+    @Test
     fun changingFromShuffleDoesNotReuseTheOldRandomMovieDeck() {
         val captain = movie("cap", "Captain America: The First Avenger", year = 2011, durationMs = HOUR)
         val iron = movie("iron", "Iron Man", year = 2008, durationMs = HOUR)
