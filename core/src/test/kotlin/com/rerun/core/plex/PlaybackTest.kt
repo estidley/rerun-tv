@@ -64,10 +64,12 @@ class PlaybackTest {
         val details = PlexParse.videoDetails(
             """{"MediaContainer":{"Metadata":[{"Media":[{"Part":[{"Stream":[
             {"id":8,"streamType":2,"loudness":-17.2,"lra":6.1},
+            {"id":10,"streamType":2,"gain":-3.2},
             {"id":9,"streamType":2}]}]}]}]}}""",
         )
         assertTrue(details.audio[0].canNormalizeLoudness)
-        assertFalse(details.audio[1].canNormalizeLoudness)
+        assertTrue(details.audio[1].canNormalizeLoudness)
+        assertFalse(details.audio[2].canNormalizeLoudness)
     }
 
     @Test

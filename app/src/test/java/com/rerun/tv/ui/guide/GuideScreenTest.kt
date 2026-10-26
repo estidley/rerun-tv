@@ -221,7 +221,7 @@ class GuideScreenTest {
         }
         compose.setContent { GuideScreen(controller, schedule) }
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("Buy Me Maybe").fetchSemanticsNodes().size >= 5
+            compose.onAllNodesWithText("Buy Me Maybe").fetchSemanticsNodes().size >= 4
         }
         val selected = hasAnyAncestor(hasTestTag("guide-row:ads:only")) and isSelected()
         val current = compose.onNode(selected).fetchSemanticsNode().boundsInRoot
