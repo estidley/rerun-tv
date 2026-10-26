@@ -133,9 +133,9 @@ class NetworkReference(val channels: List<ChannelReference>, val generated: Stri
         private fun JsonObject.str(k: String): String? = (this[k] as? JsonPrimitive)?.contentOrNull
 
         private fun JsonObject.ids(k: String): Set<Long> =
-            (this[k] as? JsonArray).orEmpty().mapTo(HashSet()) { (it as? JsonPrimitive)?.longOrNull ?: malformed() }
+            (this[k] as? JsonArray ?: malformed()).mapTo(HashSet()) { (it as? JsonPrimitive)?.longOrNull ?: malformed() }
 
-        private fun JsonObject.sources(k: String): List<TmdbSource> = (this[k] as? JsonArray).orEmpty().map { e ->
+        private fun JsonObject.sources(k: String): List<TmdbSource> = (this[k] as? JsonArray ?: malformed()).map { e ->
             val o = e as? JsonObject ?: malformed()
             val id = (o["id"] as? JsonPrimitive)?.longOrNull ?: malformed()
             TmdbSource(id, o.str("name").orEmpty())

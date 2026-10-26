@@ -61,6 +61,9 @@ fun main(args: Array<String>) {
     log("Downloading TMDB network and company lists...")
     val networkEntries = tmdb.export("tv_network_ids")
     val companyEntries = tmdb.export("production_company_ids")
+    if (networkEntries.isEmpty() || companyEntries.isEmpty()) {
+        fail("TMDB sent an empty or unreadable network/company list. Previous network lists were kept; try again later.")
+    }
     log("  ${networkEntries.size} networks, ${companyEntries.size} companies")
 
     val channels = Catalog.networks.map { n ->
