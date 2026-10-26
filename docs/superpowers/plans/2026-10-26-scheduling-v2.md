@@ -14,8 +14,10 @@ exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
 - **Ship as 8 small PRs to `main`, in order.** Each must pass validation on its own and leave the
   app working.
 - **Defaults Ethan didn't explicitly pick:** run slot times (4 PM and 8 PM), next-season
-  continuation, movie-only channel handling, and the Marvelous Timeline wait-vs-fill
-  reconciliation (§1.6). Keep them configurable and call them out in PR descriptions.
+  continuation, and movie-only channel handling. Keep them configurable and call them out in PR
+  descriptions.
+- **Marvelous Timeline (decided):** same quarter-hour grid and ad fill as every channel, with
+  strict order and no fillers (§1.6). The earlier fixed-2-ads rule is superseded.
 
 ## Repository rules (from AGENTS.md and owner instructions)
 
@@ -126,9 +128,9 @@ CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; add
 
 ### Step 6: Timeline mode (chronological)
 
-- **Files:** `Scheduler.kt`: chronological channels use strict deck order, ignore blocks, start on the next quarter mark, place a fixed 2-ad break (or the channel's Fixed N), and wait for the rest. Disable or ignore blocks for this order in `ChannelEditor.kt`.
-- **Tests:** exact order across top-ups and blocks; no skips or shortening; ad count; same inputs give the same output.
-- **Acceptance:** §1.6. The PR description must flag the wait-vs-fill choice.
+- **Files:** `Scheduler.kt`: chronological channels use strict deck order, ignore blocks, start on the next quarter mark, fill each gap with the same quarter-hour ad fill as other channels (Normal by default). There are no fillers, so a gap over 8 minutes is filled with ads up to the cap, else an Up Next wait. Disable or ignore blocks for this order in `ChannelEditor.kt`.
+- **Tests:** exact order across top-ups and blocks; no skips or shortening; every item starts on a local quarter mark; gaps are ad-filled with no fillers (including gaps over 8 min); same inputs give the same output.
+- **Acceptance:** §1.6.
 
 ### Step 7: Sync before build, and safe item removal
 

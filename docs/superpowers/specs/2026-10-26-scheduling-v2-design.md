@@ -98,16 +98,17 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
   - Strict, exact order. Never skip, reorder or shorten.
   - **Ignores time blocks** (the editor should disable blocks for this order, or they're ignored).
   - **Starts each item on the next quarter-hour mark** after the previous item plus its ad break.
-  - The ad break is **fixed: 2 clips** between items, and any remaining time to the mark becomes
+  - **Ads use exactly the same quarter-hour fill as every other channel** (1.2), "so that it's
+    not different". The ads setting defaults to Normal; Off and Fixed N work as on other
+    channels. The preferred break is 3 to 8 minutes. Fillers would break the strict order, so a
+    gap over 8 minutes is **filled with ads up to the cap**. If ads can't fill it, the rest is
     an Up Next wait.
   - Fully deterministic from the saved deck.
   - No runs, no fillers.
 
-  **Reconciliation:** Ethan first described the timeline as "no grid, start whenever, 2 ads
-  between". He then decided **every** channel uses the quarter-hour grid, and the coordinating
-  agent confirmed "starts on next quarter hour with ad fill". The plan uses **2 fixed ads plus an
-  Up Next wait to the mark**. If Ethan prefers the timeline's gaps filled with more ads (Normal
-  fill), it's a one-line policy switch. Flag this in the PR.
+  **Decision history:** Ethan's earlier "no grid, start whenever, 2 fixed ads between items" and
+  the interim "2 fixed ads, then Up Next wait" rule are **superseded**. His latest decision is that
+  the Timeline uses the same quarter-hour grid and ad fill as every channel.
 - **In order** (`PlayOrder.IN_ORDER`): keeps its order (shows rotate in order; movies play by
   year). It's **exempt from shortening (1.7) and from runs (1.5)**, uses the quarter-hour grid
   with Normal ad fill, and gets no fillers.
@@ -228,7 +229,7 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
 | 7 | Runs broken by grid padding or fillers | Runs never split; only ad fill between episodes (1.5) |
 | 8 | Run slot vs. preceding long program, due movie, time blocks | Zero-tolerance end before the slot; movie waits; blocked day skipped without losing position (1.5) |
 | 9 | Fixed order vs. shortening, blocks and fillers | Chronological and In order exempt from shortening and fillers; chronological ignores blocks (1.6) |
-| 10 | Marvelous Timeline "start whenever" vs. "every channel on the quarter hour" | Grid plus 2 fixed ads plus Up Next wait; flagged as adjustable (1.6) |
+| 10 | Marvelous Timeline "start whenever" vs. "every channel on the quarter hour" | Ethan decided: same quarter-hour grid and ad fill as every channel; ads fill gaps over 8 min (no fillers); earlier fixed-2-ads rule superseded (1.6) |
 | 11 | Movie-only channels can't use episode fillers | Grid plus ad fill (gaps under 15 min); Up Next if no ads (1.4) |
 | 12 | Nothing fits a gap | Filler, then ads, then Up Next wait; never delay the next program (1.2) |
 | 13 | Guide clutter from ads and fillers | Fold ads and waits into the previous cell; fillers get their own cells (1.12) |
@@ -247,7 +248,7 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
 | Preferred ad break | 3–8 min | Global constant |
 | Filler threshold | Gap over 8 min | Global constant |
 | Ad break hard cap | 23 min | Global constant |
-| Ads policy | Normal / Off / Fixed N | Per channel (Timeline default: Fixed 2) |
+| Ads policy | Normal / Off / Fixed N | Per channel (default Normal on every channel, Timeline included) |
 | Block overrun tolerance | 20 min | Per channel (default 20) |
 | Episodes per run | 3 | Per channel (default 3) |
 | Run slots | 4:00 PM and 8:00 PM local **(default)** | Per channel |
