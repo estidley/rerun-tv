@@ -98,6 +98,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     val update by controller.lineupUpdate.collectAsState()
     val startup by controller.startup.collectAsState()
     val focus = remember { FocusRequester() }
+    val ensuredFor = remember { arrayOfNulls<Any>(1) }
 
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var windowStart by remember { mutableLongStateOf(gridFloor(now)) }
@@ -143,12 +144,15 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
     }
     LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading) {
         if (update.busy || startup.loading) return@LaunchedEffect
-        loading = true
+        // Scrolling the time window only needs new blocks; top-up and the blocking "updating" state are for data changes.
+        val dataKey = listOf(rows, revision, attempt)
+        val dataChanged = ensuredFor[0] != dataKey || blocks.isEmpty()
+        if (dataChanged) loading = true
         loadError = null
         now = System.currentTimeMillis()
         try {
             val (b, i) = withContext(Dispatchers.IO) {
-                schedule.ensure(now)
+                if (dataChanged) schedule.ensure(now)
                 val all = schedule.allEntries(windowStart, windowStart + WINDOW_MS)
                 val mapped = rows.associate { row ->
                     val entries = all[row.id].orEmpty()
@@ -167,6 +171,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
             }
             blocks = b
             items = i
+            ensuredFor[0] = dataKey
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -343,9 +348,10 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp) {
             BasicText(clockDate(windowStart), style = Retro.GuideCell.copy(color = Retro.Cyan), maxLines = 1)
         }
         val cols = (WINDOW_MS / GRID_MS).toInt()
+        val labels = remember(windowStart) { List(cols) { clockTime(windowStart + it * GRID_MS) } }
         for (i in 0 until cols) {
             Box(Modifier.width(timelineW / cols).fillMaxHeight().background(Retro.GuideBlueDeep).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
-                BasicText(clockTime(windowStart + i * GRID_MS), style = Retro.GuideCell.copy(color = Retro.Yellow))
+                BasicText(labels[i], style = Retro.GuideCell.copy(color = Retro.Yellow))
             }
         }
     }
