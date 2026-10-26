@@ -143,6 +143,23 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
             val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
             val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs)
+            val previousById = existing.associateBy { it.def.id }
+            val nowMs = System.currentTimeMillis()
+            for (row in planned.channels) {
+                val previous = previousById[row.def.id]?.def ?: continue
+                val rulesChanged = previous.rules != row.def.rules || previous.blocks != row.def.blocks
+                // Also repair queues left behind by the initial Anime-rule upgrade.
+                val staleAnimeQueue = if (row.def.id == "toonami" && row.def.rules == Rules(genres = setOf("Anime"))) {
+                    val allowed = Resolver.pool(row.def, contents).mapTo(HashSet()) { it.key }
+                    db.entries().range(row.def.id, nowMs, Long.MAX_VALUE).any {
+                        it.startMs > nowMs && it.kind == EntryKind.PROGRAM.name && it.itemKey !in allowed
+                    }
+                } else false
+                if (rulesChanged || staleAnimeQueue) {
+                    val current = db.entries().range(row.def.id, nowMs, nowMs + 1).firstOrNull()
+                    db.entries().deleteFrom(row.def.id, current?.endMs ?: nowMs)
+                }
+            }
             db.channels().upsertAll(
                 planned.channels.map { ChannelRow.of(it.def, it.builtIn, it.dormant, it.poolMs) },
             )

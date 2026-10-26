@@ -8,47 +8,109 @@ import com.rerun.core.model.TimeBlock
 import java.time.DayOfWeek
 import java.time.LocalTime
 
+/**
+ * One built-in network channel.
+ *
+ * [name] is the parody shown on screen. [realName] is the real network it stands for and
+ * never appears on screen. [aliases] are the real network names as Plex and TMDB spell them;
+ * they match Plex metadata and pick the TMDB networks whose show lists feed the channel.
+ * [tmdbCompanies] are TMDB production companies whose movies (made-for-TV films, mostly)
+ * belong on the channel.
+ */
 data class NetworkDef(
     val id: String,
     val name: String,
     val number: Int,
     val aliases: List<String>,
     val kidsSafe: Boolean,
+    val realName: String,
+    val tmdbCompanies: List<String> = emptyList(),
 )
 
-/**
- * Built-in channel lineup. [NetworkDef.name] is the on-screen parody; [NetworkDef.aliases]
- * stay the real Plex network strings so matching still works.
- */
+/** Built-in channel lineup. See [NetworkDef] for which names show on screen. */
 object Catalog {
     val networks: List<NetworkDef> = listOf(
-        NetworkDef("disney", "Wonderland", 101, listOf("Disney Channel", "Toon Disney"), true),
-        NetworkDef("nick", "Kid Castle", 102, listOf("Nickelodeon", "Nicktoons", "Nick", "TeenNick"), true),
-        NetworkDef("cn", "Toon Tower", 103, listOf("Cartoon Network", "CN"), true),
-        NetworkDef("boomerang", "The Attic", 104, listOf("Boomerang"), true),
-        NetworkDef("toonami", "Midnight Block", 105, listOf("Toonami"), true),
-        NetworkDef("pbs", "Public Square", 106, listOf("PBS"), false),
-        NetworkDef("pbskids", "Story Yard", 107, listOf("PBS Kids"), true),
-        NetworkDef("disneyxd", "Action Club", 108, listOf("Disney XD", "Jetix"), true),
-        NetworkDef("touchstone", "The Backlot", 109, emptyList(), false),
-        NetworkDef("syfy", "Warp Nine", 110, listOf("Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"), false),
-        NetworkDef("usa", "Coast to Coast", 111, listOf("USA Network", "USA"), false),
-        NetworkDef("tnt", "Boomstick", 112, listOf("TNT"), false),
-        NetworkDef("tbs", "Ted's TV", 113, listOf("TBS"), false),
-        NetworkDef("fx", "The Edge", 114, listOf("FX", "FXX", "FX Networks"), false),
-        NetworkDef("amc", "The Marquee", 115, listOf("AMC"), false),
-        NetworkDef("mtv", "Remote Control", 116, listOf("MTV"), false),
-        NetworkDef("comedycentral", "Punchline", 117, listOf("Comedy Central"), false),
-        NetworkDef("freeform", "Family Hour", 118, listOf("ABC Family", "Freeform", "Fox Family"), false),
-        NetworkDef("paramountnet", "The Mountain", 119, listOf("Paramount Network", "Spike", "Spike TV"), false),
-        NetworkDef("discovery", "The Expedition", 120, listOf("Discovery", "Discovery Channel"), false),
-        NetworkDef("history", "Yesteryear", 121, listOf("History", "History Channel", "The History Channel"), false),
-        NetworkDef("food", "The Kitchen", 122, listOf("Food Network"), false),
-        NetworkDef("hgtv", "Home Base", 123, listOf("HGTV"), false),
-        NetworkDef("adultswim", "After Hours", 124, listOf("Adult Swim", "[adult swim]"), false),
-        NetworkDef("nickjr", "Tiny Town", 125, listOf("Nick Jr.", "Nick Jr"), true),
-        NetworkDef("disneyjr", "Little Castle", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true),
-        NetworkDef("hbo", "The Premium", 130, listOf("HBO", "Cinemax"), false),
+        NetworkDef("disney", "Dinky Channel", 101, listOf("Disney Channel", "Toon Disney"), true,
+            realName = "Disney Channel", tmdbCompanies = listOf("Disney Channel"),
+        ),
+        NetworkDef("nick", "Slimelodeon", 102, listOf("Nickelodeon", "Nicktoons", "Nick", "TeenNick"), true,
+            realName = "Nickelodeon", tmdbCompanies = listOf("Nickelodeon Movies", "Nickelodeon Productions"),
+        ),
+        NetworkDef("cn", "Cartoon Notwork", 103, listOf("Cartoon Network", "CN"), true,
+            realName = "Cartoon Network", tmdbCompanies = listOf("Cartoon Network Studios"),
+        ),
+        NetworkDef("boomerang", "Kaboomerang", 104, listOf("Boomerang"), true,
+            realName = "Boomerang",
+        ),
+        NetworkDef("toonami", "Toonuki", 105, listOf("Toonami"), false,
+            realName = "Toonami",
+        ),
+        NetworkDef("pbs", "PBJ", 106, listOf("PBS"), false,
+            realName = "PBS", tmdbCompanies = listOf("PBS"),
+        ),
+        NetworkDef("pbskids", "PBJ Kids", 107, listOf("PBS Kids"), true,
+            realName = "PBS Kids",
+        ),
+        NetworkDef("disneyxd", "Dinky XD", 108, listOf("Disney XD", "Jetix"), true,
+            realName = "Disney XD",
+        ),
+        NetworkDef("touchstone", "The Backlot", 109, emptyList(), false,
+            realName = "Touchstone",
+        ),
+        NetworkDef("syfy", "Sigh-Fi Channel", 110, listOf("Syfy", "Sci Fi Channel", "SciFi", "Sci-Fi Channel"), false,
+            realName = "Syfy", tmdbCompanies = listOf("Syfy"),
+        ),
+        NetworkDef("usa", "USB Network", 111, listOf("USA Network", "USA"), false,
+            realName = "USA Network",
+        ),
+        NetworkDef("tnt", "DNT", 112, listOf("TNT"), false,
+            realName = "TNT",
+        ),
+        NetworkDef("tbs", "Ted's TV", 113, listOf("TBS"), false,
+            realName = "TBS",
+        ),
+        NetworkDef("fx", "SFX", 114, listOf("FX", "FXX", "FX Networks"), false,
+            realName = "FX",
+        ),
+        NetworkDef("amc", "PMC", 115, listOf("AMC"), false,
+            realName = "AMC",
+        ),
+        NetworkDef("mtv", "Remote Control", 116, listOf("MTV"), false,
+            realName = "MTV", tmdbCompanies = listOf("MTV Films"),
+        ),
+        NetworkDef("comedycentral", "Tragedy Central", 117, listOf("Comedy Central"), false,
+            realName = "Comedy Central", tmdbCompanies = listOf("Comedy Central Films"),
+        ),
+        NetworkDef("freeform", "XYZ Family", 118, listOf("ABC Family", "Freeform", "Fox Family"), false,
+            realName = "ABC Family", tmdbCompanies = listOf("ABC Family"),
+        ),
+        NetworkDef("paramountnet", "Spork TV", 119, listOf("Paramount Network", "Spike", "Spike TV"), false,
+            realName = "Spike TV",
+        ),
+        NetworkDef("discovery", "Recovery Channel", 120, listOf("Discovery", "Discovery Channel"), false,
+            realName = "Discovery Channel",
+        ),
+        NetworkDef("history", "Hysteria Channel", 121, listOf("History", "History Channel", "The History Channel"), false,
+            realName = "History Channel",
+        ),
+        NetworkDef("food", "Feud Network", 122, listOf("Food Network"), false,
+            realName = "Food Network",
+        ),
+        NetworkDef("hgtv", "GGTV", 123, listOf("HGTV"), false,
+            realName = "HGTV",
+        ),
+        NetworkDef("adultswim", "Adult Whim", 124, listOf("Adult Swim", "[adult swim]"), false,
+            realName = "Adult Swim", tmdbCompanies = listOf("Williams Street"),
+        ),
+        NetworkDef("nickjr", "Slime Jr.", 125, listOf("Nick Jr.", "Nick Jr"), true,
+            realName = "Nick Jr.",
+        ),
+        NetworkDef("disneyjr", "Playhouse Dinky", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true,
+            realName = "Playhouse Disney",
+        ),
+        NetworkDef("hbo", "HMO", 130, listOf("HBO", "Cinemax"), false,
+            realName = "HBO", tmdbCompanies = listOf("HBO Films"),
+        ),
     )
 
     private val aliasIndex: Map<String, String> = buildMap {
@@ -58,6 +120,11 @@ object Catalog {
     private fun aliasKey(s: String) = s.trim().lowercase()
 
     fun canonicalNetwork(raw: String?): String? = raw?.let { aliasIndex[aliasKey(it)] }
+
+    private val numbers: Map<String, Int> = networks.associate { it.id to it.number }
+
+    /** Channel number of a built-in network, or 999 for an unknown id (sorts last). */
+    fun numberOf(id: String): Int = numbers[id] ?: 999
 
     private val weekdays = setOf(
         DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY,
@@ -74,7 +141,7 @@ object Catalog {
                 )
                 "toonami" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.CURATED,
-                    Rules(networks = setOf(n.id), titles = Curated.toonamiShows.toSet()), kidsSafe = true,
+                    Rules(genres = setOf("Anime")),
                 )
                 "cn" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.NETWORK, Rules(networks = setOf(n.id)),
@@ -103,7 +170,7 @@ object Catalog {
                 kidsSafe = true,
             ),
         )
-        return net + themes
+        return net + themes + ComicCatalog.channels
     }
 
     /** Previous on-screen names. A refresh may replace these; a name the user typed stays. */
@@ -124,33 +191,33 @@ object Catalog {
             .map { (number, clash) -> "Channel $number is used by ${clash.joinToString(" and ") { it.name }}" }
 
     private val retired: Map<String, Set<String>> = mapOf(
-        "disney" to setOf("Disney Channel"),
-        "nick" to setOf("Nickelodeon"),
-        "cn" to setOf("Cartoon Network"),
-        "boomerang" to setOf("Boomerang"),
-        "toonami" to setOf("Toonami"),
-        "pbs" to setOf("PBS"),
-        "pbskids" to setOf("PBS Kids"),
-        "disneyxd" to setOf("Disney XD"),
+        "disney" to setOf("Disney Channel", "Wonderland"),
+        "nick" to setOf("Nickelodeon", "Kid Castle"),
+        "cn" to setOf("Cartoon Network", "Toon Tower"),
+        "boomerang" to setOf("Boomerang", "The Attic"),
+        "toonami" to setOf("Toonami", "Midnight Block"),
+        "pbs" to setOf("PBS", "Public Square"),
+        "pbskids" to setOf("PBS Kids", "Story Yard"),
+        "disneyxd" to setOf("Disney XD", "Action Club"),
         "touchstone" to setOf("Touchstone"),
-        "syfy" to setOf("SYFY"),
-        "usa" to setOf("USA"),
-        "tnt" to setOf("TNT"),
-        "tbs" to setOf("TBS", "Laugh Track"),
-        "fx" to setOf("FX"),
-        "amc" to setOf("AMC"),
-        "mtv" to setOf("MTV", "The Video Channel"),
-        "comedycentral" to setOf("Comedy Central"),
-        "freeform" to setOf("ABC Family"),
-        "paramountnet" to setOf("Paramount Network"),
-        "discovery" to setOf("Discovery"),
-        "history" to setOf("History"),
-        "food" to setOf("Food Network"),
-        "hgtv" to setOf("HGTV"),
-        "adultswim" to setOf("Adult Swim"),
-        "nickjr" to setOf("Nick Jr."),
-        "disneyjr" to setOf("Disney Junior"),
-        "hbo" to setOf("HBO"),
+        "syfy" to setOf("SYFY", "Warp Nine"),
+        "usa" to setOf("USA", "Coast to Coast"),
+        "tnt" to setOf("TNT", "Boomstick"),
+        "tbs" to setOf("TBS", "Laugh Track", "TBSP"),
+        "fx" to setOf("FX", "The Edge"),
+        "amc" to setOf("AMC", "The Marquee"),
+        "mtv" to setOf("MTV", "The Video Channel", "Music TV"),
+        "comedycentral" to setOf("Comedy Central", "Punchline"),
+        "freeform" to setOf("ABC Family", "Family Hour"),
+        "paramountnet" to setOf("Paramount Network", "The Mountain"),
+        "discovery" to setOf("Discovery", "The Expedition"),
+        "history" to setOf("History", "Yesteryear"),
+        "food" to setOf("Food Network", "The Kitchen"),
+        "hgtv" to setOf("HGTV", "Home Base"),
+        "adultswim" to setOf("Adult Swim", "After Hours"),
+        "nickjr" to setOf("Nick Jr.", "Tiny Town"),
+        "disneyjr" to setOf("Disney Junior", "Little Castle"),
+        "hbo" to setOf("HBO", "The Premium"),
         "horror" to setOf("Horror"),
         "scifi" to setOf("Sci-Fi"),
         "comedy" to setOf("Comedy", "The Chuckle", "Laughing Stock"),

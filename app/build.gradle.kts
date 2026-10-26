@@ -65,7 +65,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
-    testOptions { unitTests.isIncludeAndroidResources = true }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        // Keep tests independent of a locally generated TMDB reference.
+        unitTests.all { it.systemProperty("rerun.tmdb", "off") }
+    }
 }
 
 dependencies {

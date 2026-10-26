@@ -6,7 +6,7 @@ import java.time.ZonedDateTime
 
 enum class ChannelKind { NETWORK, CURATED, THEME, CUSTOM, MUSIC }
 
-enum class PlayOrder { SHUFFLE, IN_ORDER }
+enum class PlayOrder { SHUFFLE, IN_ORDER, CHRONOLOGICAL }
 
 private fun norm(s: String) = s.trim().lowercase()
 private fun Set<String>.normed() = mapTo(HashSet()) { norm(it) }
@@ -27,7 +27,7 @@ fun bucketOf(item: MediaItem, count: Int): Int {
 /**
  * What a channel plays.
  *
- * Include sources (networks, titles, tmdbIds, labels, collections, genres) are OR'd; when none
+ * Include sources (networks, titles, tmdbIds, labels, collections, genres, franchises) are OR'd; when none
  * are set, everything passes. Filters (excludeGenres, decades, ratings, kinds) are AND'd.
  * [bucketCount] > 1 splits the matching pool into that many deterministic slices; the channel
  * then only plays the slice numbered [bucket] (0-based) — that's how MOVIES 1/2 share a library.
@@ -45,6 +45,7 @@ data class Rules(
     val kinds: Set<MediaKind> = setOf(MediaKind.MOVIE, MediaKind.EPISODE),
     val bucket: Int = 0,
     val bucketCount: Int = 1,
+    val franchises: Set<String> = emptySet(),
 ) {
     private val nNetworks by lazy { networks.normed() }
     private val nTitles by lazy { titles.mapTo(HashSet()) { titleKey(it) } }
@@ -57,9 +58,16 @@ data class Rules(
 
     private val hasIncludeSource: Boolean
         get() = networks.isNotEmpty() || titles.isNotEmpty() || tmdbIds.isNotEmpty() ||
-            labels.isNotEmpty() || collections.isNotEmpty() || genres.isNotEmpty()
+            labels.isNotEmpty() || collections.isNotEmpty() || genres.isNotEmpty() || franchises.isNotEmpty()
 
-    fun matches(item: MediaItem, networkId: String? = item.network): Boolean {
+    fun matches(item: MediaItem, networkId: String? = item.network): Boolean =
+        matchesWith(item) { networkId != null && norm(networkId) in nNetworks }
+
+    /** Like [matches], for an item that belongs to several networks (it aired on each one). */
+    fun matches(item: MediaItem, networkIds: Set<String>): Boolean =
+        matchesWith(item) { networkIds.any { norm(it) in nNetworks } }
+
+    private inline fun matchesWith(item: MediaItem, networkHit: () -> Boolean): Boolean {
         if (item.kind !in kinds) return false
         if (bucketCount > 1 && bucketOf(item, bucketCount) != bucket) return false
         if (nExclude.isNotEmpty() && item.genres.any { norm(it) in nExclude }) return false
@@ -73,7 +81,9 @@ data class Rules(
         }
         if (!hasIncludeSource) return true
 
-        if (networkId != null && norm(networkId) in nNetworks) return true
+        if (franchises.any { com.rerun.core.catalog.ComicCatalog.matches(item, it) }) return true
+
+        if (nNetworks.isNotEmpty() && networkHit()) return true
         val title = if (item.kind == MediaKind.EPISODE) item.showTitle else item.title
         if (nTitles.isNotEmpty() && title != null && titleKey(title) in nTitles) return true
         if (nTmdb.isNotEmpty() && item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true

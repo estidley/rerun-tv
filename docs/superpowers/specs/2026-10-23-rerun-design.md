@@ -1,10 +1,14 @@
 # Rerun architecture and behavior
 
-Current implementation reference, updated 2026-10-24. This replaces the original speculative design.
+Current implementation reference, updated 2026-10-25. This replaces the original speculative design.
 Installation, features, remote controls, and Plex prerequisites live in [README](../../../README.md);
 contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.md).
 
 ## Scope
+
+Channel identities use stable IDs, independent of user-renamed display text. `ChannelIcon` loads bundled lossless WebP artwork in guide rows, channel management and playback OSD/info. The 102 SVG masters/wordmarks live under `design/channel-icons`; a pinned Sharp generator produces 256 px transparent Android drawables and a static resource map. Unknown music/custom channels use explicit fallback art.
+
+The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
 Rerun is a native Android/Fire TV player for a personal Plex library, not a virtual tuner server.
 The minimum Android API is 26; compile/target SDKs and dependency versions are defined by the build files.
@@ -12,7 +16,7 @@ Basic playback does not itself require Plex Pass; optional Plex HDR tone mapping
 There is no separate Rerun server and no watch-history reporting.
 
 Implemented sources are Plex movies, episodes, music tracks, and a separately selected ad library.
-HDHomeRun/live TV, TMDb enrichment, commercial content filtering, archive streaming, and idle timeout
+HDHomeRun/live TV, general TMDb metadata enrichment, commercial content filtering, archive streaming, and idle timeout
 are not implemented. The local commercial helper downloads files and queues upscaling; it does not
 automatically split compilations or classify ads. Users must review their own ad content.
 
@@ -34,6 +38,41 @@ for body, caption and guide-cell text. Both are bundled OFL fonts; readable text
 Room stores media, channels, schedules, scheduler state, ad clips and settings.
 Explicit migrations preserve prior data. Credentials are kept out of play URLs and redacted from
 diagnostics; HTTP token attachment follows the trusted Plex host policy.
+
+Toonuki (channel 105, stable ID `toonami`) uses only the Anime genre for episodes and movies,
+without network/title or rating restrictions. Animation alone does not match. Stock legacy rules
+upgrade on lineup refresh while preserving channel names/numbers/order and explicitly edited pools.
+Rule upgrades and stale non-anime Toonuki queues discard future entries after the current airing;
+West is remirrored from East. Ordinary refreshes preserve valid locked schedules.
+
+## Network reference lists
+
+Built-in network channels use parody display names while retaining real network aliases and stable IDs.
+Refresh replaces retired built-in names and preserves names edited by the user.
+The optional `:tmdb:run` build-time tool downloads network/company references using `TMDB_TOKEN`.
+It writes gitignored `local/tmdb/rerun/tmdb-networks.json`; subsequent builds bundle that resource.
+The app receives the lists, never the token, and makes no TMDB requests.
+Episodes match their show TMDB ID; movies match the listed production companies, not broadcast history.
+Matching combines reference memberships with the network Plex reports, then falls back to owner-family
+routing only if neither matches. Missing or malformed bundled lists retain Plex-based routing. Invalid, missing or inconsistent TMDB discovery pages abort refresh before replacing the previous lists. Tests disable local lists.
+Live refresh coverage and installed-TV behavior still need validation.
+
+## Comic franchise channels
+
+`ComicCatalog` provides Marvelous TV/Movies/Timeline and Detective Club TV/Detective Pictures.
+Franchise inclusion is separate from network ownership: exact production metadata, explicit Plex labels/collections,
+and a curated title/kind/year registry qualify items. Generic distributors and genres alone do not.
+`Rules.franchises` is an additional OR inclusion source, with the existing kind/rating filters still applied.
+Channel JSON missing this field decodes to an empty set; no Room schema migration is needed.
+New station numbers are preferred values and move around existing custom channels. User edits remain preserved.
+
+Marvelous Timeline uses `CHRONOLOGICAL` order: a single persisted deck contains both movies and episodes.
+The MCU group follows the Marvel source verified 2026-10-25 with independent TV-season positions.
+Legacy universes follow as separate groups; time-travel placements are an editorial viewing order.
+Unmapped seasons/items use the documented grouped fallback, and missing library files are skipped.
+A state marker prevents a prior shuffle deck from being reused as chronology. Normal movie/episode and music
+schedulers retain their existing algorithms. The guide, filler and locked schedule rules still apply.
+The full icon set is bundled in `app/src/main/res/drawable-nodpi`; only physical TV legibility remains to be checked on a device.
 
 ## Scheduling and ads
 

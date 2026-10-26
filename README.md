@@ -4,14 +4,17 @@ Old-school cable TV, built from your own Plex library. For Fire TV and Android T
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
-- **Network channels:** Wonderland, Action Club, Kid Castle, Toon Tower, The Attic, Midnight Block, Story Yard, Warp Nine, Coast to Coast, The Premium, and more. The names on screen are parodies. Shows still land by the network and studio stored in Plex.
+- **Network channels:** Dinky Channel, Dinky XD, Slimelodeon, Cartoon Notwork, Kaboomerang, Toonuki, PBJ Kids, Sigh-Fi Channel, USB Network, HMO, and more. The names on screen are parodies; each channel keeps its real network name behind the scenes. With TMDB lists (below), a show lands on every network it really aired on. Without them, shows land by the network and studio stored in Plex.
 - **Streaming originals follow the studio and the audience:**
-  - Disney+ kids shows go to Wonderland.
+  - Disney+ kids shows go to Dinky Channel.
   - Marvel and live-action Star Wars go to **The Backlot**.
-  - Paramount+ kids shows go to Kid Castle.
-  - Max originals go to The Premium.
-  - Hulu originals go to The Edge.
+  - Paramount+ kids shows go to Slimelodeon.
+  - Max originals go to HMO.
+  - Hulu originals go to SFX.
   - Netflix, Prime Video and Apple TV+ originals are spread by genre.
+- **Toonuki (105):** all movies and episodes tagged with the Anime genre in your included Plex libraries, regardless of network, studio, title or age rating. Animation alone does not qualify. Episodes inherit genres from their show; add Anime to the show or movie in Plex and sync Rerun if needed. The normal four-hour activation minimum applies. Stock Toonuki rules upgrade on refresh; edited content rules are preserved. Old non-anime future entries are rebuilt while the current airing stays locked.
+- **Comic channels:** Marvelous TV (380), Marvelous Movies (381), Marvelous Timeline (382), Detective Club TV (390), and Detective Pictures (391). Movies and shows stay in their respective channels; Marvelous Timeline combines both. Each channel uses your included Plex libraries and the normal four-hour activation minimum. Occupied numbers move to a free slot. Known adaptations, explicit Marvel/DC production metadata, and Marvel/DC labels or collections identify content; generic Disney/Fox/Sony/Warner ownership or Action/Animation genres alone do not. Label otherwise-unrecognized titles **Marvel** or **DC** in Plex, then sync. DC has separate TV/movie channels without an automatic chronology channel.
+- **Marvelous Timeline:** plays the MCU group using the [published Marvel timeline](https://www.marvel.com/articles/movies/mcu-timeline-order-disney-plus), including season-level placements, then other continuities as separate groups (X-Men, the separate Spider-Man series, Sony's universe, Spider-Verse, and other adaptations). It skips missing files and loops after the available sequence finishes. Movies and episodes share one sequence; the normal six-hour movie rotation does not apply. Other-continuity placements are an editorial whole-title watch order, not one official multiverse chronology. Unmapped seasons, stand-alone shows and unclassified Marvel films remain included, grouped by show or in a release-year fallback. Unknown movie years cannot reliably distinguish reboots. Future additions join the next sequence cycle; already-locked programs stay scheduled. Ordinary Marvelous TV/Movies remain shuffled under the usual episode-order policy. Channel editing includes Comic universes and Universe timeline options.
 - **Theme channels:** Fright Night, The Void, Laugh Track, Adrenaline, The Living Room, Neon Decade, Dial-Up Cinema, Cereal Hour. Laugh Track uses the Comedy genre; TBS metadata belongs on **Ted's TV**, not a comedy-only station. **Remote Control** is the MTV-inspired network station, including its mixed programming. More themes show up only when that genre has at least 4 hours: True-ish (documentaries), Canned Laughter (sitcoms), Sob Story (dramedies), Cold Read (psychic and paranormal), This Just In (news), and others such as The Matinee and Case File. See the [complete cable dial](docs/channel-lineup.md) for every predefined station's name, inspiration, matching rules and minimum.
 - **Movie channels:** 4 hours of movies adds The Big Picture. 24 hours adds Second Feature. 48 hours adds Late Seating. They share your movies and shuffle independently.
 - **Decade stations:** your included libraries automatically add TV decade channels with at least **24 hours of episodes** and, when Music is enabled, music decade channels with at least **12 hours of tracks**. For example, "1980s TV" and "1990s Music" appear alongside genre stations. TV decade numbers start at 1100; music decades at 3000, with collisions moved to a free number. Years come from Plex episode/track metadata (falling back to show/album year); missing years and clips shorter than a minute do not count. Supported decades are 1900s through 2090s. Movies keep their existing decade/theme channels. Sync or startup refresh reconciles eligibility; unedited stations disappear when their pool falls below the threshold, while edited stations retain their settings and minimum unless explicitly overridden. Music decades follow the Music switch.
@@ -39,6 +42,8 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 
 ## Install on a Fire TV
 
+The guide, channel manager and playback info display the bundled 1990s channel artwork. The library covers 60 named channels and all 40 TV/music decade templates, with fallbacks for custom channels and arbitrary music genres. Editable SVGs and wordmarks, a preview, stable-ID mapping and regeneration instructions are in [`design/channel-icons`](design/channel-icons). Lossless WebP renders are committed for Android, so ordinary builds do not need Node or an SVG decoder.
+
 Requirements:
 - JDK 17 or newer (Gradle 9 will not run on JDK 11)
 - Android SDK (platform 37)
@@ -59,6 +64,46 @@ The first build creates a private release key (`rerun-release.jks` and `keystore
 5. On the TV, the app shows a code. Enter it at **plex.tv/link**, pick your server, select the libraries to include, and continue to the first sync. Your choices are saved for future syncs; newly added libraries are not included automatically. Music libraries are only synced when Music is enabled in Settings. Existing installations without a saved selection continue syncing all supported libraries.
 
 To remove it: `.\scripts\restore.ps1 -TvIp 192.168.1.50`
+
+## Shared network lists from TMDB
+
+Plex stores one network per show, and nothing at all about which network aired a movie. To fill channels with what each network really aired, the build can download lists from [TMDB](https://www.themoviedb.org/): every show each network aired, plus made-for-TV movies from that network's own studios (Disney Channel Original Movies, HBO Films, and so on). Shows that aired on several networks appear on each of those channels.
+
+The repository includes a shared snapshot at [`data/tmdb/rerun/tmdb-networks.json`](data/tmdb/rerun/tmdb-networks.json). A normal build bundles it into the APK automatically, with no TMDB account or token required. The TV reads these lists locally; it never calls TMDB. A fresh local refresh overrides the shared snapshot on that computer.
+
+Only maintainers refreshing the data need their own free TMDB token. It is used for the download and never saved in the JSON, repository or app.
+
+1. Create a free account at [themoviedb.org](https://www.themoviedb.org/signup) and verify your email.
+2. Go to **Settings > API** ([themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)) and request an API key. Choose **Developer**, accept the terms, and fill in the short form (personal or non-commercial use is fine).
+3. That page then shows two values. Copy the **API Read Access Token**, the long one that starts with `eyJ`. Rerun doesn't use the shorter **API Key**.
+4. Build and install with the token:
+
+   ```powershell
+   .\scripts\install.ps1 -TvIp 192.168.1.50 -TmdbToken 'eyJhbGciOi...'
+   ```
+
+   Or keep it out of your command history by setting it for the current shell only:
+
+   ```powershell
+   $env:TMDB_TOKEN = 'eyJhbGciOi...'
+   .\scripts\install.ps1 -TvIp 192.168.1.50
+   ```
+
+The refresh writes `local\tmdb\rerun\tmdb-networks.json`. Git ignores that local file, and later builds on your computer reuse it until you refresh again. Failed, malformed or incomplete discovery responses stop the refresh and preserve the previous lists. To refresh without installing, set `TMDB_TOKEN` and run `.\gradlew.bat :tmdb:run`. The refresh prints each channel's real network, the TMDB networks it matched, and how many shows and movies it found. It also warns about any network it couldn't find.
+
+To share a successful refresh with everyone:
+
+```powershell
+# Run after :tmdb:run; publishing itself does not need a token or internet access.
+.\gradlew.bat :tmdb:publishSnapshot :tmdb:check
+git diff -- data/tmdb/rerun/tmdb-networks.json
+```
+
+Commit the reviewed `data/tmdb/rerun/tmdb-networks.json` through a pull request. Publishing rejects empty, unreadable, incomplete or duplicate-network snapshots and serializes only the public reference fields. CI validates this shared snapshot and runs the publisher tests without credentials. Once the update is merged, other users pull the repo and rebuild/install normally to receive the newer lists. Already-installed TVs keep their existing snapshot until the app is updated.
+
+TMDB doesn't track which theatrical movies a channel showed. Movies outside a network's own studios still use the studio-owner rules.
+
+This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 ## Remote
 

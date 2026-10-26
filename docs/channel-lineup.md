@@ -111,7 +111,6 @@ stock stations would increase schedule/storage costs without necessarily improvi
 | 325 | High Noon | Western; classic western blocks |
 | 326 | The Front | War or War & Politics; military-history atmosphere |
 | 327 | The Overture | Musical or Music videos in movie/episode libraries, not audio tracks |
-| 328 | Import Toons | Anime; imported-animation blocks |
 | 329 | Unscripted | Reality; 2000s cable evolution |
 | 330 | The Arena | Sport or Sports; sports-programming atmosphere, not live sports |
 | 331 | This Just In | News; rolling-news atmosphere, not a live news feed |

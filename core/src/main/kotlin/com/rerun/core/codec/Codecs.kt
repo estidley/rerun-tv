@@ -87,6 +87,7 @@ object ChannelCodec {
         put("excludeGenres", strings(r.excludeGenres)); put("decades", strings(r.decades.map { it.toString() }))
         put("ratings", strings(r.ratings)); put("kinds", strings(r.kinds.map { it.name }))
         put("bucket", r.bucket); put("bucketCount", r.bucketCount)
+        put("franchises", strings(r.franchises))
     }
 
     private fun rules(o: JsonObject): Rules = Rules(
@@ -99,6 +100,7 @@ object ChannelCodec {
             ?: setOf(MediaKind.MOVIE, MediaKind.EPISODE),
         bucket = o["bucket"]?.jsonPrimitive?.int ?: 0,
         bucketCount = o["bucketCount"]?.jsonPrimitive?.int ?: 1,
+        franchises = o["franchises"].stringSet(),
     )
 }
 

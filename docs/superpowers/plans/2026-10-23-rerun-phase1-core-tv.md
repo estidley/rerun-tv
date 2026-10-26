@@ -1,12 +1,21 @@
 # Core TV delivery and PR readiness
 
-Updated 2026-10-24. The original implementation scaffold and unchecked task recipes have been
+Updated 2026-10-25. The original implementation scaffold and unchecked task recipes have been
 retired; this file tracks delivered scope and real acceptance gaps, not instructions to recreate the app.
 See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 [current design reference](../specs/2026-10-23-rerun-design.md).
 
 ## Delivered
 
+- Approved 1990s channel artwork: 102 icon/wordmark pairs, locally bundled Android renders, stable-ID lookup and dynamic fallbacks in guide, channel manager and playback overlays.
+
+- Shared TMDB network snapshot bundled by token-free builds; local refresh override, validated `:tmdb:publishSnapshot` promotion and credential-free `:tmdb:check` CI verification.
+
+- Marvelous TV, Marvelous Movies, Marvelous Timeline, Detective Club TV and Detective Pictures; persisted mixed-media universe ordering, season positions and explicit franchise metadata/tag matching.
+
+- Toonuki uses all Anime-tagged episodes and movies; stock legacy rules upgrade on refresh and edited pools remain unchanged. Stale future schedules are repaired without replacing the current airing.
+
+- Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
 - Genre music stations, Off Air and Up Next states, hidden episode start-over.
@@ -34,6 +43,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 Run the full command in AGENTS.md, covering core tests, Android JVM tests, debug APK assembly and lint.
 The suite includes regression coverage for:
 
+- Malformed bundled TMDB references, rejected invalid discovery pages, and stock Toonuki schedule upgrades with current-airing and West-feed preservation.
+
 - Fixed scheduling output fingerprints, large pools, episode order, time blocks and filler boundaries.
 - Room persistence/migrations, transactional library selections and stale snapshot invalidation.
 - Startup restoration, genuinely empty lineups, failure/cancellation and sign-out.
@@ -60,6 +71,12 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 
 ## Physical TV and live Plex acceptance still open
 
+- [ ] Inspect Marvel/DC matching on the real Plex library, annotate unrecognized titles with Marvel/DC labels, and verify MCU seasons, legacy-universe transitions, missing files and restart continuation.
+- [ ] Approve the five SVG samples before generating/integrating the full icon library; check TV-distance legibility in all guide themes.
+
+- [ ] Confirm Toonuki activates with four hours of Anime-tagged Plex content and excludes Animation-only items after refresh.
+
+- [ ] Refresh TMDB lists with a real token, inspect network/company coverage, rebuild, and verify multi-network memberships and preserved user channel names on TV.
 - [ ] Update an installed signed build with saved channels: loading/updating appears until restore settles; genuinely empty and failed states remain distinct.
 - [ ] Upgrade with a saved West feed selected: its original channel resumes, no delayed-feed rows
   remain, and original channel edits, schedules and unrelated settings survive.
@@ -78,5 +95,5 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 - [ ] Measure target-TV frame rate, CPU, memory, channel-change latency and long-running playback.
 - [ ] Check music stations with MP3/MPEG, FLAC, M4A and non-DRM WMA requiring Plex HTTP/MP3 conversion; songs should play instead of cycling silent countdowns, including after a failed direct decoder attempt. General multi-device testing has improved performance and exposed regressions; the latest WMA correction still needs a device retest.
 
-Unimplemented roadmap ideas (HDHomeRun/live TV, TMDb enrichment, automatic clip splitting,
+Unimplemented roadmap ideas (HDHomeRun/live TV, general TMDb metadata enrichment, automatic clip splitting,
 ad age/content filtering and idle timeout) are not acceptance requirements for this PR.

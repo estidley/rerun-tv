@@ -37,9 +37,16 @@ object Lineup {
     const val MUSIC_DECADE_MIN_MS = 12 * 3_600_000L
     val adsChannel = ChannelDef(ADS_ID, 998, "Buy Me Maybe", ChannelKind.CUSTOM, Rules(kinds = setOf(MediaKind.MOVIE)))
 
+    /** Toonuki now owns the Anime genre; only a user-edited former Import Toons station is retained. */
+    private fun isEditedRetiredAnime(def: ChannelDef): Boolean =
+        def.id == "opt:anime" && !looksStock(
+            def, ChannelDef("opt:anime", 328, "Import Toons", ChannelKind.THEME, Rules(genres = setOf("Anime"))),
+        )
+
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =
-        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") || id.startsWith("music:")
+        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") ||
+            id.startsWith("music:") || id.startsWith("marvel:") || id.startsWith("dc:")
 
     /** Built-ins plus every extra that currently has enough content. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
@@ -83,7 +90,13 @@ object Lineup {
 
         for (template in templates) {
             val prev = existingById[template.id]
-            val base = prev?.def ?: template
+            val stored = prev?.def
+            // Upgrade the old stock Toonami pool, retaining names, numbers and play order.
+            // Explicitly edited rules or time blocks remain owned by the user.
+            val base = if (template.id == "toonami" && prev?.builtIn == true &&
+                stored?.rules == Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()) &&
+                stored.blocks.isEmpty()
+            ) stored.copy(rules = template.rules, kidsSafe = template.kidsSafe) else stored ?: template
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
             val pool = duration(base)
             val dormant = isDormant(base, pool, music)
@@ -97,7 +110,7 @@ object Lineup {
             if (id in seen || id == RESTART_ID) continue
             if (isGenerated(id)) {
                 // A genre can disappear completely; retain edits even without a live template.
-                if (id.startsWith("music:") && !looksStockMusic(prev.def)) {
+                if ((id.startsWith("music:") && !looksStockMusic(prev.def)) || isEditedRetiredAnime(prev.def)) {
                     val pool = duration(prev.def)
                     upserts += PlannedChannel(prev.def, prev.builtIn, dormant = isDormant(prev.def, pool, music), poolMs = pool)
                 }
@@ -282,7 +295,6 @@ object Lineup {
         opt("opt:western", 325, "High Noon", Rules(genres = setOf("Western"))),
         opt("opt:war", 326, "The Front", Rules(genres = setOf("War", "War & Politics"))),
         opt("opt:musical", 327, "The Overture", Rules(genres = setOf("Musical", "Music"), kinds = video)),
-        opt("opt:anime", 328, "Import Toons", Rules(genres = setOf("Anime"))),
         opt("opt:reality", 329, "Unscripted", Rules(genres = setOf("Reality"))),
         opt("opt:sports", 330, "The Arena", Rules(genres = setOf("Sport", "Sports"))),
         opt("opt:news", 331, "This Just In", Rules(genres = setOf("News"))),

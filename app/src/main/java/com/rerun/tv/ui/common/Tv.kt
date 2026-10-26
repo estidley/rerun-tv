@@ -54,6 +54,7 @@ fun TvButton(
     enabled: Boolean = true,
     sub: String? = null,
     selectedIndicator: String? = if (selected) "■" else null,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
@@ -70,14 +71,20 @@ fun TvButton(
             .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 10.dp),
     ) {
-        Column {
-            val color = when {
-                !enabled -> Retro.Dim
-                selected -> Retro.Cyan
-                else -> Retro.White
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (leading != null) {
+                leading()
+                Spacer(Modifier.width(14.dp))
             }
-            BasicText((selectedIndicator?.let { "$it " } ?: "") + text, style = Retro.Body.copy(color = color, shadow = null))
-            if (sub != null) BasicText(sub, style = Retro.Caption)
+            Column {
+                val color = when {
+                    !enabled -> Retro.Dim
+                    selected -> Retro.Cyan
+                    else -> Retro.White
+                }
+                BasicText((selectedIndicator?.let { "$it " } ?: "") + text, style = Retro.Body.copy(color = color, shadow = null))
+                if (sub != null) BasicText(sub, style = Retro.Caption)
+            }
         }
     }
 }

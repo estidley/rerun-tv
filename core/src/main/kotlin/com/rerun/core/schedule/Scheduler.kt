@@ -19,6 +19,7 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
  * shuffle (random show, weighted by episode count, episodes in order). Every program is
  * padded to the next :00/:30 with a FILLER entry. Music stations play back to back.
+ * Chronology channels use one ordered deck across movies and episodes instead of the movie rotation.
  */
 class Scheduler(private val zone: ZoneId) {
 
@@ -36,7 +37,7 @@ class Scheduler(private val zone: ZoneId) {
         val music = def.kind == ChannelKind.MUSIC
         val base = Candidates(items.filter { Resolver.inBase(def, it) }.ifEmpty { items }, music)
         val blockSets = def.blocks.map { b ->
-            Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) null else Resolver.networkOf(it)) }, music)
+            Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) emptySet() else Resolver.networksOf(it)) }, music)
         }
 
         val floor = gridFloor(nowMs)
@@ -45,11 +46,12 @@ class Scheduler(private val zone: ZoneId) {
         val run = Run(state)
         val out = ArrayList<ScheduleEntry>()
 
+        val poolKeys by lazy { items.mapTo(HashSet()) { it.key } }
         while (cursor < end) {
             val local = Instant.ofEpochMilli(cursor).atZone(zone)
             val bi = def.blocks.indexOfFirst { it.activeAt(local) }
             val candidates = if (bi >= 0 && blockSets[bi].items.isNotEmpty()) blockSets[bi] else base
-            val item = run.pick(def, candidates)
+            val item = run.pick(def, candidates, poolKeys)
 
             val length = item.durationMs.coerceAtLeast(1L)
             val progEnd = cursor + length
@@ -68,6 +70,8 @@ class Scheduler(private val zone: ZoneId) {
 
     /** Pools stay fixed throughout an extension; prepare lookup/order data once, not per airing. */
     private class Candidates(val items: List<MediaItem>, music: Boolean) {
+        val chronology by lazy { com.rerun.core.catalog.ComicCatalog.ordered(items) }
+        val byKey by lazy { items.associateBy { it.key } }
         val movies = items.filter { it.kind == MediaKind.MOVIE }
         val episodes = if (music) items else items.filter { it.kind == MediaKind.EPISODE }
         val moviesByKey by lazy { movies.associateBy { it.key } }
@@ -95,7 +99,9 @@ class Scheduler(private val zone: ZoneId) {
 
         private fun rng(): Random = Random(seed + rngCalls).also { rngCalls++ }
 
-        fun pick(def: ChannelDef, candidates: Candidates): MediaItem {
+        fun pick(def: ChannelDef, candidates: Candidates, poolKeys: Set<String>): MediaItem {
+            if (def.order == PlayOrder.CHRONOLOGICAL) return pickChronological(candidates, poolKeys)
+            if (pointers.remove(CHRONOLOGY_KEY) != null) deck.clear()
             if (def.kind == ChannelKind.MUSIC) return pickEpisode(def, candidates)
             val movies = candidates.movies
             val episodes = candidates.episodes
@@ -105,6 +111,21 @@ class Scheduler(private val zone: ZoneId) {
                 else -> msSinceMovie >= def.movieEveryMs
             }
             return if (wantMovie) pickMovie(def, candidates) else pickEpisode(def, candidates)
+        }
+
+        private fun pickChronological(candidates: Candidates, poolKeys: Set<String>): MediaItem {
+            if (pointers[CHRONOLOGY_KEY] != 1) {
+                deck.clear()
+                pointers[CHRONOLOGY_KEY] = 1
+            }
+            // Entries outside the active time block stay queued so the sequence resumes afterwards.
+            deck.removeAll { it !in poolKeys }
+            var idx = deck.indexOfFirst { it in candidates.byKey }
+            if (idx < 0) {
+                deck.addAll(candidates.chronology.map { it.key })
+                idx = deck.indexOfFirst { it in candidates.byKey }
+            }
+            return candidates.byKey.getValue(deck.removeAt(idx))
         }
 
         private fun pickMovie(def: ChannelDef, candidates: Candidates): MediaItem {
@@ -153,5 +174,6 @@ class Scheduler(private val zone: ZoneId) {
     private companion object {
         const val RECENT_CAP = 200
         const val RR_KEY = "__round_robin"
+        const val CHRONOLOGY_KEY = "__chronology"
     }
 }

@@ -22,6 +22,7 @@ import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvFrame
+import com.rerun.tv.ui.common.ChannelIcon
 import com.rerun.tv.ui.theme.Retro
 
 /** Every channel: active ones first, then dormant ones waiting for content. */
@@ -43,18 +44,19 @@ fun ChannelManager(controller: TvController) {
             }
             item { BasicText("ON THE AIR (${active.size})", style = Retro.GuideNumber) }
             items(active, key = { it.id }) { ch ->
-                TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = hours(ch.poolMs))
+                TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = hours(ch.poolMs), leading = { ChannelIcon(ch.id, size = 40.dp) })
             }
             if (hidden.isNotEmpty()) {
                 item { BasicText("HIDDEN (${hidden.size})", style = Retro.GuideNumber) }
                 items(hidden, key = { it.id }) { ch ->
-                    TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = "hidden · ${hours(ch.poolMs)}")
+                    TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = "hidden · ${hours(ch.poolMs)}", leading = { ChannelIcon(ch.id, size = 40.dp) })
                 }
             }
             item { BasicText("WAITING FOR CONTENT (${dormant.size})", style = Retro.GuideNumber) }
             items(dormant, key = { it.id }) { ch ->
                 val minimum = Lineup.minimumContentMs(ch.def) / 3_600_000L
                 TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), enabled = true,
+                    leading = { ChannelIcon(ch.id, size = 40.dp) },
                     sub = "${hours(ch.poolMs)} · minimum $minimum hours" +
                         if (ch.def.kind == ChannelKind.MUSIC) "; enable Music in Settings" else "")
             }

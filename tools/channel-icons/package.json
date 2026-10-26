@@ -1,0 +1,6 @@
+{
+  "name": "rerun-channel-art",
+  "private": true,
+  "scripts": { "build": "node render.cjs" },
+  "dependencies": { "sharp": "0.35.5" }
+}

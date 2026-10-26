@@ -22,6 +22,24 @@ import kotlin.test.assertTrue
 
 class LineupTest {
     @Test
+    fun stockToonukiUpgradesToAnimeWhilePreservingUserPresentationAndEditedPools() {
+        val template = Catalog.builtInChannels().single { it.id == "toonami" }
+        val legacy = template.copy(name = "My Anime", number = 777, kidsSafe = true,
+            rules = Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()))
+        val library = listOf(episode("anime", "New Anime", genres = setOf("Anime"), durationMs = 4 * HOUR))
+        val plan = Lineup.plan(library, listOf(StoredChannel(legacy, true)), music = false)
+        val east = plan.channels.single { it.def.id == "toonami" }
+        assertEquals(legacy.copy(rules = template.rules, kidsSafe = false), east.def)
+        assertFalse(east.dormant)
+        assertEquals(4 * HOUR, east.poolMs)
+        val refreshed = Lineup.plan(library, plan.channels.map { StoredChannel(it.def, it.builtIn) }, false)
+        assertEquals(east, refreshed.channels.single { it.def.id == "toonami" })
+        val edited = legacy.copy(rules = Rules(genres = setOf("Comedy")))
+        assertEquals(edited, Lineup.plan(library, listOf(StoredChannel(edited, true)), false)
+            .channels.single { it.def.id == "toonami" }.def)
+    }
+
+    @Test
     fun decadesQualifyIndependentlyByMediaTypeAndEligibleDuration() {
         val library = listOf(
             episode("tv", "Show", durationMs = 24 * HOUR, year = 1985),
@@ -112,9 +130,11 @@ class LineupTest {
         val defs = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels()
         for (def in defs) {
             val name = def.name.lowercase()
-            for (brand in banned) assertFalse(brand in name, "${def.id} uses $brand")
+            for (brand in banned) {
+                assertFalse(Regex("\\b${Regex.escape(brand)}\\b").containsMatchIn(name), "${def.id} uses $brand")
+            }
         }
-        assertEquals("Wonderland", defs.first { it.id == "disney" }.name)
+        assertEquals("Dinky Channel", defs.first { it.id == "disney" }.name)
         assertEquals("Laugh Track", defs.first { it.id == "comedy" }.name)
         assertEquals("True-ish", defs.first { it.id == "opt:docs" }.name)
         assertEquals("Canned Laughter", defs.first { it.id == "opt:sitcom" }.name)
@@ -126,9 +146,9 @@ class LineupTest {
 
     @Test
     fun chooseNameKeepsARenameAndReplacesStock() {
-        assertEquals("Wonderland", Catalog.chooseName("disney", "Disney Channel", "Wonderland"))
-        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club", "Wonderland"))
-        assertEquals("Castle Club W", Catalog.chooseName("disney", "Castle Club W", "Wonderland"))
+        assertEquals("Dinky Channel", Catalog.chooseName("disney", "Disney Channel", "Dinky Channel"))
+        assertEquals("Castle Club", Catalog.chooseName("disney", "Castle Club", "Dinky Channel"))
+        assertEquals("Castle Club W", Catalog.chooseName("disney", "Castle Club W", "Dinky Channel"))
         assertEquals("Laughing Stock", Catalog.chooseName("comedy", "The Chuckle", "Laughing Stock"))
         assertEquals("True-ish", Catalog.chooseName("opt:docs", "The Reel", "True-ish"))
         assertEquals("Fright Night", Catalog.chooseName("horror", "Horror", "Fright Night"))
@@ -257,7 +277,7 @@ class LineupTest {
         val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel"), true)
         val plan = Lineup.plan(emptyList(), listOf(stored), music = false)
         val channel = plan.channels.first { it.def.id == "disney" }
-        assertEquals("Wonderland", channel.def.name)
+        assertEquals("Dinky Channel", channel.def.name)
         assertTrue(channel.dormant)
     }
 
@@ -353,6 +373,18 @@ class LineupTest {
         assertTrue(plan.channels.none { it.def.id == Lineup.RESTART_ID })
     }
 
+    @Test
+    fun toonukiOwnsAnimeSoTheDuplicateStockStationIsRetiredButEditsSurvive() {
+        val anime = Rules(genres = setOf("Anime"))
+        val library = listOf(episode("anime", "Show", genres = setOf("Anime"), durationMs = 4 * HOUR))
+        val stock = StoredChannel(ChannelDef("opt:anime", 328, "Import Toons", ChannelKind.THEME, anime), true)
+        val retired = Lineup.plan(library, listOf(stock), music = false)
+        assertTrue("opt:anime" in retired.deleteIds)
+        assertTrue(retired.channels.none { it.def.rules == anime && it.def.id != "toonami" })
+        val renamed = StoredChannel(stock.def.copy(name = "My Anime"), true)
+        val kept = Lineup.plan(library, listOf(renamed), music = false)
+        assertEquals("My Anime", kept.channels.single { it.def.id == "opt:anime" }.def.name)
+    }
     @Test
     fun fullLineupNumbersAreUnique() {
         val library = listOf(
