@@ -3,6 +3,10 @@ package com.rerun.tv.ui.guide
 import android.app.Application
 import android.content.pm.PackageManager
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.isSelectable
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performTouchInput
 import org.robolectric.Shadows.shadowOf
@@ -128,6 +132,37 @@ class GuideScreenTest {
         compose.onNodeWithTag("guide-channel:test:2").performTouchInput { click() }
         compose.waitForIdle()
         assertEquals(Screen.Player, controller.screen.value)
+    }
+
+    @Test
+    fun longTouchDragMovesThroughSeveralProgramsInOneGesture() = runBlocking<Unit> {
+        shadowOf(RuntimeEnvironment.getApplication().packageManager)
+            .setSystemFeature(PackageManager.FEATURE_TOUCHSCREEN, true)
+        val now = System.currentTimeMillis()
+        `when`(schedule.allEntries(anyLong(), anyLong())).thenReturn(
+            mapOf(
+                "test:0" to (0 until 6).map { i ->
+                    ScheduleEntry("test:0", now - 60_000 + i * 600_000L, now - 60_000 + (i + 1) * 600_000L, EntryKind.PROGRAM, null)
+                },
+            ),
+        )
+        compose.setContent { GuideScreen(controller, schedule) }
+        val cells = hasAnyAncestor(hasTestTag("guide-row:test:0")) and isSelectable()
+        fun selectedIndex(): Int {
+            val nodes = compose.onAllNodes(cells).fetchSemanticsNodes().sortedBy { it.boundsInRoot.left }
+            return nodes.indexOfFirst { it.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Selected) == true }
+        }
+        compose.waitUntil(10_000) { compose.onAllNodes(cells).fetchSemanticsNodes().size >= 6 && selectedIndex() >= 0 }
+        val start = selectedIndex()
+
+        // Three and a half time steps to the left in one quick drag: later by three programs.
+        val step = com.rerun.tv.ui.touch.TouchControls.GUIDE_TIME_STEP_DP
+        compose.onNodeWithTag("guide-grid").performTouchInput {
+            swipe(Offset(centerX + step * 2, centerY), Offset(centerX - step * 1.5f, centerY), durationMillis = 100)
+        }
+        compose.waitForIdle()
+        assertEquals(start + 3, selectedIndex())
+        assertNotEquals(Screen.Player, controller.screen.value)
     }
 
     @Test

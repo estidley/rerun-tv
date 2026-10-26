@@ -182,8 +182,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
         focusRow = (focusRow + dRow).coerceIn(-1, rows.size - 1)
     }
 
-    fun moveTime(forward: Boolean) {
-        val b = focusedBlock
+    fun moveTime(forward: Boolean, b: GuideBlock? = focusedBlock) {
         val minTime = maxOf(System.currentTimeMillis(), gridFloor(System.currentTimeMillis()))
         focusTime = if (forward) (b?.endMs ?: (focusTime + GRID_MS)) else maxOf(minTime, (b?.startMs ?: focusTime) - 1)
         if (focusTime >= windowStart + WINDOW_MS - GRID_MS) windowStart += GRID_MS
@@ -201,6 +200,17 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                 focusTime = maxOf(block?.startMs ?: 0L, System.currentTimeMillis())
             }
             GuideTouchAction.WATCH -> { controller.go(Screen.Player); controller.tuneTo(channel.id) }
+        }
+    }
+
+    // Touch: one drag can cover several programs before the next recomposition, so look up the
+    // selected block from current state on every step instead of the composition-time focusedBlock.
+    fun touchMoveTime(steps: Int) {
+        // Like the remote, Left/Right never move through time while the header is selected.
+        if (updating || rows.isEmpty() || focusRow < 0) return
+        repeat(abs(steps)) {
+            val block = rows.getOrNull(focusRow)?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
+            moveTime(steps > 0, block)
         }
     }
 
@@ -271,7 +281,7 @@ fun GuideScreen(controller: TvController, schedule: ScheduleRepo = RerunApp.inst
                     Modifier.fillMaxSize().clipToBounds().testTag("guide-grid").guideTouchScroll(
                         touch,
                         onRows = { move(it) },
-                        onTime = { steps -> repeat(abs(steps)) { moveTime(steps > 0) } },
+                        onTime = { touchMoveTime(it) },
                     ),
                 ) {
                     TimeHeader(windowStart, timelineW)
