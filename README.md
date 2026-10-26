@@ -120,6 +120,20 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 Channels and Settings sit at the top of the guide: press ▲ from the first row.
 
+## Touch controls (phones and tablets)
+
+Rerun also runs on Android phones and tablets, full screen in landscape. Touch controls turn on only when the device has a touchscreen, so TV remotes work exactly as above.
+
+| Touch | Watching | Guide |
+|---|---|---|
+| Swipe up / down | Channel up / down | Drag to move between channels |
+| Swipe left | Last channel | Drag to move through time |
+| Swipe right | Info banner | — |
+| Tap | Show / hide the info banner and touch buttons | Select a program; tap it again to tune in |
+| Hold | Guide | Edit that channel |
+| Back gesture | Guide | Back to TV. Go back again right away to exit. |
+
+While the banner is up, touch buttons cover the remote's hold actions: Guide, CH ▲, CH ▼, Last channel, Start over, Audio and CRT. In the guide, tap CHANNELS or SETTINGS at the top. Settings and other menus respond to taps.
 ## Commercials (optional)
 
 `tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Choose that library as the ad source during setup or in Settings. Rerun plays clips that fit between shows, seeking to the current ad position when you tune into a break. Clip choices are stable for a given channel, break, and catalog; consecutive repeats are avoided when another clip fits. Ads never appear as guide entries: each program's displayed time includes its following break, ending when the next program starts. Disabled ads, empty catalogs, and remaining gaps too short for a clip show an "Up Next" card. Times with no schedule say Off Air.
