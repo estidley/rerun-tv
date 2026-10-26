@@ -252,14 +252,16 @@ private fun visibleUntil(deadlineMs: Long): Boolean {
  */
 @Composable
 internal fun TouchControlBar(controller: TvController, modifier: Modifier = Modifier) {
+    // Buttons that stay on the player keep the banner (and this bar) up for the next press.
+    fun staying(action: () -> Unit): () -> Unit = { action(); controller.showBanner() }
     TouchControlBar(
         onGuide = { controller.go(Screen.Guide) },
-        onChannelUp = controller::channelUp,
-        onChannelDown = controller::channelDown,
-        onLastChannel = controller::lastChannel,
-        onStartOver = controller::startEpisodeOver,
+        onChannelUp = staying(controller::channelUp),
+        onChannelDown = staying(controller::channelDown),
+        onLastChannel = staying(controller::lastChannel),
+        onStartOver = staying(controller::startEpisodeOver),
         onAudio = { controller.go(Screen.AudioTracks) },
-        onCrt = controller::cycleCrt,
+        onCrt = staying(controller::cycleCrt),
         modifier = modifier,
     )
 }
@@ -277,8 +279,8 @@ internal fun TouchControlBar(
 ) {
     Row(modifier.testTag("touch-controls"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         TvButton("Guide", onGuide)
-        TvButton("CH ▲", onChannelUp)
-        TvButton("CH ▼", onChannelDown)
+        TvButton("CH ▲", onChannelUp, Modifier.semantics { contentDescription = "Channel up" })
+        TvButton("CH ▼", onChannelDown, Modifier.semantics { contentDescription = "Channel down" })
         TvButton("Last channel", onLastChannel)
         TvButton("Start over", onStartOver)
         TvButton("Audio", onAudio)
