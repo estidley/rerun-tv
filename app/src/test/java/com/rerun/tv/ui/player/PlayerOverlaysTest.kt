@@ -59,6 +59,27 @@ class PlayerOverlaysTest {
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
         compose.onNodeWithText("Coming up").assertDoesNotExist()
+    }
+
+    @Test
+    fun actionNotificationsRemainVisibleInEveryPlaybackPhase() {
+        val phase = mutableStateOf(Phase.UP_NEXT)
+        compose.setContent { Box { PlaybackMessage("Cannot restart this program", phase.value) } }
+        for (value in Phase.entries) {
+            compose.runOnIdle { phase.value = value }
+            compose.onNodeWithText("Cannot restart this program").assertExists()
+        }
+    }
+
+    @Test
+    fun upNextTimingShowsStartTimeAndCountdown() {
+        val now = 1_000_000_000L
+        assertEquals(true, upNextTiming(now + 12 * 60_000, now).endsWith("in 12 min"))
+        assertEquals(true, upNextTiming(now + 90 * 60_000, now).endsWith("in 1 hr 30 min"))
+        assertEquals(true, upNextTiming(now + 120 * 60_000, now).endsWith("in 2 hr"))
+        assertEquals(true, upNextTiming(now, now).endsWith("starting now"))
+        assertEquals(true, upNextTiming(now + 5_000, now).endsWith("in 1 min"))
     }
 }

@@ -93,6 +93,26 @@ class TunerEngineTest {
     fun tearDown() = engine.release()
 
     @Test
+    fun rolloverAfterClockRollbackRelocatesPlaybackAndKeepsMenusMuted() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare("east", item)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 120_000, now + 10_000, EntryKind.PROGRAM, item.key),
+        ))
+        engine.setVisible(false)
+        engine.tune("east")
+        await { sources.size == 1 }
+        clearInvocations(player)
+        wallTime = now - 60_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
+        await { sources.size == 2 }
+        verify(player).seekTo(60_000)
+        verify(player, never()).setVolume(1f)
+    }
+
+    @Test
     fun audioBecomesPlayingWithoutAVideoFrame() = runBlocking {
         val item = PlexParse.tracks(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Song","duration":240000,"Genre":[{"tag":"Jazz"}],"Media":[{"container":"mp3","Part":[{"key":"/library/parts/1/file.mp3"}]}]}]}}""",

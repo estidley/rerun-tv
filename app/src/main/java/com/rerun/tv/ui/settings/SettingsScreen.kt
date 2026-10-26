@@ -34,6 +34,8 @@ import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvStage
 import com.rerun.tv.ui.crt.CrtLevel
 import com.rerun.tv.ui.player.clockTime
+import com.rerun.tv.ui.player.SubtitleSize
+import com.rerun.tv.ui.player.SubtitleColor
 import com.rerun.tv.ui.theme.Retro
 import com.rerun.tv.ui.theme.ColorTheme
 import com.rerun.tv.ui.guide.GuideDensity
@@ -49,6 +51,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val theme by controller.colorTheme.collectAsState()
     val density by controller.guideDensity.collectAsState()
     val subtitleLanguage by controller.subtitleLanguage.collectAsState()
+    val subtitleSize by controller.subtitleSize.collectAsState()
+    val subtitleColor by controller.subtitleColor.collectAsState()
     val audioLanguage by controller.audioLanguage.collectAsState()
     val hdrMode by controller.hdrMode.collectAsState()
     var server by remember { mutableStateOf("") }
@@ -62,7 +66,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
     val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
     val shownMusic = update.music ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 2, 1, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 4, 1, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -151,7 +155,33 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     sub = if (subtitlesOn) "on" else "off",
                 )
                 TvButton("Subtitle language: ${languageName(subtitleLanguage)}", { controller.go(Screen.SubtitleLanguage) }, modifier = buttonFocus(5, 1))
+                TvButton("Size: ${SubtitleSize.from(subtitleSize).label}", {
+                    scope.launch {
+                        try {
+                            val choices = SubtitleSize.entries
+                            app.settings.setSubtitleSize(choices[(SubtitleSize.from(subtitleSize).ordinal + 1) % choices.size].name)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            localStatus = "Couldn't change subtitle size: ${e.message}"
+                        }
+                    }
+                }, modifier = buttonFocus(5, 2))
+                TvButton("Color: ${SubtitleColor.from(subtitleColor).label}", {
+                    scope.launch {
+                        try {
+                            val choices = SubtitleColor.entries
+                            app.settings.setSubtitleColor(choices[(SubtitleColor.from(subtitleColor).ordinal + 1) % choices.size].name)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            localStatus = "Couldn't change subtitle color: ${e.message}"
+                        }
+                    }
+                }, modifier = buttonFocus(5, 3))
             }
+            BasicText(
+                "Text subtitles use a semi-transparent black background. Size and color apply to text rendered by Rerun, not image-based or Plex-burned subtitles.",
+                style = Retro.Caption,
+            )
             BasicText("LINEUP", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton(
@@ -253,7 +283,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             )
 
             BasicText("ABOUT", style = Retro.GuideNumber)
-            BasicText("Rerun 0.1 · plays your own Plex library like 90s cable. Nothing you watch is reported to Plex.", style = Retro.Caption)
+            BasicText("Rerun ${com.rerun.tv.BuildConfig.VERSION_NAME} · plays your own Plex library like 90s cable. Nothing you watch is reported to Plex.", style = Retro.Caption)
             BasicText("VT323 font © The VT323 Project Authors, SIL Open Font License 1.1.", style = Retro.Caption)
         }
     }

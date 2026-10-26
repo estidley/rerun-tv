@@ -3,6 +3,7 @@ package com.rerun.tv.ui
 import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
+import com.rerun.core.plex.PlexParse
 import com.rerun.core.plex.ServerUri
 import com.rerun.core.schedule.EntryKind
 import com.rerun.tv.RerunApp
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
 
 data class Effects(
@@ -71,6 +73,9 @@ sealed interface Screen {
 }
 
 /** App-level state and remote-control actions. One per activity. */
+private const val SUMMARY_CAPACITY = 64
+private const val SUMMARY_TIMEOUT_MS = 5_000L
+
 class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -88,8 +93,10 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     val crtLevel: StateFlow<String> = app.settings.crtLevel().stateIn(scope, SharingStarted.Eagerly, "SUBTLE")
     val colorTheme: StateFlow<String> = app.settings.colorTheme().stateIn(scope, SharingStarted.Eagerly, "STANDARD_BLUE")
-    val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "COMFORTABLE")
+    val guideDensity: StateFlow<String> = app.settings.guideDensity().stateIn(scope, SharingStarted.Eagerly, "DEFAULT")
     val subtitleLanguage: StateFlow<String> = app.settings.subtitleLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
+    val subtitleSize: StateFlow<String> = app.settings.subtitleSize().stateIn(scope, SharingStarted.Eagerly, "MEDIUM")
+    val subtitleColor: StateFlow<String> = app.settings.subtitleColor().stateIn(scope, SharingStarted.Eagerly, "WHITE")
     val audioLanguage: StateFlow<String> = app.settings.audioLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val hdrMode: StateFlow<String> = app.settings.hdrMode().stateIn(scope, SharingStarted.Eagerly, "AUTO")
 
@@ -174,11 +181,14 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     private suspend fun changeLineupFlag(key: String, enabled: Boolean, operation: suspend () -> Unit) {
         val previous = app.settings.isOn(key)
+        val cleanVersion = app.settings.lineupAppVersion()
         try {
             // Persist the dirty marker first so an interrupted rebuild is repaired on the next launch.
             app.settings.invalidateLineupAppVersion()
             app.settings.setFlag(key, enabled)
             operation()
+            // Only a completed rebuild restores the marker; failure or cancellation leaves it invalidated.
+            cleanVersion?.let { app.settings.setLineupAppVersion(it) }
         } catch (e: Exception) {
             withContext(NonCancellable) { app.settings.setFlag(key, previous) }
             throw e
@@ -188,7 +198,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private suspend fun syncLibrary(selected: Set<String>? = null) {
         app.sync.sync(selected).collect { p ->
             _lineupUpdate.value = _lineupUpdate.value.copy(
-                message = if (p.finished) "Done" else "${p.stage} ${p.done}/${p.total}",
+                message = if (p.finished) "Library synced: ${p.total} items" else "${p.stage} ${p.done}/${p.total}",
             )
         }
         _lineupUpdate.value = _lineupUpdate.value.copy(lastSyncMs = app.settings.lastSyncMs())
@@ -292,7 +302,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             previousId = null
             channelBeforeRestart = null
             serverBase = null
-            _bannerUntil.value = 0L
+            synchronized(summaries) { summaries.clear() }
             go(Screen.Onboarding)
         } finally {
             signingOut = false
@@ -417,13 +427,24 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             val returnTo = currentId ?: return@launch
             if (returnTo == Lineup.RESTART_ID) return@launch
             val snap = engine.state.value
-            val item = snap.item ?: return@launch
-            if (item.kind != MediaKind.EPISODE) return@launch
-            if (snap.located?.entry?.kind != EntryKind.PROGRAM) return@launch
-            if (snap.channel?.id != returnTo) return@launch
+            val item = snap.item
+            val restartable = returnTo != Lineup.ADS_ID &&
+                item != null && (item.kind == MediaKind.EPISODE || item.kind == MediaKind.MOVIE) &&
+                snap.located?.entry?.kind == EntryKind.PROGRAM && snap.channel?.id == returnTo
+            if (!restartable || item == null) {
+                engine.notify("Start over works while a show or movie is playing.")
+                return@launch
+            }
+            try {
+                app.schedule.airFromStart(item, System.currentTimeMillis())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                engine.notify("Couldn't start over: ${e.message}")
+                return@launch
+            }
+            if (!foreground || currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
             channelBeforeRestart = previousId
-            app.schedule.airFromStart(item, System.currentTimeMillis())
-            if (currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
             engine.armReturn(returnTo)
             tuneTo(Lineup.RESTART_ID)
         }
@@ -448,6 +469,46 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun currentChannelId(): String? = currentId
+
+    private val summaries = object : LinkedHashMap<String, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > SUMMARY_CAPACITY
+    }
+
+    /** Program description from Plex, fetched on demand for the focused guide cell. Never persisted; failures are null. */
+    suspend fun programSummary(item: MediaItem?): String? {
+        if (item == null || item.kind == MediaKind.TRACK) return null
+        val base = serverBase ?: return null
+        val token = token ?: return null
+        val path = "/library/metadata/${item.key}"
+        if (!ServerUri.isLibraryPath(path) || !ServerUri.isAcceptable(base)) return null
+        val revision = app.schedule.guideRevision.value
+        val cacheKey = "$base|$token|$revision|${item.key}"
+        synchronized(summaries) { summaries[cacheKey] }?.let { return it }
+        val text = try {
+            withContext(Dispatchers.IO) { fetchSummary(base, path, token) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        // A sync or edit during the fetch invalidates the revision; don't cache the stale response.
+        if (app.schedule.guideRevision.value == revision) synchronized(summaries) { summaries[cacheKey] = text }
+        return text
+    }
+
+    // withTimeoutOrNull, not withTimeout: its cancellation exception would be rethrown by the caller's catch.
+    private suspend fun fetchSummary(base: String, path: String, token: String): String? {
+        repeat(2) {
+            val body = try {
+                withTimeoutOrNull(SUMMARY_TIMEOUT_MS) { app.plex.getWithTimeout(base, path, token, SUMMARY_TIMEOUT_MS) }
+            } catch (_: java.io.InterruptedIOException) {
+                null
+            }
+            if (body != null) return PlexParse.summary(body)
+            android.util.Log.w("TvController", "Program description request timed out")
+        }
+        return null
+    }
 
     fun dispose() {
         scope.cancel()

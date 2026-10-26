@@ -132,11 +132,19 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
             }
             if (items != null) {
                 db.items().replaceAll(items.map(ItemRow::of))
+                val resyncNow = System.currentTimeMillis()
                 for (id in db.entries().channelsWithMissingItems()) {
                     if (id == Lineup.ADS_ID) continue
-                    db.entries().deleteChannel(id)
-                    db.states().delete(id)
-                    if (id == Lineup.RESTART_ID) db.channels().delete(id)
+                    if (id == Lineup.RESTART_ID) {
+                        db.entries().deleteChannel(id)
+                        db.states().delete(id)
+                        db.channels().delete(id)
+                        continue
+                    }
+                    // Keep what is airing and later entries that are still playable; a removed item cannot air.
+                    val current = db.entries().range(id, resyncNow, resyncNow + 1).firstOrNull()
+                    val from = db.entries().firstMissingStart(id, current?.startMs ?: resyncNow)
+                    if (from != null) db.entries().deleteFrom(id, from)
                 }
             }
             val contents = items ?: db.items().all().map { it.toItem() }
@@ -175,6 +183,13 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         for (row in db.channels().active()) topUp(row, nowMs)
     }
 
+    /** Tops up only the given channels, so the guide does not resolve pools for rows nobody is looking at. */
+    suspend fun ensure(channelIds: Collection<String>, nowMs: Long) = mutex.withLock {
+        db.entries().pruneBefore(nowMs - KEEP_PAST_MS)
+        val ids = channelIds.toList()
+        if (ids.isNotEmpty()) for (row in db.channels().byIds(ids)) topUp(row, nowMs)
+    }
+
     /** Tops up a single channel (used right before tuning to it). */
     suspend fun ensure(channelId: String, nowMs: Long) = mutex.withLock {
         db.channels().byId(channelId)?.let { topUp(it, nowMs) }
@@ -188,7 +203,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
                 number = Lineup.RESTART_NUMBER,
                 name = "From the Top",
                 kind = ChannelKind.CUSTOM,
-                rules = Rules(kinds = setOf(MediaKind.EPISODE)),
+                rules = Rules(kinds = setOf(item.kind)),
                 hidden = true,
             )
             db.channels().upsert(ChannelRow.of(def, builtIn = true, dormant = false, poolMs = item.durationMs))
@@ -207,7 +222,7 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         val def = row.def
         val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
             else Resolver.pool(def, lib().items)
-        val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = row.id.hashCode().toLong())
+        val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = kotlin.random.Random.nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs,
             backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
@@ -218,8 +233,10 @@ class ScheduleRepo(private val db: RerunDb, private val scheduler: Scheduler) {
         db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
 
     /** Include the preceding program when the guide window starts during its ad break. */
-    suspend fun allEntries(fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
-        (db.entries().programsBeforeBreak(fromMs) + db.entries().rangeAll(fromMs, toMs))
+    suspend fun entriesFor(channelIds: Collection<String>, fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
+        val ids = channelIds.toList()
+        if (ids.isEmpty()) return@withTransaction emptyMap()
+        (db.entries().programsBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs))
             .distinctBy { it.channelId to it.startMs }
             .map { it.toEntry() }.groupBy { it.channelId }
     }

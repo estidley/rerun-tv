@@ -90,6 +90,7 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
   guide blocks, refresh duration and guide responsiveness on the largest target library.
 - [ ] Confirm fades composite correctly over the real video surface, including program/ad transitions and station changes during fades.
 - [ ] Check audio and subtitle selection with multi-track 4K/HDR media on a live server; audio-only changes should not impose video downscaling limits.
+- [ ] Check all subtitle sizes and colors on a physical TV, including Medium/White defaults and the semi-transparent background. Confirm persistence, embedded/external text styling, and the documented bitmap/burn-in limitation.
 - [ ] Verify HDR color rendering, tone mapping, fallback errors and Dolby Vision limitations on affected TVs.
 - [ ] With Plex Pass, server support and analyzed program/ad audio, verify normalization eligibility, output loudness consistency and server transcode load.
 - [ ] Measure target-TV frame rate, CPU, memory, channel-change latency and long-running playback.

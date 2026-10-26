@@ -187,6 +187,9 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE id = :id")
     suspend fun byId(id: String): ChannelRow?
 
+    @Query("SELECT * FROM channels WHERE id IN (:ids)")
+    suspend fun byIds(ids: List<String>): List<ChannelRow>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(row: ChannelRow)
 
@@ -202,6 +205,9 @@ interface EntryDao {
     @Query("SELECT DISTINCT channelId FROM entries WHERE itemKey IS NOT NULL AND itemKey NOT IN (SELECT `key` FROM items)")
     suspend fun channelsWithMissingItems(): List<String>
 
+    @Query("SELECT MIN(startMs) FROM entries WHERE channelId = :channelId AND startMs >= :fromMs AND itemKey IS NOT NULL AND itemKey NOT IN (SELECT `key` FROM items)")
+    suspend fun firstMissingStart(channelId: String, fromMs: Long): Long?
+
     @Query("DELETE FROM entries")
     suspend fun clear()
 
@@ -214,11 +220,15 @@ interface EntryDao {
     @Query("SELECT * FROM entries WHERE endMs > :fromMs AND startMs < :toMs ORDER BY channelId, startMs")
     suspend fun rangeAll(fromMs: Long, toMs: Long): List<EntryRow>
 
+    @Query("SELECT * FROM entries WHERE channelId IN (:channelIds) AND endMs > :fromMs AND startMs < :toMs ORDER BY channelId, startMs")
+    suspend fun rangeFor(channelIds: List<String>, fromMs: Long, toMs: Long): List<EntryRow>
+
     @Query(
         "SELECT p.* FROM entries p INNER JOIN entries f ON p.channelId = f.channelId AND p.endMs = f.startMs " +
-            "WHERE p.kind = 'PROGRAM' AND f.kind = 'FILLER' AND f.startMs <= :fromMs AND f.endMs > :fromMs",
+            "WHERE p.channelId IN (:channelIds) AND p.kind = 'PROGRAM' AND f.kind = 'FILLER' " +
+            "AND f.startMs <= :fromMs AND f.endMs > :fromMs",
     )
-    suspend fun programsBeforeBreak(fromMs: Long): List<EntryRow>
+    suspend fun programsBeforeBreakFor(channelIds: List<String>, fromMs: Long): List<EntryRow>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(rows: List<EntryRow>)

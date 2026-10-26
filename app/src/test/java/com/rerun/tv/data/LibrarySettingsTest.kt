@@ -77,8 +77,36 @@ class LibrarySettingsTest {
     }
 
     @Test
+    fun subtitleAppearanceDefaultsAndPersists() = runBlocking {
+        assertEquals("MEDIUM", settings.subtitleSize().first())
+        assertEquals("WHITE", settings.subtitleColor().first())
+        settings.setSubtitleSize("LARGE")
+        settings.setSubtitleColor("YELLOW")
+        val reopened = Settings(RuntimeEnvironment.getApplication(), db.settings())
+        assertEquals("LARGE", reopened.subtitleSize().first())
+        assertEquals("YELLOW", reopened.subtitleColor().first())
+        settings.signOut()
+        assertEquals("LARGE", reopened.subtitleSize().first())
+        assertEquals("YELLOW", reopened.subtitleColor().first())
+        for (invalid in listOf("", "invalid")) {
+            try {
+                settings.setSubtitleSize(invalid)
+                fail("Invalid size must be rejected")
+            } catch (_: IllegalArgumentException) {
+                assertEquals("LARGE", settings.subtitleSize().first())
+            }
+            try {
+                settings.setSubtitleColor(invalid)
+                fail("Invalid color must be rejected")
+            } catch (_: IllegalArgumentException) {
+                assertEquals("YELLOW", settings.subtitleColor().first())
+            }
+        }
+    }
+
+    @Test
     fun densityAndSubtitleLanguagePersist() = runBlocking {
-        assertEquals("COMFORTABLE", settings.guideDensity().first())
+        assertEquals("DEFAULT", settings.guideDensity().first())
         assertEquals("auto", settings.subtitleLanguageValue())
         settings.setGuideDensity("LARGE")
         settings.setSubtitleLanguage("es")

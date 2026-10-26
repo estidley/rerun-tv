@@ -6,7 +6,7 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
-Channel identities use stable IDs, independent of user-renamed display text. `ChannelIcon` loads bundled lossless WebP artwork in guide rows, channel management and playback OSD/info. The 102 SVG masters/wordmarks live under `design/channel-icons`; a pinned Sharp generator produces 256 px transparent Android drawables and a static resource map. Unknown music/custom channels use explicit fallback art.
+Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. `ChannelIcon` retains square artwork in channel management and playback OSD/info. The 102 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music/custom channels use explicit fallback art.
 
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
@@ -137,6 +137,10 @@ instead of a silent Up Next loop. Diagnostics omit raw exception messages, URLs 
 Multi-audio selection uses an explicit Plex stream ID. Audio-only conversion allows video copy without
 1080p/bitrate caps; required video conversion retains its compatibility limits.
 Subtitles can use external or embedded text, otherwise Plex burn-in.
+Locally rendered text subtitles use saved Small/Medium/Large size and White/Yellow/Cyan/Green
+color choices, defaulting to Medium and White on a 60%-opaque black background. Appearance updates
+apply through the PlayerView without retuning and override embedded text styles and font sizes.
+Bitmap and server-burned subtitles are not restyled locally.
 
 HDR Auto checks connected display and decoder support. Convert requests SDR tone mapping;
 Prefer native bypasses the capability-driven conversion choice. Native HDR errors retry SDR once.
@@ -148,8 +152,22 @@ Station changes retain configurable static/roll effects. Same-station clips fade
 replacement, hold black while loading, and fade in on the first frame (or music readiness).
 Load/fade time is included in wall-clock seeking; menu muting survives replacement.
 Start-over alone begins at zero and returns to the prior station when the one-shot ends.
+The separate ad-only station is not eligible for start-over; its clips stay in the ad catalog,
+and a rejected request displays the normal notification without interrupting playback.
+Pending start-over work validates the tune generation before switching, so rollover or retuning
+cannot restart an obsolete program. Action messages remain visible during filler and Off Air.
+Rollover callbacks relocate playback against current wall time, including after clock rollback.
+
+Plex HTTP calls are asynchronous and coroutine cancellation cancels their sockets, including stalled
+response bodies. Focused program descriptions have a five-second HTTP deadline and one timeout
+retry. An empty lineup during startup or sync shows progress until loading finishes.
 
 ## Performance contracts and validation limits
+
+The guide checks device locale, 12/24-hour preference and time zone on its 30-second tick.
+Time-axis labels invalidate on formatting changes even when the schedule window does not advance.
+The focused program panel is also keyed on formatting settings, so its date/time range updates
+without requiring a focus or program change.
 
 Scheduler candidate indexes and reused lineup calculations preserve deterministic output.
 Stock decade qualification aggregates duration by media kind/decade in one metadata pass and

@@ -36,6 +36,7 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        com.rerun.tv.ui.player.clockContext = this
         db = RerunDb.open(this)
         settings = Settings(this, db.settings())
         // One local read so the first image or playback request already knows the pinned host.
