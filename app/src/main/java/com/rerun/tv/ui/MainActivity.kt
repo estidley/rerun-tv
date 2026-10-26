@@ -9,7 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -179,6 +182,8 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
     androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides canvas) {
     ProvideColorTheme(ColorTheme.from(colorTheme)) { ProvideCrtLevel(level) { Box(
         Modifier.fillMaxSize().background(Color.Black)
+            // Keep controls and overlays clear of phone camera cutouts. TVs report no cutout, so this is a no-op there.
+            .windowInsetsPadding(WindowInsets.displayCutout)
             .onPreviewKeyEvent { onPlayerKeyEvent(it.nativeKeyEvent) }
             .focusRequester(playerFocus).focusable(enabled = screen == Screen.Player),
     ) {
