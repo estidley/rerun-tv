@@ -85,6 +85,7 @@ object Retro {
     private val shadow = Shadow(Color.Black, Offset(2f, 2f), 0f)
 
     val Osd: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Vcr, fontSize = 64.sp, shadow = shadow)
+    val ChannelNumber: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Dim.copy(alpha = 0.75f), fontSize = 26.sp, shadow = shadow)
     val OsdSmall: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = Vcr, fontSize = 32.sp, shadow = shadow)
     val Title: TextStyle @Composable get() = TextStyle(fontFamily = Font, color = White, fontSize = 40.sp, shadow = shadow)
     val Body: TextStyle @Composable get() = TextStyle(fontFamily = ReadableFont, fontWeight = FontWeight.Medium, color = White, fontSize = 28.sp)

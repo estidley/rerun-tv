@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
@@ -55,14 +56,13 @@ fun describe(item: MediaItem?): String = when {
 private val clock = SimpleDateFormat("h:mm", Locale.US)
 fun clockTime(ms: Long): String = clock.format(Date(ms))
 
-/** "103  CN" in the top-right corner, VCR style. */
+/** Channel icon with a small gray number beneath it in the top-right corner. */
 @Composable
 fun ChannelOsd(channel: ChannelRow?, modifier: Modifier = Modifier) {
     if (channel == null) return
-    Column(modifier.padding(top = 36.dp, end = 56.dp), horizontalAlignment = Alignment.End) {
-        ChannelIcon(channel.id, size = 56.dp)
-        RetroText(channel.number.toString(), style = Retro.Osd)
-        RetroText(channel.name.uppercase(), style = Retro.OsdSmall)
+    Column(modifier.padding(top = 36.dp, end = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        ChannelIcon(channel.id, size = 96.dp)
+        RetroText(channel.number.toString(), style = Retro.ChannelNumber)
     }
 }
 
@@ -78,10 +78,10 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
             .padding(horizontal = 28.dp, vertical = 18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(150.dp)) {
-                if (channel != null) ChannelIcon(channel.id, size = 40.dp)
-                BasicText(channel?.number?.toString() ?: "", style = Retro.Osd)
-                BasicText(channel?.name ?: "", style = Retro.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.width(130.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (channel != null) ChannelIcon(channel.id, size = 96.dp)
+                BasicText(channel?.number?.toString() ?: "", style = Retro.ChannelNumber)
+                BasicText(channel?.name ?: "", style = Retro.Caption.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(24.dp))
             Column(Modifier.weight(1f)) {
