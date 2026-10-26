@@ -122,7 +122,7 @@ Channels and Settings sit at the top of the guide: press ▲ from the first row.
 
 ## Touch controls (phones and tablets)
 
-Rerun also runs on Android phones and tablets, full screen in landscape. Touch controls turn on only when the device has a touchscreen, so TV remotes work exactly as above.
+Rerun also runs on Android phones and tablets, full screen in landscape. Touch controls turn on only when the device has a touchscreen and is not running as a TV, so TV remotes work exactly as above. With TalkBack, double-tap the video for the banner and touch buttons, or use the actions menu for Channel up, Channel down, Last channel and Open guide.
 
 | Touch | Watching | Guide |
 |---|---|---|
