@@ -2,7 +2,7 @@
 
 Status: **not started**. The design is approved in the
 [scheduling v2 design spec](../specs/2026-10-26-scheduling-v2-design.md); read it first, since
-section numbers below (§) refer to it. Base: `main` at `3a11d13` (v1.0.1). No implementation code
+section numbers below (§) refer to it. Base: `main` at `6078bcd` (v1.0.1 plus PR #11, merged 2026-10-26). No implementation code
 exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
 
 ## Handoff summary
@@ -27,7 +27,9 @@ exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
 - **Don't install to or uninstall from Ethan's Fire TV Cube.** Debug builds can't update the
   release-signed install, and uninstalling wipes the saved Plex sign-in.
 - **Release flow** (only when asked):
-  - Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
+  - Bump `versionCode` and `versionName` in `app/build.gradle.kts`. **The next release is 1.0.2,
+    versionCode 4**; 1.0.1 already used code 3. Settings > About reads `BuildConfig.VERSION_NAME`,
+    so no other file holds the version.
   - Run `gradlew assembleRelease bundleRelease`, signed by the local gitignored
     `rerun-release.jks` and `keystore.properties`. Never commit or print them.
   - Run `apksigner verify --print-certs`. The certificate SHA-256 must stay
@@ -65,7 +67,13 @@ CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; add
   - `app/.../ui/settings/SettingsScreen.kt`: Time zone row (Automatic / pick list).
   - `app/.../ui/TvController.kt`, `app/.../ui/MainActivity.kt`: detect changes at start and resume, and via the `ACTION_TIMEZONE_CHANGED` receiver; show the "Reset your schedule?" Yes/No dialog.
   - `ScheduleRepo.resetAllFuture(nowMs)`: keep each channel's current entry, delete after it, top up.
-  - `app/.../ui/guide/GuideScreen.kt`: window flooring and clock in the effective zone.
+  - `app/.../ui/guide/GuideScreen.kt`: window flooring and clock in the effective zone. Reuse
+    `app/.../ui/ClockWatch.kt` (PR #11): it already detects clock jumps and zone changes on the
+    guide's 30-second tick and bumps `clockEpoch`. Hook the "Reset your schedule?" check into the
+    same signal rather than adding a second poller. Note `gridFloor` there is still the UTC
+    30-minute grid.
+  - Formatting already follows the device locale, 12/24-hour setting and zone (`clockTime`,
+    `clockDate`, `clockFormatSettings` in `Overlays.kt`); a manual zone setting must feed them too.
 - **Tests:**
   - Core: quarter-hour marks in America/Chicago, Asia/Kolkata (+5:30), Asia/Kathmandu (+5:45), Pacific/Chatham, and DST spring-forward and fall-back days.
   - Scheduler: programs start on local quarter marks.
@@ -137,7 +145,8 @@ CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; add
 - **Files:**
   - `app/.../data/LibrarySync.kt`: `syncIfStale(24h)`, serialized, fail-soft.
   - `app/.../ui/TvController.kt` and `ScheduleRepo.kt`: before a top-up, if the last sync is stale, start the background sync. Never block tuning; a cold start builds from the saved library.
-  - `ScheduleRepo.refreshChannels`: for channels with missing items, keep the current entry, delete the future, keep state minus missing keys, then top up (replaces the full wipe).
+  - `ScheduleRepo.refreshChannels`: PR #11 already keeps the airing entry and later entries up to the first missing item (`EntryDao.firstMissingStart` + `deleteFrom`) and keeps the channel's state. **This step only adds dropping the missing keys from the saved deck, `recent`, episode pointers and run slots**, so the next top-up never picks a removed item.
+  - Top-up triggers: tuning (`ensure(channelId)`), sync (`ensure(now)`) and the guide (`ensure(ids, now)` for visible rows, repeated every 10 minutes while open, PR #11). Check sync staleness once per trigger batch, not per guide row, and never from inside the 10-minute guide refresh loop while a sync is already running.
 - **Tests:**
   - LibrarySyncTest: stale vs. fresh; failure falls back.
   - ScheduleRepoTest: an item removed mid-program keeps now-playing and positions; a library-selection change still rebuilds.
@@ -160,11 +169,15 @@ CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; add
 - **Downgrade:** old APKs decode `kind` with `EntryKind.valueOf` and would crash on AD or WAIT
   entries. Sideloading an older version after v2 would need app data cleared. Mention it in
   release notes.
+- **Random seeds:** since PR #11 a channel's first seed is random and saved. Write determinism
+  tests from an explicit saved `ChannelState` (spec §3 #20), never from the channel ID.
 - **Determinism:** the deterministic fingerprints in `PerformanceWorkloadTest` and the existing
   scheduler tests change by design. Update them in the step that changes them.
 - **Build cost:** quarter-hour ad planning adds entries (about 4–8 per program). Watch
   `ScheduleRepo.ensure` time on the Fire TV CPU (JVM timings aren't device evidence).
 - **Narrow guide cells:** fillers and short gaps make narrow cells; check readability on a TV.
+  The wordmark channel column from PR #11 grows with the layout (about 125 to almost 300 dp), so cells
+  are narrowest in Large.
 - **Background sync:** on large libraries it takes minutes. It must not hold
   `ScheduleRepo`'s mutex for long or block tuning.
 - **Time-zone dialog:** must not appear during onboarding or on top of other dialogs.

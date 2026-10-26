@@ -144,7 +144,9 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
   - Delete entries after it, then top up again.
   - **Keep the channel's saved state** (show positions, decks, run slots); drop missing keys from
     the deck and runs.
-  - This replaces today's whole-channel wipe in `ScheduleRepo.refreshChannels`.
+  - PR #11 already stopped the whole-channel wipe: `refreshChannels` keeps the airing entry and
+    later entries up to the first one whose item is missing, deletes from there and keeps the
+    saved state. What's left for v2 is dropping the missing keys from the deck and runs (Step 7).
 - Changing **which libraries are included** still intentionally rebuilds schedules (unchanged
   invariant).
 
@@ -175,7 +177,9 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
 - **Music stations:** back to back, no grid, no ads, hourly guide blocks.
 - **Buy Me Maybe:** ad clips back to back, no padding, hourly guide blocks, generated only from a
   nonempty enabled ad catalog.
-- **From the Top** (hidden start-over channel): unchanged.
+- **From the Top** (hidden start-over channel): unchanged by v2. Since PR #11 it restarts movies
+  as well as episodes (its rules use the restarted item's own kind) and never the Buy Me Maybe
+  station.
 
 ### 1.12 Guide display
 
@@ -188,6 +192,8 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
 - Music and Buy Me Maybe keep hourly station blocks.
 - Run episodes show as consecutive cells. Optionally add a "Part 1 of 3" label later (not
   required).
+- Cell width depends on the channel column, which grows with the guide layout since PR #11, so
+  a 15-minute cell (one twelfth of the 3-hour timeline) is narrowest in Large.
 
 ### 1.13 Tuning in
 
@@ -197,23 +203,23 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
 - Playback continues to follow wall-clock time (existing invariant). Ads never delay the next
   program.
 
-## 2. Current code facts (main at 3a11d13)
+## 2. Current code facts (main at 6078bcd, after PR #11)
 
 | Area | Today | Where |
 |---|---|---|
 | Grid | 30-minute grid computed in **UTC** epoch ms (`GRID_MS`, `gridFloor`, `gridCeil`); each video program padded to the next `:00/:30` with a `FILLER` entry | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
 | Build model | `Scheduler.extend` appends from the last saved end (or the current grid floor) to 48 h ahead; never rewrites saved entries | `core/.../schedule/Scheduler.kt` |
-| Top-up | `ScheduleRepo.ensure` tops up channels with under 24 h left (`needsTopUp`). It's lazy, triggered by tuning (`TunerEngine`), opening the guide (`GuideScreen`) and sync (`LibrarySync`). It prunes entries that ended over 6 h ago | `app/src/main/java/com/rerun/tv/data/ScheduleRepo.kt`, `core/.../schedule/Tune.kt` |
-| Randomness | Seeded per channel (`row.id.hashCode()`); scheduler state (deck, recent, episode pointers, `msSinceMovie`, `rngCalls`) persisted as JSON | `Scheduler.kt`, `Schedule.kt` (`ChannelState`), `core/.../codec/Codecs.kt` (`StateCodec`) |
+| Top-up | `ScheduleRepo.ensure` tops up channels with under 24 h left (`needsTopUp`). It's lazy. Tuning tops up one channel (`ensure(channelId)`, `TunerEngine`); a library sync tops up all (`ensure(now)`, `LibrarySync`). Since PR #11 the guide tops up **only the visible rows plus a margin** (`ensure(ids, now)`, `wantRange`), reads them with `entriesFor(ids, …)`, and repeats the top-up **every 10 minutes while open** (`ENSURE_INTERVAL_MS`). It prunes entries that ended over 6 h ago | `app/src/main/java/com/rerun/tv/data/ScheduleRepo.kt`, `app/.../ui/guide/GuideScreen.kt`, `core/.../schedule/Tune.kt` |
+| Randomness | Since PR #11 a channel with no saved state gets a **random seed** on its first build (`ChannelState(seed = Random.nextLong())` in `ScheduleRepo.topUp`); before that it was `row.id.hashCode()`. The seed and the rest of the scheduler state (deck, recent, episode pointers, `msSinceMovie`, `rngCalls`) are saved as JSON, so a channel is deterministic **from its saved state** but differs between installs and after a state reset | `ScheduleRepo.kt`, `Scheduler.kt`, `Schedule.kt` (`ChannelState`), `core/.../codec/Codecs.kt` (`StateCodec`) |
 | Picks | Shows: weighted random show, next episode in order, pointer advances on every pick. Movies: shuffled deck with a recent hold-back. Mixed: movie when `msSinceMovie >= movieEveryMs` (6 h). In order: round-robin shows; movies by year. Chronological: persisted ordered deck | `Scheduler.kt` |
 | Time blocks | `TimeBlock` checked only at each program's start, so programs can run into a block. Only built-in block: Cartoon Network weekdays 4–7 PM, Toonami titles | `core/.../model/Channels.kt`, `core/.../catalog/Catalog.kt` |
 | Ads | Chosen **at tune time** by `adFiller` (seeded by channel and break start), filling the whole FILLER back to back; Up Next card if none fits | `core/.../schedule/AdFiller.kt`, `app/.../player/TunerEngine.kt` |
 | Entries | Room `entries` table: `kind` stored as a **string** and decoded with `EntryKind.valueOf`; unique `(channelId, startMs)`; DB version 3 | `app/.../data/Db.kt` (`EntryRow`) |
-| Guide | 3-hour window; filler folded into the previous program; gaps are Off Air; music and Buy Me Maybe hourly | `core/.../schedule/GuideBlocks.kt`, `app/.../ui/guide/GuideScreen.kt` |
+| Guide | 3-hour window; filler folded into the previous program; gaps are Off Air; music and Buy Me Maybe hourly. Since PR #11 the channel column shows a vertical number and a wordmark, and its width follows the row height (`iconDp * 400 / 270 + 54` dp, from about 125 dp in Compact to almost 300 dp in Large), so the timeline and every program cell get narrower. While updating it shows skeleton rows. Touch controls (PR #12) work on the rows and cells | `core/.../schedule/GuideBlocks.kt`, `app/.../ui/guide/GuideScreen.kt`, `GuideLayout.kt` |
 | Tune | `locate` finds the entry covering now; 5 s end skip; Off Air waits for the next entry | `core/.../schedule/Tune.kt`, `TunerEngine.kt` |
-| Time zone | `Scheduler(ZoneId.systemDefault())` built once at app start | `app/.../RerunApp.kt` |
+| Time zone | `Scheduler(ZoneId.systemDefault())` built once at app start. Since PR #11, `ClockWatch` notices a clock jump or a zone change on the guide's 30-second tick (wall vs. elapsed time and `TimeZone.getDefault().id`); the guide then re-floors its window and relabels times. It doesn't prompt or rebuild. `clockTime`/`clockDate` follow the device locale, 12/24-hour setting and zone | `app/.../RerunApp.kt`, `app/.../ui/ClockWatch.kt`, `app/.../ui/player/Overlays.kt` |
 | Library sync | **Manual only** (onboarding, Settings resync and libraries). App start only re-plans from the saved library (`refreshChannelsForAppVersion`) | `app/.../data/LibrarySync.kt`, `RerunApp.kt`, `app/.../ui/TvController.kt` |
-| Item removal | `refreshChannels` deletes the **entire** schedule and state of any channel with a missing item | `ScheduleRepo.refreshChannels` |
+| Item removal | Since PR #11, `refreshChannels` keeps the airing entry and later entries up to the first entry whose item is missing (`EntryDao.firstMissingStart`), deletes from there (`deleteFrom`) and **keeps the channel's state**; the next top-up refills. The hidden From the Top channel is still deleted outright. The saved deck and pointers can still name missing keys | `ScheduleRepo.refreshChannels`, `app/.../data/Db.kt` |
 | Edits | Channel edits keep the current entry and rebuild the future (`resetFuture`) | `ScheduleRepo.kt`, `app/.../ui/channels/ChannelEditor.kt` |
 
 ## 3. Red-team findings and resolutions
@@ -239,6 +245,8 @@ Keep them configurable or easy to change. Everything else is an explicit decisio
 | 17 | Music and Buy Me Maybe | Explicitly unchanged (1.11) |
 | 18 | Upgrade with old 30-minute entries | One-time future rebuild keeping now-playing (1.9) |
 | 19 | Deterministic fingerprints in tests will change | Intentional; update fingerprints in the PR that changes them and say so |
+| 20 | Seeds are random per install since PR #11, so "same inputs give the same output" can't mean the same schedule on every device | Determinism is defined **from a saved `ChannelState`**: tests build the state with an explicit seed (or save one first) and assert that the same state, pool and time give the same entries. Never assert on a seed derived from the channel ID |
+| 21 | The wider wordmark channel column (PR #11) narrows every program cell, and 8–15 minute fillers get very thin | Check filler-cell readability in all three guide layouts on a TV (1.12) |
 
 ## 4. Recommended numbers and settings
 
