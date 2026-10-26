@@ -1,6 +1,11 @@
 package com.rerun.tv.ui.touch
 
 import android.content.pm.PackageManager
+import android.content.res.Configuration
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.runtime.Composable
@@ -77,17 +82,34 @@ object TouchControls {
         if (alreadySelected) GuideTouchAction.WATCH else GuideTouchAction.SELECT
 }
 
-/** True on phones and tablets. TV boxes do not declare a touchscreen. */
+/**
+ * True on phones and tablets. TVs normally declare no touchscreen (only faketouch at most), but some
+ * Android TV boxes run phone builds that claim one, so a television UI mode always keeps touch off.
+ */
 @Composable
 fun rememberTouchControlsEnabled(): Boolean {
     val context = LocalContext.current
-    return remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN) }
+    return remember(context) {
+        val television = (context.resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+            Configuration.UI_MODE_TYPE_TELEVISION
+        !television && context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+    }
 }
 
 /** Player gestures. Pass a remembered [onAction]; the detectors restart when it changes. */
 fun Modifier.playerTouchControls(enabled: Boolean, onAction: (PlayerTouchAction) -> Unit): Modifier {
     if (!enabled) return this
     return this
+        .semantics {
+            // Screen readers cannot swipe the video, so expose the same actions.
+            onClick(label = "Show info and controls") { onAction(PlayerTouchAction.TOGGLE_BANNER); true }
+            customActions = listOf(
+                CustomAccessibilityAction("Channel up") { onAction(PlayerTouchAction.CHANNEL_UP); true },
+                CustomAccessibilityAction("Channel down") { onAction(PlayerTouchAction.CHANNEL_DOWN); true },
+                CustomAccessibilityAction("Last channel") { onAction(PlayerTouchAction.LAST_CHANNEL); true },
+                CustomAccessibilityAction("Open guide") { onAction(PlayerTouchAction.OPEN_GUIDE); true },
+            )
+        }
         .pointerInput(onAction) {
             detectTapGestures(
                 onTap = { onAction(TouchControls.playerAction(TouchGesture.TAP)) },
