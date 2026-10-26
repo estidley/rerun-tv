@@ -109,6 +109,25 @@ class GuideScreenTest {
     }
 
     @Test
+    fun emptyLineupShowsSyncProgressUntilCompletion() = runBlocking<Unit> {
+        channels.value = emptyList()
+        val finish = CompletableDeferred<Unit>()
+        `when`(sync.sync()).thenReturn(flow {
+            emit(SyncProgress("Reading libraries", 1, 2))
+            finish.await()
+        })
+        controller.resyncLibrary()
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
+        compose.onNodeWithText("Updating guide...").assertExists()
+        compose.onNodeWithText("Elapsed: 0s").assertExists()
+        compose.onNodeWithText("Reading libraries 1/2").assertExists()
+        compose.onNodeWithText("No channels yet. Open Settings and run a library sync.").assertDoesNotExist()
+        compose.runOnIdle { finish.complete(Unit) }
+        compose.waitUntil(10_000) { !controller.lineupUpdate.value.busy }
+        compose.onNodeWithText("No channels yet. Open Settings and run a library sync.").assertExists()
+    }
+
+    @Test
     fun timeHeaderRefreshesFormattingWithoutAdvancingTheWindow() {
         val context = RuntimeEnvironment.getApplication()
         val originalContext = com.rerun.tv.ui.player.clockContext

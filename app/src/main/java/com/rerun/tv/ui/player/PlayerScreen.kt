@@ -114,33 +114,30 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier) {
             }
             Phase.DIFFICULTIES -> {
                 DifficultiesCard()
-                state.message?.let { message ->
-                    BasicText(
-                        message, style = Retro.Body,
-                        modifier = Modifier.align(Alignment.BottomCenter)
-                            .background(Retro.GuideBlueDeep)
-                            .padding(horizontal = 48.dp, vertical = 32.dp),
-                    )
-                }
             }
             Phase.TUNING -> Unit
             Phase.PLAYING -> Unit
         }
         PlaybackTransition(state, fx.static, fx.roll)
-        if (state.phase == Phase.PLAYING && state.message != null) {
-            BasicText(
-                state.message.orEmpty(), style = Retro.Caption,
-                modifier = Modifier.align(Alignment.BottomCenter).background(Retro.GuideBlueDeep)
-                    .padding(horizontal = 48.dp, vertical = 16.dp),
-            )
-        }
 
         if (state.channel == null) {
             StartupMessage(startup, update, channels.isEmpty())
         }
 
         PlayerOverlays(state, bannerUntil)
+        PlaybackMessage(state.message, state.phase)
     }
+}
+
+@Composable
+internal fun BoxScope.PlaybackMessage(message: String?, phase: Phase) {
+    if (message == null) return
+    BasicText(
+        message,
+        style = if (phase == Phase.DIFFICULTIES) Retro.Body else Retro.Caption,
+        modifier = Modifier.align(Alignment.BottomCenter).background(Retro.GuideBlueDeep)
+            .padding(horizontal = 48.dp, vertical = if (phase == Phase.DIFFICULTIES) 32.dp else 16.dp),
+    )
 }
 
 @Composable

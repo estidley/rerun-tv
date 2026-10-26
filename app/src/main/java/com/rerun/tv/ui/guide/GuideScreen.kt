@@ -313,11 +313,16 @@ fun GuideScreen(
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 if (loadError != null || rows.isEmpty()) {
                     Column(Modifier.align(Alignment.Center).testTag("guide-status")) {
-                        BasicText(loadError ?: "No channels yet. Open Settings and run a library sync.", style = Retro.Title)
                         BasicText(
-                            if (loadError != null) "Press OK to retry, or UP for Settings." else "Press UP for Settings.",
+                            if (updating) "Updating guide..." else loadError ?: "No channels yet. Open Settings and run a library sync.",
+                            style = Retro.Title,
+                        )
+                        BasicText(
+                            if (updating) "Elapsed: ${elapsedSeconds}s"
+                            else if (loadError != null) "Press OK to retry, or UP for Settings." else "Press UP for Settings.",
                             style = Retro.Body,
                         )
+                        if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
                     }
                     return@BoxWithConstraints
                 }

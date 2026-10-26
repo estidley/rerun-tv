@@ -421,12 +421,7 @@ class TunerEngine(
     /** Linear channels follow wall time; start-over returns on playback end, not a metadata timer. */
     private fun scheduleRollover(channelId: String, endMs: Long) {
         if (channelId == Lineup.RESTART_ID) return
-        lateinit var r: Runnable
-        r = Runnable {
-            // A wall-clock change can fire this early; wait out the remainder instead of retuning mid-program.
-            val left = endMs - clock()
-            if (left > 1_000) handler.postDelayed(r, left) else tune(channelId)
-        }
+        val r = Runnable { tune(channelId) }
         rollover = r
         handler.postDelayed(r, (endMs - clock()).coerceAtLeast(0))
     }

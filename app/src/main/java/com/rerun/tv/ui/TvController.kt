@@ -434,7 +434,6 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
                 engine.notify("Start over works while a show or movie is playing.")
                 return@launch
             }
-            channelBeforeRestart = previousId
             try {
                 app.schedule.airFromStart(item, System.currentTimeMillis())
             } catch (e: CancellationException) {
@@ -443,7 +442,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
                 engine.notify("Couldn't start over: ${e.message}")
                 return@launch
             }
-            if (currentId != returnTo) return@launch
+            if (!foreground || currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
+            channelBeforeRestart = previousId
             engine.armReturn(returnTo)
             tuneTo(Lineup.RESTART_ID)
         }
@@ -498,8 +498,13 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     // withTimeoutOrNull, not withTimeout: its cancellation exception would be rethrown by the caller's catch.
     private suspend fun fetchSummary(base: String, path: String, token: String): String? {
         repeat(2) {
-            val body = withTimeoutOrNull(SUMMARY_TIMEOUT_MS) { app.plex.get(base, path, token) }
+            val body = try {
+                withTimeoutOrNull(SUMMARY_TIMEOUT_MS) { app.plex.getWithTimeout(base, path, token, SUMMARY_TIMEOUT_MS) }
+            } catch (_: java.io.InterruptedIOException) {
+                null
+            }
             if (body != null) return PlexParse.summary(body)
+            android.util.Log.w("TvController", "Program description request timed out")
         }
         return null
     }

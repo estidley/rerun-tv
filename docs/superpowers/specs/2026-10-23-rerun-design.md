@@ -152,6 +152,13 @@ Station changes retain configurable static/roll effects. Same-station clips fade
 replacement, hold black while loading, and fade in on the first frame (or music readiness).
 Load/fade time is included in wall-clock seeking; menu muting survives replacement.
 Start-over alone begins at zero and returns to the prior station when the one-shot ends.
+Pending start-over work validates the tune generation before switching, so rollover or retuning
+cannot restart an obsolete program. Action messages remain visible during filler and Off Air.
+Rollover callbacks relocate playback against current wall time, including after clock rollback.
+
+Plex HTTP calls are asynchronous and coroutine cancellation cancels their sockets, including stalled
+response bodies. Focused program descriptions have a five-second HTTP deadline and one timeout
+retry. An empty lineup during startup or sync shows progress until loading finishes.
 
 ## Performance contracts and validation limits
 
