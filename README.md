@@ -43,7 +43,7 @@ Turn it on and something's already playing. Flip channels and you land in the mi
 
 ## Install on a Fire TV
 
-The guide uses bundled illustrated wordmarks; the channel manager and playback info retain square icons. The library covers 60 named channels and all 40 TV/music decade templates, with fallbacks for custom channels and arbitrary music genres. Editable SVGs and wordmarks, a preview, stable-ID mapping and regeneration instructions are in [`design/channel-icons`](design/channel-icons). Lossless WebP renders of both are committed for Android, so ordinary builds do not need Node or an SVG decoder.
+The guide and top-right channel display use bundled illustrated wordmarks; the channel manager and bottom playback info retain square icons. The top-right wordmark is larger than the previous icon, with the complete artwork fitted in its original proportions above the channel number. The library covers 60 named channels and all 40 TV/music decade templates, with fallbacks for custom channels and arbitrary music genres. Editable SVGs and wordmarks, a preview, stable-ID mapping and regeneration instructions are in [`design/channel-icons`](design/channel-icons). Lossless WebP renders of both are committed for Android, so ordinary builds do not need Node or an SVG decoder.
 
 Requirements:
 - JDK 17 or newer (Gradle 9 will not run on JDK 11)
