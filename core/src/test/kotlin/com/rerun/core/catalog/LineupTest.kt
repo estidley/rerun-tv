@@ -399,4 +399,38 @@ class LineupTest {
         assertTrue(plan.channels.any { it.def.id == "music:jazz" })
         assertTrue(plan.channels.none { it.def.number == Lineup.RESTART_NUMBER })
     }
+
+    @Test
+    fun userRenameToARetiredOrRealNameSurvivesARefresh() {
+        assertEquals("Disney Channel", Catalog.chooseName("disney", "Disney Channel", "Dinky Channel", userRenamed = true))
+        val shows = List(8) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
+        val renamed = StoredChannel(
+            Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Disney Channel", userRenamed = true),
+            builtIn = true,
+        )
+        val plan = Lineup.plan(shows, listOf(renamed), music = false)
+        val disney = plan.channels.single { it.def.id == "disney" }.def
+        assertEquals("Disney Channel", disney.name)
+        assertTrue(disney.userRenamed)
+    }
+
+    @Test
+    fun movieChannelsSplitTheMoviePoolWhenEachSliceCanStayOnAir() {
+        val films = (1..60).map { movie("m$it", title = "Movie $it", durationMs = 2 * HOUR) }
+        val active = Lineup.channels(films, music = false).filter { it.id.startsWith("movies:") }
+        assertEquals(listOf("movies:1", "movies:2", "movies:3"), active.map { it.id })
+        assertEquals(listOf(0, 1, 2), active.map { it.rules.bucket })
+        assertEquals(listOf(3, 3, 3), active.map { it.rules.bucketCount })
+        val pools = active.map { def -> com.rerun.core.resolve.Resolver.pool(def, films).map { it.key }.toSet() }
+        assertTrue(pools.all { it.isNotEmpty() })
+        assertEquals(films.size, pools.sumOf { it.size })
+        assertEquals(films.size, pools.flatten().toSet().size)
+        // A stock movie channel saved before the split follows it; an edited one keeps its rules.
+        val stock = StoredChannel(Lineup.movieChannels().first(), builtIn = true)
+        val edited = StoredChannel(Lineup.movieChannels()[1].copy(rules = Rules(kinds = setOf(MediaKind.MOVIE), genres = setOf("Drama"))), builtIn = true)
+        val plan = Lineup.plan(films, listOf(stock, edited), music = false)
+        assertEquals(3, plan.channels.single { it.def.id == "movies:1" }.def.rules.bucketCount)
+        assertEquals(setOf("Drama"), plan.channels.single { it.def.id == "movies:2" }.def.rules.genres)
+        assertEquals(1, plan.channels.single { it.def.id == "movies:2" }.def.rules.bucketCount)
+    }
 }

@@ -95,7 +95,8 @@ class TunerEngine(
     private val api: PlexApi = PlexApi({ settings.clientId }, httpClient),
     private val clock: () -> Long = System::currentTimeMillis,
     private val hdrSupported: (VideoDetails) -> Boolean = { supportsHdr(context, it) },
-    playerFactory: (Context) -> ExoPlayer = { ExoPlayer.Builder(it).build() },
+    // Hold a network wake lock while playing so the TV doesn't drop the stream when idle.
+    playerFactory: (Context) -> ExoPlayer = { ExoPlayer.Builder(it).setWakeMode(C.WAKE_MODE_NETWORK).build() },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
@@ -434,6 +435,17 @@ class TunerEngine(
         tune(back)
     }
 
+    private fun subtitleRank(format: androidx.media3.common.Format): Int {
+        val caption = format.sampleMimeType == MimeTypes.APPLICATION_CEA608 || format.sampleMimeType == MimeTypes.APPLICATION_CEA708
+        val isDefault = (format.selectionFlags and C.SELECTION_FLAG_DEFAULT) != 0
+        return when {
+            !caption && isDefault -> 0
+            !caption -> 1
+            isDefault -> 2
+            else -> 3
+        }
+    }
+
     private fun applySubtitles(tracks: Tracks) {
         val builder = player.trackSelectionParameters.buildUpon()
         builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
@@ -453,7 +465,9 @@ class TunerEngine(
                 val matches = candidates.filter { (group, index) ->
                     language == null || group.getTrackFormat(index).language?.let(::subtitleLanguageCode) == subtitleLanguageCode(language)
                 }
-                candidates.getOrNull(embeddedSubtitleIndex)?.takeIf { it in matches } ?: matches.firstOrNull()
+                // Without Plex's pick, prefer real subtitle tracks (default first) over CEA-608/708 captions.
+                candidates.getOrNull(embeddedSubtitleIndex)?.takeIf { it in matches }
+                    ?: matches.minByOrNull { (group, index) -> subtitleRank(group.getTrackFormat(index)) }
             }
             if (selection != null) {
                 builder.setOverrideForType(TrackSelectionOverride(selection.first.mediaTrackGroup, selection.second))

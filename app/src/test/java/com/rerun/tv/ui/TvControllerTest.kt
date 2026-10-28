@@ -485,4 +485,19 @@ class TvControllerTest {
         assertEquals(Screen.Settings, controller.screen.value)
         verify(engine).clear()
     }
+
+    @Test
+    fun steppingFromStartOverUsesTheChannelItCameFrom() {
+        rows.value = listOf("one", "two", "three").mapIndexed { i, id ->
+            ChannelRow.of(ChannelDef(id, 101 + i, id, ChannelKind.CUSTOM, Rules()), false, false)
+        }
+        shadowOf(Looper.getMainLooper()).idle()
+        controller.tuneTo("two", sound = false)
+        controller.tuneTo(Lineup.RESTART_ID, sound = false)
+        assertEquals("two", controller.effectiveChannelId())
+        controller.channelUp()
+        assertEquals("three", controller.currentChannelId())
+        controller.lastChannel()
+        assertEquals("two", controller.currentChannelId())
+    }
 }

@@ -50,9 +50,8 @@ object Lineup {
 
     /** Built-ins plus every extra that currently has enough content. */
     fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
-        val movieMs = moviePoolMs(library)
         val extras = optionalThemes().filter { qualified(it, library) }
-        val features = movieChannels().filter { movieMs >= movieThreshold(it.id) }
+        val features = movieTemplates(library)
         val stations = if (music) musicTemplates(library).filter { qualified(it, library) } else emptyList()
         val totals = decadeTotals(library)
         val decades = decadeTemplates.filter {
@@ -63,6 +62,26 @@ object Lineup {
 
     fun optionalThemes(): List<ChannelDef> = optional
     fun movieChannels(): List<ChannelDef> = movies
+
+    /**
+     * Movie channels the library supports. With two or more, each plays its own disjoint slice
+     * of the movie pool, unless a slice would be too small to stay on the air.
+     */
+    private fun movieTemplates(library: List<MediaItem>): List<ChannelDef> {
+        val movieMs = moviePoolMs(library)
+        val active = movies.filter { movieMs >= movieThreshold(it.id) }
+        if (active.size <= 1) return active
+        val sliced = active.mapIndexed { index, def ->
+            def.copy(rules = def.rules.copy(bucket = index, bucketCount = active.size))
+        }
+        return if (sliced.all { qualified(it, library) }) sliced else active
+    }
+
+    /** Stock movie channels differ only in their bucket slice; anything else is a user edit. */
+    private fun sameIgnoringMovieBucket(stored: ChannelDef, template: ChannelDef): Boolean =
+        if (template.id.startsWith("movies:")) {
+            stored.rules.copy(bucket = 0, bucketCount = 1) == template.rules.copy(bucket = 0, bucketCount = 1)
+        } else stored.rules == template.rules
 
     /**
      * Merges the catalog with channels already stored.
@@ -84,7 +103,8 @@ object Lineup {
         }
         val builtIn = Catalog.builtInChannels()
         val stations = musicTemplates(library)
-        val templates = builtIn + optional + movies + stations + decadeTemplates
+        val activeMovies = movieTemplates(library).associateBy { it.id }
+        val templates = builtIn + optional + movies.map { activeMovies[it.id] ?: it } + stations + decadeTemplates
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
@@ -96,8 +116,12 @@ object Lineup {
             val base = if (template.id == "toonami" && prev?.builtIn == true &&
                 stored?.rules == Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()) &&
                 stored.blocks.isEmpty()
-            ) stored.copy(rules = template.rules, kidsSafe = template.kidsSafe) else stored ?: template
-            val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
+            ) stored.copy(rules = template.rules, kidsSafe = template.kidsSafe)
+            // Stock movie channels follow the current bucket split as the library grows or shrinks.
+            else if (stored != null && template.id.startsWith("movies:") && sameIgnoringMovieBucket(stored, template))
+                stored.copy(rules = template.rules)
+            else stored ?: template
+            val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name, prev?.def?.userRenamed ?: false)
             val pool = duration(base)
             val dormant = isDormant(base, pool, music)
             if (isGenerated(template.id) && dormant && (prev == null || looksStock(prev.def, template))) continue
@@ -219,12 +243,13 @@ object Lineup {
     }
 
     private fun looksStock(stored: ChannelDef, template: ChannelDef): Boolean {
+        if (stored.userRenamed) return false
         val name = stored.name
         val nameOk = name == template.name || name in Catalog.retiredNames(template.id)
         return nameOk &&
             stored.number == template.number &&
             stored.kind == template.kind &&
-            stored.rules == template.rules &&
+            sameIgnoringMovieBucket(stored, template) &&
             stored.order == template.order &&
             stored.blocks == template.blocks &&
             stored.hidden == template.hidden &&

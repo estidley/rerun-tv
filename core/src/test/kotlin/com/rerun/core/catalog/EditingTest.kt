@@ -54,4 +54,12 @@ class EditingTest {
         assertTrue(validateDraft(d.copy(number = 10_000), emptyList()).isNotEmpty())
         assertTrue(validateDraft(d.copy(number = Lineup.RESTART_NUMBER), emptyList()).isNotEmpty())
     }
+
+    @Test
+    fun facetsSeparateVideoAndMusicChoices() {
+        val lib = listOf(movie("m1", genres = setOf("Sci-Fi")), com.rerun.core.track("t1", genre = "Synthwave"))
+        assertEquals(listOf("Sci-Fi"), Facets.from(lib, ChannelKind.CUSTOM).genres)
+        assertEquals(listOf("Synthwave"), Facets.from(lib, ChannelKind.MUSIC).genres)
+        assertEquals(listOf("Sci-Fi", "Synthwave"), Facets.from(lib).genres)
+    }
 }

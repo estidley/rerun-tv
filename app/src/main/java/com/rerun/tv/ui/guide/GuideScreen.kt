@@ -186,12 +186,12 @@ fun GuideScreen(
     }
 
     LaunchedEffect(rows) {
-        val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
+        val idx = rows.indexOfFirst { it.id == controller.effectiveChannelId() }
         focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, rows.lastIndex.coerceAtLeast(-1))
     }
     LaunchedEffect(updating, rows) {
         if (!updating && loadError == null && rows.isNotEmpty() && selectCurrentOnOpen) {
-            focusRow = rows.indexOfFirst { it.id == controller.currentChannelId() }.coerceAtLeast(0)
+            focusRow = rows.indexOfFirst { it.id == controller.effectiveChannelId() }.coerceAtLeast(0)
             focusTime = clock()
             selectCurrentOnOpen = false
         }

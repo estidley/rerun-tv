@@ -177,10 +177,12 @@ object Catalog {
     fun retiredNames(id: String): Set<String> = retired[id].orEmpty()
 
     /**
-     * Name to store for [id]. Stock names take [catalogName]; personal renames are kept.
+     * Name to store for [id]. Stock names take [catalogName]; personal renames are kept,
+     * including a rename to an old or real network name when [userRenamed] is set.
      */
-    fun chooseName(id: String, stored: String?, catalogName: String): String {
+    fun chooseName(id: String, stored: String?, catalogName: String, userRenamed: Boolean = false): String {
         if (stored.isNullOrBlank()) return catalogName
+        if (userRenamed) return stored
         return if (stored == catalogName || stored in retiredNames(id)) catalogName else stored
     }
 

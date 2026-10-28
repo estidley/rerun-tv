@@ -1,5 +1,7 @@
 package com.rerun.tv.ui
 
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -48,6 +50,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : ComponentActivity() {
     private lateinit var controller: TvController
+    private var mediaSession: MediaSession? = null
     private var okDownAt = 0L
     private var okLongFired = false
     private var leftDownAt = 0L
@@ -61,6 +64,17 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
         val app = application as RerunApp
         controller = TvController(app, TunerEngine(this, app.schedule, app.settings, app.http))
+        // An active, playing media session tells the TV that video is on, so it skips the screensaver/ambient mode.
+        mediaSession = runCatching {
+            MediaSession(this, "RerunTV").apply {
+                setPlaybackState(
+                    PlaybackState.Builder()
+                        .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE)
+                        .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                        .build(),
+                )
+            }
+        }.getOrNull()
         setContent { RerunRoot(controller, onPoweredOff = { finish() }, onPlayerKeyEvent = ::handlePlayerKeyEvent) }
     }
 
@@ -80,16 +94,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        runCatching { mediaSession?.isActive = true }
         controller.resume()
     }
 
     override fun onStop() {
         super.onStop()
+        runCatching { mediaSession?.isActive = false }
         controller.stop()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        runCatching { mediaSession?.release() }
+        mediaSession = null
         controller.engine.release()
         controller.dispose()
     }

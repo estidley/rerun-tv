@@ -1,6 +1,7 @@
 package com.rerun.core.catalog
 
 import com.rerun.core.model.ChannelDef
+import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
 import com.rerun.core.resolve.Resolver
@@ -17,16 +18,25 @@ data class Facets(
     val networks: List<String>,
 ) {
     companion object {
-        fun from(items: List<MediaItem>): Facets {
+        /**
+         * Music stations offer choices from music tracks only; every other channel kind offers
+         * video choices only. A null [kind] keeps the whole library.
+         */
+        fun from(items: List<MediaItem>, kind: ChannelKind? = null): Facets {
+            val scoped = when (kind) {
+                null -> items
+                ChannelKind.MUSIC -> items.filter { it.kind == MediaKind.TRACK }
+                else -> items.filter { it.kind != MediaKind.TRACK }
+            }
             val ci = String.CASE_INSENSITIVE_ORDER
             return Facets(
-                genres = items.flatMap { it.genres }.distinct().sortedWith(ci),
-                shows = items.filter { it.kind == MediaKind.EPISODE }.mapNotNull { it.showTitle }.distinct().sortedWith(ci),
-                labels = items.flatMap { it.labels }.distinct().sortedWith(ci),
-                collections = items.flatMap { it.collections }.distinct().sortedWith(ci),
-                decades = items.mapNotNull { it.year?.let { y -> y / 10 * 10 } }.distinct().sorted(),
-                ratings = items.mapNotNull { it.contentRating }.distinct().sortedWith(ci),
-                networks = items.flatMapTo(LinkedHashSet()) { Resolver.networksOf(it) }.sortedBy { Catalog.numberOf(it) },
+                genres = scoped.flatMap { it.genres }.distinct().sortedWith(ci),
+                shows = scoped.filter { it.kind == MediaKind.EPISODE }.mapNotNull { it.showTitle }.distinct().sortedWith(ci),
+                labels = scoped.flatMap { it.labels }.distinct().sortedWith(ci),
+                collections = scoped.flatMap { it.collections }.distinct().sortedWith(ci),
+                decades = scoped.mapNotNull { it.year?.let { y -> y / 10 * 10 } }.distinct().sorted(),
+                ratings = scoped.mapNotNull { it.contentRating }.distinct().sortedWith(ci),
+                networks = scoped.flatMapTo(LinkedHashSet()) { Resolver.networksOf(it) }.sortedBy { Catalog.numberOf(it) },
             )
         }
     }

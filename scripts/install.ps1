@@ -16,13 +16,19 @@
   It is only passed to the refresh step and is never saved; you can set TMDB_TOKEN
   in your shell instead. Without either, the last local refresh or shared repo snapshot is used.
 
+  -DebugBuild installs the debug build instead (no release key needed). Android
+  refuses to update an app signed with a different key; -ReinstallOnKeyMismatch
+  uninstalls the old app first (this clears the saved Plex sign-in).
+
   Usage:  .\scripts\install.ps1 -TvIp 192.168.1.50
           .\scripts\install.ps1 -TvIp 192.168.1.50 -TmdbToken 'eyJhbGciOi...'
 #>
 param(
     [Parameter(Mandatory = $true)][string]$TvIp,
     [switch]$SkipBuild,
-    [string]$TmdbToken
+    [string]$TmdbToken,
+    [switch]$DebugBuild,
+    [switch]$ReinstallOnKeyMismatch
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -36,9 +42,14 @@ if (-not $env:ANDROID_HOME -and -not (Test-Path "$root\local.properties")) {
     else { throw 'Android SDK not found. Install it or set ANDROID_HOME.' }
 }
 
+$sdkAdb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
+$adbCmd = if (Test-Path $sdkAdb) { $sdkAdb } else { 'adb' }
+
 if (-not $SkipBuild) {
-    & "$PSScriptRoot\keystore.ps1"
-    if (-not $?) { throw 'Keystore setup failed' }
+    if (-not $DebugBuild) {
+        & "$PSScriptRoot\keystore.ps1"
+        if (-not $?) { throw 'Keystore setup failed' }
+    }
     $tmdbList = Join-Path $root 'local\tmdb\rerun\tmdb-networks.json'
     $token = if ($TmdbToken) { $TmdbToken } else { $env:TMDB_TOKEN }
     if ($token) {
@@ -59,20 +70,36 @@ if (-not $SkipBuild) {
     else {
         Write-Warning 'No TMDB token, so channels use the network Plex reports. See README: Real network lists from TMDB.'
     }
-    & "$root\gradlew.bat" ':app:assembleRelease' --console=plain
+    $task = if ($DebugBuild) { ':app:assembleDebug' } else { ':app:assembleRelease' }
+    & "$root\gradlew.bat" $task --console=plain
     if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 }
 
-$apk = Join-Path $root 'app\build\outputs\apk\release\app-release.apk'
+$apkRel = if ($DebugBuild) { 'app\build\outputs\apk\debug\app-debug.apk' } else { 'app\build\outputs\apk\release\app-release.apk' }
+$apk = Join-Path $root $apkRel
 if (-not (Test-Path $apk)) { throw "APK not found at $($apk)" }
 
-adb connect "$($TvIp):5555" | Write-Information -InformationAction Continue
+$device = "$($TvIp):5555"
+& $adbCmd connect $device | Write-Information -InformationAction Continue
 if ($LASTEXITCODE -ne 0) { throw 'ADB connection failed' }
 Write-Information "If the TV shows 'Allow USB debugging?', choose Always allow, then press Enter here." -InformationAction Continue
-adb -s "$($TvIp):5555" wait-for-device
+& $adbCmd -s $device wait-for-device
 if ($LASTEXITCODE -ne 0) { throw 'Waiting for the TV failed' }
-adb -s "$($TvIp):5555" install -r $apk
-if ($LASTEXITCODE -ne 0) { throw 'Install failed' }
-adb -s "$($TvIp):5555" shell monkey -p com.rerun.tv -c android.intent.category.LAUNCHER 1 | Out-Null
+$installOut = & $adbCmd -s $device install -r $apk 2>&1 | Out-String
+$installExit = $LASTEXITCODE
+Write-Information $installOut.Trim() -InformationAction Continue
+if ($installExit -ne 0 -or $installOut -match 'INSTALL_FAILED_') {
+    if ($installOut -notmatch 'INSTALL_FAILED_UPDATE_INCOMPATIBLE') { throw 'Install failed' }
+    if (-not $ReinstallOnKeyMismatch) {
+        throw ('The TV has Rerun signed with a different key (for example debug vs. release). ' +
+            'Pass -DebugBuild to match a debug install and keep the Plex sign-in, or ' +
+            '-ReinstallOnKeyMismatch to uninstall it first (you will sign in to Plex again).')
+    }
+    Write-Information 'Signing key changed; uninstalling the old app and installing again.' -InformationAction Continue
+    & $adbCmd -s $device uninstall com.rerun.tv | Out-Null
+    & $adbCmd -s $device install $apk
+    if ($LASTEXITCODE -ne 0) { throw 'Reinstall failed' }
+}
+& $adbCmd -s $device shell monkey -p com.rerun.tv -c android.intent.category.LAUNCHER 1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'Starting Rerun failed' }
 Write-Information 'Rerun is installed and starting on the TV.' -InformationAction Continue

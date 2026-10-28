@@ -80,7 +80,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             )
         }
         val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
-        facets = withContext(Dispatchers.Default) { Facets.from(contents) }
+        facets = withContext(Dispatchers.Default) { Facets.from(contents, d.kind) }
         library = contents
         draft = d
         numberText = d.number.toString()
@@ -109,7 +109,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Field("Name", d.name, Modifier.width(520.dp).focusRequester(first)) { draft = d.copy(name = it) }
+                    Field("Name", d.name, Modifier.width(520.dp).focusRequester(first)) { draft = d.copy(name = it, userRenamed = true) }
                     Field("Number", numberText, Modifier.width(160.dp), numeric = true) { t ->
                         numberText = t.filter(Char::isDigit).take(4)
                         numberText.toIntOrNull()?.let { draft = d.copy(number = it) }
@@ -119,13 +119,16 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             }
             item {
                 Section("Plays") {
-                    chipRow(listOf("Movies + shows", "Movies only", "Shows only")) { label ->
-                        val kinds = when (label) {
-                            "Movies only" -> setOf(MediaKind.MOVIE)
-                            "Shows only" -> setOf(MediaKind.EPISODE)
-                            else -> setOf(MediaKind.MOVIE, MediaKind.EPISODE)
+                    // Music stations play tracks; movie/show choices would empty their pool.
+                    if (d.kind != ChannelKind.MUSIC) {
+                        chipRow(listOf("Movies + shows", "Movies only", "Shows only")) { label ->
+                            val kinds = when (label) {
+                                "Movies only" -> setOf(MediaKind.MOVIE)
+                                "Shows only" -> setOf(MediaKind.EPISODE)
+                                else -> setOf(MediaKind.MOVIE, MediaKind.EPISODE)
+                            }
+                            TvButton(label, { update(d.rules.copy(kinds = kinds)) }, selected = d.rules.kinds == kinds)
                         }
-                        TvButton(label, { update(d.rules.copy(kinds = kinds)) }, selected = d.rules.kinds == kinds)
                     }
                     chipRow(PlayOrder.entries.toList()) { o ->
                         val label = when (o) {
@@ -158,7 +161,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                     }
                 }
             }
-            item {
+            if (d.kind != ChannelKind.MUSIC) item {
                 Section("Networks") {
                     chipRow(f.networks) { id ->
                         val name = Catalog.networks.firstOrNull { it.id == id }?.name ?: id
@@ -168,7 +171,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             }
             item { Section("Genres") { chipRow(f.genres) { g -> TvButton(g, { update(d.rules.copy(genres = d.rules.genres.toggle(g))) }, selected = g in d.rules.genres) } } }
             item { Section("Leave out genres") { chipRow(f.genres) { g -> TvButton(g, { update(d.rules.copy(excludeGenres = d.rules.excludeGenres.toggle(g))) }, selected = g in d.rules.excludeGenres) } } }
-            item { Section("Shows") { chipRow(f.shows) { s -> TvButton(s, { update(d.rules.copy(titles = d.rules.titles.toggle(s))) }, selected = s in d.rules.titles) } } }
+            if (d.kind != ChannelKind.MUSIC) item { Section("Shows") { chipRow(f.shows) { s -> TvButton(s, { update(d.rules.copy(titles = d.rules.titles.toggle(s))) }, selected = s in d.rules.titles) } } }
             if (f.collections.isNotEmpty()) item {
                 Section("Collections") { chipRow(f.collections) { c -> TvButton(c, { update(d.rules.copy(collections = d.rules.collections.toggle(c))) }, selected = c in d.rules.collections) } }
             }

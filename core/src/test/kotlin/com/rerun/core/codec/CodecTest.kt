@@ -66,4 +66,11 @@ class CodecTest {
         assertEquals(s, SetCodec.decode(SetCodec.encode(s)))
         assertEquals(emptySet(), SetCodec.decode(""))
     }
+
+    @Test
+    fun userRenamedRoundTripsAndDefaultsToFalse() {
+        val def = ChannelDef("disney", 101, "Disney Channel", ChannelKind.THEME, Rules(), userRenamed = true)
+        assertEquals(def, ChannelCodec.decode(ChannelCodec.encode(def)))
+        assertEquals(false, ChannelCodec.decode(ChannelCodec.encode(def.copy(userRenamed = false))).userRenamed)
+    }
 }

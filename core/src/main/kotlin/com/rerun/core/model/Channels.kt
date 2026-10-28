@@ -127,4 +127,5 @@ data class ChannelDef(
     val hidden: Boolean = false,
     val movieEveryMs: Long = 6 * 3_600_000L,
     val minimumContentHours: Int? = null,
+    val userRenamed: Boolean = false,
 )

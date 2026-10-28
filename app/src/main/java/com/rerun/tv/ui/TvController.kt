@@ -411,10 +411,15 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private fun step(dir: Int) {
         val list = channels.value
         if (list.isEmpty()) return
-        val i = list.indexOfFirst { it.id == currentId }
+        val anchor = effectiveChannelId()
+        val i = list.indexOfFirst { it.id == anchor }
         val next = if (i < 0) list.first() else list[Math.floorMod(i + dir, list.size)]
         tuneTo(next.id)
     }
+
+    /** The channel the viewer is on; the hidden start-over channel counts as the one it came from. */
+    fun effectiveChannelId(): String? =
+        if (currentId == Lineup.RESTART_ID) previousId ?: currentId else currentId
 
     fun lastChannel() { previousId?.let { tuneTo(it) } }
 

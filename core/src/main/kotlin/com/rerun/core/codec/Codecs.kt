@@ -53,6 +53,7 @@ object ChannelCodec {
             }
         })
         put("kidsSafe", def.kidsSafe); put("hidden", def.hidden); put("movieEveryMs", def.movieEveryMs)
+        if (def.userRenamed) put("userRenamed", true)
         def.minimumContentHours?.let { put("minimumContentHours", it) }
     }.toString()
 
@@ -77,6 +78,7 @@ object ChannelCodec {
             kidsSafe = o["kidsSafe"]?.jsonPrimitive?.boolean ?: false,
             hidden = o["hidden"]?.jsonPrimitive?.boolean ?: false,
             movieEveryMs = o["movieEveryMs"]?.jsonPrimitive?.long ?: 6 * 3_600_000L,
+            userRenamed = o["userRenamed"]?.jsonPrimitive?.boolean ?: false,
             minimumContentHours = o["minimumContentHours"]?.jsonPrimitive?.int,
         )
     }
