@@ -2,6 +2,7 @@ package com.rerun.tv.ui.player
 
 import androidx.compose.foundation.Canvas
 import com.rerun.tv.ui.common.ChannelIcon
+import com.rerun.tv.ui.common.ChannelWordmark
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -104,12 +105,12 @@ fun upNextTiming(startMs: Long, nowMs: Long): String {
     return "${clockTime(startMs)}  ·  $until"
 }
 
-/** Channel icon with a small gray number beneath it in the top-right corner. */
+/** Channel wordmark with a small gray number beneath it in the top-right corner. */
 @Composable
 fun ChannelOsd(channel: ChannelRow?, modifier: Modifier = Modifier) {
     if (channel == null) return
     Column(modifier.padding(top = 36.dp, end = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        ChannelIcon(channel.id, size = 96.dp)
+        ChannelWordmark(channel.id, channel.name, Modifier.width(180.dp).height(122.dp))
         RetroText(channel.number.toString(), style = Retro.ChannelNumber)
     }
 }
