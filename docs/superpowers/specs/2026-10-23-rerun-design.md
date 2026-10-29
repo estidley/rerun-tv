@@ -113,6 +113,7 @@ This section describes shipped behavior. An approved replacement (local quarter-
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.
 - Each guide opening selects the current station and wall-clock program after loading; subsequent browsing is not reset by schedule reloads.
+- The upper-right channel badge appears on channel changes or explicit program info, not on successive commercial or program transitions within the same channel.
 - Guide data is bounded to nearby rows and a nine-hour range around the three-hour view; only visible cells are composed. Horizontal movement within that range uses cached blocks and metadata. Revisions, clock jumps, retries and ten-minute top-ups refresh the cache, and distant rows/metadata are evicted.
 
 ### Opt-in shared-code pilot

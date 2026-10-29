@@ -139,6 +139,9 @@ While the banner is up, touch buttons cover the remote's hold actions: Guide, CH
 
 `tools/commercials/fetch_archive_item.py` downloads every video in an Internet Archive item and queues each one for a local upscaler. Upscaled clips go into a Plex library named **Commercials**. Choose that library as the ad source during setup or in Settings. Rerun plays clips that fit between shows, seeking to the current ad position when you tune into a break. Clip choices are stable for a given channel, break, and catalog; consecutive repeats are avoided when another clip fits. Ads never appear as guide entries: each program's displayed time includes its following break, ending when the next program starts. Disabled ads, empty catalogs, and remaining gaps too short for a clip show an "Up Next" card. Times with no schedule say Off Air.
 
+Commercial transitions do not redisplay the upper-right channel name/number; changing
+channels or opening the info banner still shows it.
+
 Vintage commercials are generally still under copyright. Keep downloaded copies for personal viewing, and never commit media to this repository.
 
 ## Music playback troubleshooting
