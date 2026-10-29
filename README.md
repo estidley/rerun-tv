@@ -181,9 +181,66 @@ Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design refe
 Windows runners execute the Gradle checks above using JDK 21 and Android platform 37.
 A parallel job runs PSScriptAnalyzer (errors fail; warnings remain visible) and the isolated
 keystore property-encoding regression. The final `CI` check requires both jobs to pass.
+CI also validates Android versions against release tags and the PR base: unchanged versions
+are allowed for feature PRs; a bump must increase both `versionName` and `versionCode`.
+Pushing a `v*` tag runs CI and requires the tag to match the Android version. A failed check
+does not delete a tag or prevent someone from manually publishing; check CI before publishing.
 Test/lint reports and successful Android verification debug APKs are available as workflow artifacts for 14 days.
 Debug APKs use debug signing and cannot update installations signed with your private release key.
 CI does not require release credentials or replace live TV/Plex testing.
+
+### Preparing a release
+
+Run **Actions > Prepare release > Run workflow** on `main`, choosing patch, minor or major.
+It opens a PR changing only the Android version and explicitly dispatches CI for that branch
+(PRs made with `GITHUB_TOKEN` do not automatically trigger PR workflows). Repository
+**Settings > Actions > General > Allow GitHub Actions to create and approve pull requests**
+must permit PR creation; no personal access token or release-signing credentials are needed.
+The workflow never force-pushes, merges, signs, tags or publishes. An existing branch for the
+same version causes a visible failure rather than overwriting work.
+
+Review the PR and its CI result, merge it, then build/sign from the merged commit and publish
+manually using the existing release process. The workflow's PR is a version preparation,
+not evidence that a release has shipped. Feature merges after a tag may legitimately retain
+the last version until the next release-preparation PR.
+
+### Shared scheduling pilot
+
+Settings > Shared scheduling lets you generate, copy, enter or disable a **24-symbol code**.
+Codes use a larger monospace font; generated codes use digit 0, not letter O.
+Choose Join code to open a focused entry form, enter or paste the code, then Confirm join.
+Generation is a separate action lower on the page.
+Confirmation actions are vertically spaced for remotes. After confirming, the entered
+code and refresh status remain visible while joining; the code is not active until saved.
+Horizontal guide browsing reads booked schedules rather than rebuilding unchanged channels.
+The guide preloads three hours before and after the visible window for nearby rows,
+evicting distant rows and metadata as you browse. Shared input fingerprints are cached
+across joining, status reads and top-ups, and invalidated by library or programming changes.
+Enter the same code on another device signed into the same Plex server. Different Plex users
+can participate when they have matching video access. The code needs no hosted service and
+contains no Plex credentials. Clipboard paste supports hyphenated, case-insensitive codes;
+QR and platform share links are not implemented.
+
+The opt-in pilot covers predefined video channels configured at **100-199**, not custom
+channels. Edited or unsupported programming rules (including stock time-block channels)
+stay on ordinary local scheduling. The settings page lists participating channels and
+manually comparable input hints; it cannot automatically verify another TV's catalog.
+Refresh your libraries so both devices use matching content, durations and channel settings.
+
+Shared programs use fixed **3-hour UTC windows**, one show per TV window, with quarter-hour
+episode starts and ordered continuation. Each eligible show gets a window per shuffled round.
+Mixed channels alternate TV/movie windows; if one type is absent, use the other. Movies get
+one window each. Episodes over 3 hours and movies at or above 3:02:00 are excluded; movies
+between 3:00:00 and 3:02:00 stop at the 3-hour boundary, potentially omitting scenes or credits.
+The settings page explains these limits.
+
+Music, Buy Me Maybe and start-over remain independent. Commercials are randomly booked and
+saved locally; different ads or disabled ads do not move shared program starts. Existing
+programs finish safely before the displayed UTC cutover. Catalog changes can shift episode
+positions or repeat an episode; equal current inputs, rather than historical airings, define
+agreement. A new device generates current programming directly instead of replaying years.
+Two-device playback and Fire TV input/performance still require live validation.
+See the [design](docs/superpowers/specs/2026-10-26-shared-schedules-design.md) for precise limits.
 
 HDHomeRun/live TV, TMDb enrichment, automatic commercial splitting, ad content/age filtering, and an idle timeout are not implemented. Review all clips in your chosen ad library yourself; Rerun does not screen ads for children. No device CPU/RAM/frame-rate gains or live Plex loudness measurements are claimed by the JVM benchmarks.
 

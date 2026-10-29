@@ -60,6 +60,7 @@ class SettingsScreenTest {
         `when`(app.settings).thenReturn(settings)
         `when`(app.sync).thenReturn(sync)
         val schedule = mock(ScheduleRepo::class.java)
+        `when`(schedule.sharedRefreshRequests).thenReturn(kotlinx.coroutines.flow.MutableSharedFlow())
         `when`(app.schedule).thenReturn(schedule)
         `when`(schedule.activeChannels()).thenReturn(flowOf(emptyList()))
         `when`(schedule.active()).thenReturn(emptyList())
@@ -138,7 +139,7 @@ class SettingsScreenTest {
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
             "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic", "Size: Medium", "Color: White",
-            "Music", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
+            "Music", "Shared scheduling pilot", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
             "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )
         for ((index, label) in labels.withIndex()) {
@@ -172,6 +173,13 @@ class SettingsScreenTest {
         compose.onNodeWithText("Normalize loudness").performScrollTo().performClick()
         verify(settings).setFlag(Settings.NORMALIZE_LOUDNESS, true)
         verify(controller).setNormalizeLoudness(true)
+    }
+
+    @Test
+    fun sharedPilotMatchesAdjacentMusicButtonHeight() {
+        val music = compose.onNodeWithText("Music").fetchSemanticsNode().boundsInRoot
+        val shared = compose.onNodeWithText("Shared scheduling pilot").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertEquals(music.height, shared.height, 0.1f)
     }
 
     @Test

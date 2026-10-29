@@ -53,6 +53,23 @@ class LibrarySettingsTest {
     }
 
     @Test
+    fun sharedRecipeIsConnectionScopedWhilePresentationPreferencesSurvive() = runBlocking {
+        settings.setServerId("server-a")
+        settings.setCrtLevel("OFF")
+        db.settings().put(SettingRow(Settings.SHARED_CODE, "local-test-recipe"))
+        db.settings().put(SettingRow("${Settings.SHARED_PREFIX}break:tbs:0:1", "[]"))
+        settings.setServerId("server-a")
+        assertEquals("local-test-recipe", db.settings().get(Settings.SHARED_CODE))
+        settings.setServerId("server-b")
+        assertTrue(db.settings().withPrefix(Settings.SHARED_PREFIX).isEmpty())
+        assertEquals("OFF", settings.crtLevel().first())
+        db.settings().put(SettingRow(Settings.SHARED_CODE, "local-test-recipe"))
+        settings.signOut()
+        assertTrue(db.settings().withPrefix(Settings.SHARED_PREFIX).isEmpty())
+        assertEquals("OFF", settings.crtLevel().first())
+    }
+
+    @Test
     fun emptySelectionCannotBeSaved() = runBlocking {
         settings.setSelectedLibraries(setOf("1"))
         try {

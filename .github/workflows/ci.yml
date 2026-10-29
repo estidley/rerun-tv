@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -47,6 +48,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
+
+      - name: Validate Android version
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          .\scripts\check-version.ps1 -BaseRef $env:PR_BASE -TagName $env:RELEASE_TAG
 
       - name: Install Android platform
         run: |
@@ -151,6 +159,11 @@ jobs:
         run: |
           .\scripts\test-keystore.ps1
           if (-not $?) { throw 'Keystore property encoding checks failed' }
+
+      - name: Check version helpers
+        if: ${{ !cancelled() }}
+        run: |
+          .\scripts\test-version.ps1
 
       - name: Upload PowerShell report
         if: ${{ !cancelled() }}

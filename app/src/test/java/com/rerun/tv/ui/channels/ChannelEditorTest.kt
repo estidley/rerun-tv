@@ -33,6 +33,7 @@ class ChannelEditorTest {
     fun namesAndNumbersDoNotRescanTheLibraryButRulesUpdatePoolHours() = runBlocking<Unit> {
         val app = mock(RerunApp::class.java)
         val schedule = mock(ScheduleRepo::class.java)
+        `when`(schedule.sharedRefreshRequests).thenReturn(kotlinx.coroutines.flow.MutableSharedFlow())
         `when`(app.schedule).thenReturn(schedule)
         val scans = AtomicInteger()
         val items = PlexParse.movies(
