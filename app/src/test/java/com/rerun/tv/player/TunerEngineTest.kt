@@ -66,6 +66,9 @@ class TunerEngineTest {
         player = mock(ExoPlayer::class.java)
         repo = mock(ScheduleRepo::class.java)
         `when`(repo.guideRevision).thenReturn(revision)
+        `when`(repo.isSharedFiller(any(ScheduleEntry::class.java)
+            ?: ScheduleEntry("test", 0, 1, EntryKind.FILLER, null))).thenReturn(false)
+        `when`(repo.sharedTiming(anyString(), anyLong())).thenReturn(false)
         settings = mock(Settings::class.java)
         api = mock(PlexApi::class.java)
         `when`(player.trackSelectionParameters).thenReturn(TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT)
@@ -110,6 +113,70 @@ class TunerEngineTest {
         await { sources.size == 2 }
         verify(player).seekTo(60_000)
         verify(player, never()).setVolume(1f)
+    }
+
+    @Test
+    fun truncatedMovieStopsAtScheduledBoundaryRatherThanSourceEnd() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 10_900_000L)
+        prepare("east", item)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 10_000, EntryKind.PROGRAM, item.key),
+            ScheduleEntry("east", now + 10_000, now + 10_810_000, EntryKind.PROGRAM, item.key),
+        ))
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        clearInvocations(player)
+        wallTime = now + 10_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
+        verify(player, atLeastOnce()).stop()
+        await { sources.size == 2 }
+        assertEquals(now + 10_000, engine.state.value.located!!.entry.startMs)
+        assertFalse(engine.state.value.fadingOut)
+    }
+
+    @Test
+    fun sharedTimingNeverStartsTheNextProgramDuringThePreviousProgramsLastSeconds() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare("east", item)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.sharedTiming("east", now)).thenReturn(true)
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 3_000, EntryKind.PROGRAM, item.key),
+            ScheduleEntry("east", now + 3_000, now + 600_000, EntryKind.PROGRAM, item.key),
+        ))
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals(now - 60_000, engine.state.value.located!!.entry.startMs)
+        verify(player).seekTo(60_000)
+    }
+
+    @Test
+    fun missingBookedLocalAdWaitsOnlyItsSlotThenRetriesWithoutUsingCommonPlanner() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 15_000)
+        prepare("east", item)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        val entry = ScheduleEntry("east", now, now + 60_000, EntryKind.FILLER, null)
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(entry))
+        `when`(repo.sharedTiming(anyString(), anyLong())).thenReturn(true)
+        `when`(repo.isSharedFiller(entry)).thenReturn(false)
+        `when`(repo.sharedAd(entry, now)).thenReturn(null)
+        `when`(repo.sharedAdNextChange(entry, now)).thenReturn(now + 15_000)
+        `when`(repo.sharedAd(entry, now + 15_000)).thenReturn(
+            com.rerun.core.schedule.AdSlot(item, now + 15_000, now + 30_000),
+        )
+        engine.tune("east")
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        assertTrue(sources.isEmpty())
+        wallTime = now + 15_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(15))
+        await { sources.size == 1 }
+        verify(repo, never()).adCatalog()
+        assertEquals(item, engine.state.value.item)
     }
 
     @Test

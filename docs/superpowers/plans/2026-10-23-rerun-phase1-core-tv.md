@@ -71,6 +71,12 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 
 ## Physical TV and live Plex acceptance still open
 
+- [ ] Shared-code pilot: two separately signed-in devices on the same Plex server
+  produce equal main-program IDs/times with equal inputs; cold join using an old
+  code, UTC cutover, changed episodes, independent ads/music and long-film cutoff
+  behave as documented. Verify remote code input, process-death ad reuse and TV
+  cold-start costs. This is not established by JVM checks.
+
 - [ ] Inspect Marvel/DC matching on the real Plex library, annotate unrecognized titles with Marvel/DC labels, and verify MCU seasons, legacy-universe transitions, missing files and restart continuation.
 - [ ] Approve the five SVG samples before generating/integrating the full icon library; check TV-distance legibility in all guide themes.
 

@@ -98,6 +98,7 @@ class GuideScreenTest {
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         `when`(settings.isOn(anyString(), anyBoolean())).thenReturn(false)
         schedule = mock(ScheduleRepo::class.java)
+        `when`(schedule.sharedRefreshRequests).thenReturn(kotlinx.coroutines.flow.MutableSharedFlow())
         `when`(schedule.guideRevision).thenReturn(revision)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(schedule)
@@ -117,6 +118,69 @@ class GuideScreenTest {
     @After
     fun tearDown() {
         controller.dispose()
+    }
+
+    @Test
+    fun horizontalWindowChangesReusePrefetchedEntriesWithoutEnsuringAgain() = runBlocking<Unit> {
+        channels.value = listOf(channels.value.first())
+        val start = com.rerun.core.schedule.gridFloor(baseNow)
+        val slot = com.rerun.core.schedule.GRID_MS
+        val movie = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Program","duration":1800000,
+                "Media":[{"container":"mp4","Part":[{"key":"/library/parts/1/file.mp4"}]}]}]}}""",
+        ).single()
+        `when`(schedule.item(movie.key)).thenReturn(movie)
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
+            "test:0" to (0 until 20).map {
+                ScheduleEntry("test:0", start + it * slot, start + (it + 1) * slot, EntryKind.PROGRAM, movie.key)
+            },
+        ))
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
+        compose.waitForIdle()
+        repeat(7) {
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            compose.waitForIdle()
+        }
+        verify(schedule, times(1)).entriesFor(anyCollection(), anyLong(), anyLong())
+        verify(schedule).entriesFor(listOf("test:0"), start - 6 * slot, start + 12 * slot)
+        verify(schedule, times(1)).item(movie.key)
+        verify(schedule, times(1)).ensure(anyCollection(), anyLong())
+        compose.onNode(hasAnyAncestor(hasTestTag("guide-row:test:0")) and isSelected()).assertExists()
+        repeat(7) {
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+            compose.waitForIdle()
+        }
+        verify(schedule, times(1)).entriesFor(anyCollection(), anyLong(), anyLong())
+        repeat(12) {
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            compose.waitForIdle()
+        }
+        verify(schedule, times(2)).entriesFor(anyCollection(), anyLong(), anyLong())
+        verify(schedule, times(1)).ensure(anyCollection(), anyLong())
+        compose.onNode(hasAnyAncestor(hasTestTag("guide-row:test:0")) and isSelected()).assertExists()
+        `when`(schedule.item(movie.key)).thenReturn(movie.copy(title = "Refreshed program"))
+        compose.runOnIdle { revision.value++ }
+        compose.waitForIdle()
+        verify(schedule, times(3)).entriesFor(anyCollection(), anyLong(), anyLong())
+        verify(schedule, times(2)).ensure(anyCollection(), anyLong())
+        verify(schedule, times(3)).item(movie.key)
+        val ranges = mockingDetails(schedule).invocations.filter { it.method.name == "entriesFor" }
+        assertTrue(ranges.all { (it.arguments[2] as Long) - (it.arguments[1] as Long) == 18 * slot })
+        assertTrue(compose.onAllNodesWithText("Refreshed program").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun stationaryGuideStillRefreshesItsPrefetchedDataAfterTenMinutes() = runBlocking<Unit> {
+        var testNow = baseNow
+        compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
+        compose.waitForIdle()
+        verify(schedule, times(1)).ensure(anyCollection(), anyLong())
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { testNow += 10 * 60_000L }
+        compose.mainClock.advanceTimeBy(30_100)
+        compose.waitForIdle()
+        verify(schedule, times(2)).ensure(anyCollection(), anyLong())
+        verify(schedule, times(2)).entriesFor(anyCollection(), anyLong(), anyLong())
     }
 
     @Test

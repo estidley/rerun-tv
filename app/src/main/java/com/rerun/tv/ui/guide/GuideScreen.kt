@@ -95,7 +95,8 @@ private val TIME_HEADER_H = 36.dp
 /** Bookkeeping for what the guide has already loaded; plain fields so updating them never recomposes. */
 private class LoadMarks {
     var dataKey: Any? = null
-    var window = 0L
+    var fromMs = 0L
+    var toMs = 0L
     var lastEnsureMs = 0L
     var ids: Set<String> = emptySet()
 }
@@ -154,6 +155,13 @@ fun GuideScreen(
     var headerIndex by rememberSaveable { mutableIntStateOf(0) }
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
+    val visibleBlocks = remember(blocks, windowStart) {
+        blocks.mapValues { (_, entries) ->
+            entries.filter { it.endMs > windowStart && it.startMs < windowStart + WINDOW_MS }.map {
+                it.copy(startMs = maxOf(it.startMs, windowStart), endMs = minOf(it.endMs, windowStart + WINDOW_MS))
+            }
+        }
+    }
     // Rows near the viewport; only these get schedules topped up and blocks built.
     var want by remember { mutableStateOf(IntRange.EMPTY) }
     var clockEpoch by remember { mutableIntStateOf(0) }
@@ -196,50 +204,67 @@ fun GuideScreen(
             selectCurrentOnOpen = false
         }
     }
-    LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading, want, clockEpoch) {
+    LaunchedEffect(windowStart, rows, revision, attempt, update.busy, startup.loading, want, clockEpoch, now) {
         if (update.busy || startup.loading) return@LaunchedEffect
         if (rows.isEmpty()) { loading = false; return@LaunchedEffect }
         // Stay in the loading state until the layout reports which rows are on screen.
         if (want.isEmpty()) return@LaunchedEffect
         val ids = rows.slice(want.first..minOf(want.last, rows.lastIndex)).map { it.id }
+        val loadNow = clock()
         val dataKey = listOf(rows, revision, attempt, clockEpoch)
         val dataChanged = marks.dataKey != dataKey
-        val reset = dataChanged || marks.window != windowStart
+        // Refill before reaching the cached edge, leaving the current view usable during I/O.
+        val rangeChanged = dataChanged || windowStart < marks.fromMs + GRID_MS ||
+            windowStart + WINDOW_MS > marks.toMs - GRID_MS
         // Keep extending schedules for nearby untuned channels while the guide stays open.
-        val topUpDue = dataChanged || now - marks.lastEnsureMs >= ENSURE_INTERVAL_MS
+        val topUpDue = dataChanged || loadNow - marks.lastEnsureMs >= ENSURE_INTERVAL_MS
+        val reset = rangeChanged || topUpDue
         val missing = if (reset) ids else ids.filter { it !in marks.ids }
+        val unensured = if (dataChanged) ids else ids.filter { it !in marks.ids }
         val toBuild = if (topUpDue) ids else missing
-        if (toBuild.isEmpty()) return@LaunchedEffect
+        if (toBuild.isEmpty()) {
+            if (marks.ids != ids.toSet()) {
+                blocks = blocks.filterKeys { it in ids }
+                val keys = blocks.values.flatten().mapNotNull { it.itemKey }.toSet()
+                items = items.filterKeys { it in keys }
+                marks.ids = ids.toSet()
+            }
+            return@LaunchedEffect
+        }
+        val fromMs = if (reset) windowStart - WINDOW_MS else marks.fromMs
+        val toMs = if (reset) windowStart + 2 * WINDOW_MS else marks.toMs
         if (dataChanged) loading = true
         loadError = null
-        now = clock()
         try {
             val (b, i) = withContext(Dispatchers.IO) {
-                if (topUpDue) schedule.ensure(ids, now) else schedule.ensure(missing, now)
-                val all = schedule.entriesFor(toBuild, windowStart, windowStart + WINDOW_MS)
+                if (topUpDue) schedule.ensure(ids, loadNow)
+                else if (unensured.isNotEmpty()) schedule.ensure(unensured, loadNow)
+                val all = schedule.entriesFor(toBuild, fromMs, toMs)
                 val byId = rows.associateBy { it.id }
                 val mapped = toBuild.associateWith { id ->
                     val row = byId.getValue(id)
                     val entries = all[id].orEmpty()
                     when {
                         id == Lineup.ADS_ID ->
-                            hourlyGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, row.name)
+                            hourlyGuideBlocks(entries, fromMs, toMs, row.name)
                         row.def.kind == ChannelKind.MUSIC -> {
                             val title = if (row.name.endsWith("Music", ignoreCase = true)) row.name else "${row.name} Music"
-                            hourlyGuideBlocks(entries, windowStart, windowStart + WINDOW_MS, title)
+                            hourlyGuideBlocks(entries, fromMs, toMs, title)
                         }
-                        else -> guideBlocks(entries, windowStart, windowStart + WINDOW_MS)
+                        else -> guideBlocks(entries, fromMs, toMs)
                     }
                 }
                 val keys = mapped.values.flatten().mapNotNull { it.itemKey }.toSet()
                 mapped to keys.mapNotNull { k -> schedule.item(k)?.let { k to it } }.toMap()
             }
-            blocks = if (reset) b else blocks + b
-            items = if (reset) i else items + i
-            marks.ids = if (reset) toBuild.toSet() else marks.ids + toBuild
+            blocks = (if (reset) b else blocks + b).filterKeys { it in ids }
+            val keys = blocks.values.flatten().mapNotNull { it.itemKey }.toSet()
+            items = (if (reset) i else items + i).filterKeys { it in keys }
+            marks.ids = ids.toSet()
             marks.dataKey = dataKey
-            marks.window = windowStart
-            if (topUpDue) marks.lastEnsureMs = now
+            marks.fromMs = fromMs
+            marks.toMs = toMs
+            if (topUpDue) marks.lastEnsureMs = loadNow
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -253,8 +278,8 @@ fun GuideScreen(
     BackHandler { controller.closeGuideWithBack() }
 
     val focusedChannel = rows.getOrNull(focusRow)
-    val focusedBlock = remember(blocks, focusedChannel?.id, focusTime) {
-        focusedChannel?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
+    val focusedBlock = remember(visibleBlocks, focusedChannel?.id, focusTime) {
+        focusedChannel?.let { ch -> visibleBlocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
     }
     val focusedItem = focusedBlock?.itemKey?.let { items[it] }
     val header = updating || rows.isEmpty() || focusRow < 0
@@ -299,7 +324,7 @@ fun GuideScreen(
         // Like the remote, Left/Right never move through time while the header is selected.
         if (updating || rows.isEmpty() || focusRow < 0) return
         repeat(abs(steps)) {
-            val block = rows.getOrNull(focusRow)?.let { ch -> blocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
+            val block = rows.getOrNull(focusRow)?.let { ch -> visibleBlocks[ch.id]?.firstOrNull { focusTime >= it.startMs && focusTime < it.endMs } }
             moveTime(steps > 0, block)
         }
     }
@@ -391,7 +416,7 @@ fun GuideScreen(
                             GuideRow(
                                 ch = ch,
                                 rowIndex = rowIndex,
-                                blocks = if (updating) emptyList() else blocks[ch.id].orEmpty(),
+                                blocks = if (updating) emptyList() else visibleBlocks[ch.id].orEmpty(),
                                 items = items,
                                 selectedTime = if (rowIndex == focusRow) focusTime else Long.MIN_VALUE,
                                 windowStart = windowStart,

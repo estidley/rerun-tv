@@ -194,6 +194,7 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
             Screen.Channels -> ChannelManager(controller)
             is Screen.Editor -> ChannelEditor(controller, s.channelId)
             Screen.Settings -> SettingsScreen(controller)
+            Screen.SharedPilot -> com.rerun.tv.ui.settings.SharedPilotScreen(controller)
             Screen.Libraries -> LibrarySettingsScreen(controller)
             Screen.AdLibrary -> com.rerun.tv.ui.settings.AdLibraryScreen(controller)
             Screen.SubtitleLanguage -> SubtitleLanguageScreen(controller)

@@ -24,6 +24,9 @@ GitHub Actions runs these explicit Gradle tasks on Windows with JDK 21 and Andro
 plus PSScriptAnalyzer 1.24.0 and the isolated `scripts/test-keystore.ps1` check. The aggregate
 `CI` status requires both verification jobs. Reports/debug APKs are retained for 14 days.
 Keep PR workflows read-only and secret-free; release signing is not part of CI.
+The manually dispatched Prepare release workflow is the exception: it may write a version-bump
+branch/PR and dispatch CI, never sign, tag, publish or merge. Feature PRs need no version bump;
+CI requires both Android version fields to increase together when changed and validates release tags.
 
 ## Behavioral invariants
 
@@ -36,6 +39,11 @@ Keep PR workflows read-only and secret-free; release signing is not part of CI.
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
 - Preserve explicit Room migrations and existing preferences; do not add destructive database fallback. Keep keystores, `keystore.properties`, and local SDK configuration out of version control.
 - Routine scheduling appends locked entries. Library inclusion changes intentionally invalidate schedules; channel edits preserve the currently airing entry and rebuild the future.
+- The opt-in shared-code pilot is an explicit exception: eligible stock video channels
+  configured at 100-199 use seekable UTC 3-hour windows, with safe future cutovers on
+  input changes. Custom/unsupported policies and music stay local. Shared breaks use
+  persisted device-local random ad bookings; never use ordinary deterministic ad
+  selection for them or let local ads move shared program boundaries.
 - Stock decade stations require 24 hours of episodes or 12 hours of music; keep qualification a single metadata aggregation pass, preserve edited stations, and honor the Music setting. Do not generate genre-by-decade combinations.
 - Apply `Lineup.minimumContentMs`/`isDormant` consistently on save and refresh, including renamed/generated stations. Only a persisted `minimumContentHours` override waives the normal minimum; empty pools never activate. Catalog identities and matching rules are documented in `docs/channel-lineup.md`.
 - Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception, on a hidden one-shot channel.

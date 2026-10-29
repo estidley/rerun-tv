@@ -25,7 +25,7 @@ class PlayerOverlaysTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun hiddenOverlaysDoNotPollAndRetuningRestartsTheOsdDeadline() {
+    fun hiddenOverlaysDoNotPollAndOnlyChannelChangesRestartTheOsdDeadline() {
         val channel = ChannelRow.of(ChannelDef("test", 401, "Test channel", ChannelKind.CUSTOM, Rules()), false, false)
         val state = mutableStateOf(TunerState(channel = channel, phase = Phase.PLAYING))
         compose.mainClock.autoAdvance = false
@@ -38,11 +38,26 @@ class PlayerOverlaysTest {
         compose.mainClock.advanceTimeBy(10_000)
         compose.waitForIdle()
         assertEquals(before, Recomposer.runningRecomposers.value.sumOf { it.changeCount })
-        compose.runOnIdle { state.value = state.value.copy(tuneId = 2) }
+        repeat(3) { index ->
+            compose.runOnIdle {
+                state.value = state.value.copy(tuneId = index + 1L, sameChannelTransition = true)
+            }
+            compose.mainClock.advanceTimeBy(500)
+            compose.waitForIdle()
+            compose.onNodeWithText("401").assertDoesNotExist()
+        }
+        compose.runOnIdle {
+            state.value = state.value.copy(
+                channel = ChannelRow.of(
+                    ChannelDef("other", 402, "Other channel", ChannelKind.CUSTOM, Rules()), false, false,
+                ),
+                tuneId = 4, sameChannelTransition = false,
+            )
+        }
         compose.mainClock.advanceTimeByFrame()
         compose.waitForIdle()
         compose.mainClock.advanceTimeBy(500)
-        compose.onNodeWithText("401").assertExists()
+        compose.onNodeWithText("402").assertExists()
     }
 
     @Test

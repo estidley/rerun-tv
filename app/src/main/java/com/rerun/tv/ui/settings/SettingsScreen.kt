@@ -66,7 +66,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
     val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
     val shownMusic = update.music ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 4, 1, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 4, 2, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -196,6 +196,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     selected = shownMusic,
                     sub = if (shownMusic) "on - Plex audio libraries" else "off - Plex audio libraries",
                 )
+                TvButton("Shared scheduling pilot", { controller.go(Screen.SharedPilot) },
+                    modifier = buttonFocus(6, 1), sub = "Share a schedule code")
             }
             BasicText(
                 "Music uses audio tracks from your included Plex music libraries, with a channel for each genre that has 4 hours. Include music libraries in Manage libraries. Subtitles stay off until you turn them on.",
