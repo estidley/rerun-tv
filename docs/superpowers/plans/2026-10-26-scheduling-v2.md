@@ -18,10 +18,11 @@ exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
   descriptions.
 - **Marvelous Timeline (decided):** same quarter-hour grid and ad fill as every channel, with
   strict order and no fillers (§1.6). The earlier fixed-2-ads rule is superseded.
-- **Follow-on, not part of these eight PRs:** [sharing-code schedules](../specs/2026-10-26-shared-schedules-design.md).
-  Preserve stable identities and explicit algorithm/state versions for this extension.
-  Different Plex users can participate with matching effective access. The current direction
-  is no-service seekable video blocks; commercials and music stay local.
+- **Implemented separately, not part of these eight PRs:** the opt-in
+  [sharing-code pilot](../specs/2026-10-26-shared-schedules-design.md).
+  Preserve its stable identities and explicit algorithm/state versions during the v2 rewrite.
+  Different Plex users can participate with matching effective access. It uses no-service
+  seekable video blocks; commercials and music stay local.
 
 ## Repository rules (from AGENTS.md and owner instructions)
 
@@ -33,7 +34,8 @@ exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
 - **Release flow** (only when asked):
   - Run the **Prepare release** workflow on `main` (patch/minor/major) and review its version-bump
     PR. It increments both values in `app/build.gradle.kts`; feature PRs need no bump.
-    From the current 1.0.1/code 3, a patch produces 1.0.2/code 4. Settings > About reads
+    The workflow derives the next version from `main`; a patch increments the patch component
+    and `versionCode` by one. Settings > About reads
     `BuildConfig.VERSION_NAME`, so no other file holds the version.
   - Run `gradlew assembleRelease bundleRelease`, signed by the local gitignored
     `rerun-release.jks` and `keystore.properties`. Never commit or print them.
