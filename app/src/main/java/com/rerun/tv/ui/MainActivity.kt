@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
 
     /** Remote-control routing while watching. Other screens use normal D-pad focus. */
     private fun handlePlayerKeyEvent(event: KeyEvent): Boolean {
+        if (controller.restartPrompt.value != null) return false
         if (controller.screen.value != Screen.Player) return false
         val code = event.keyCode
         val isOk = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
@@ -202,6 +203,7 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
             Screen.AudioTracks -> com.rerun.tv.ui.player.AudioTrackScreen(controller)
         }
         CrtOverlay(level)
+        com.rerun.tv.ui.player.RestartDialog(controller)
         if (fx.power) PowerTransition(on = !exiting, onOffDone = onPoweredOff)
         else if (exiting) androidx.compose.runtime.LaunchedEffect(Unit) { onPoweredOff() }
     } } } }

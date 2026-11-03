@@ -229,6 +229,86 @@ class TvControllerTest {
     }
 
     @Test
+    fun episodeStartOverWaitsForQueueChoiceBeforeCreatingTheStation() = runBlocking<Unit> {
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Episode","duration":1800000}]}}""",
+        ).single().copy(kind = com.rerun.core.model.MediaKind.EPISODE)
+        val entry = com.rerun.core.schedule.ScheduleEntry("east", 0, 1_800_000,
+            com.rerun.core.schedule.EntryKind.PROGRAM, item.key)
+        `when`(engine.state).thenReturn(MutableStateFlow(com.rerun.tv.player.TunerState(
+            channel = channel("east"), item = item, tuneId = 1,
+            located = com.rerun.core.schedule.Located(entry, 0, null),
+        )))
+        controller.tuneTo("east")
+        controller.startEpisodeOver()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.restartPrompt.value is RestartPrompt.Start)
+        verify(repo, never()).airFromStart(eq(item) ?: item, anyString(), anyBoolean())
+        controller.cancelRestartPrompt()
+        assertEquals("east", controller.currentChannelId())
+        controller.startEpisodeOver()
+        controller.confirmRestartStart(queueEpisodes = true)
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (controller.restartBusy.value && System.nanoTime() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        assertFalse(controller.restartBusy.value)
+        verify(repo).airFromStart(item, "east", true)
+        assertEquals(Lineup.RESTART_ID, controller.currentChannelId())
+    }
+
+    @Test
+    fun pendingRestartLeaveStaysHeldAcrossActivityStopAndResumeUntilViewerDecides() = runBlocking<Unit> {
+        `when`(settings.isSignedIn).thenReturn(true)
+        controller.tuneTo(Lineup.RESTART_ID, sound = false)
+        controller.tuneTo("other", sound = false)
+        controller.stop()
+        clearInvocations(engine)
+        controller.resume()
+        verify(engine, never()).tune(anyString())
+        assertTrue(controller.restartPrompt.value is RestartPrompt.Leave)
+        controller.cancelRestartPrompt()
+        verify(engine).continueRestart()
+        verify(engine).tune(Lineup.RESTART_ID)
+
+        controller.tuneTo("other", sound = false)
+        controller.stop()
+        clearInvocations(engine)
+        controller.resume()
+        verify(engine, never()).tune(anyString())
+        controller.confirmRestartLeave(remove = false)
+        verify(engine).pauseRestart()
+        verify(engine).tune("other")
+        assertEquals("other", controller.currentChannelId())
+    }
+
+    @Test
+    fun restartMenusDoNotPromptAndLeavingSupportsCancelRemoveAndSaveFailure() = runBlocking<Unit> {
+        controller.tuneTo(Lineup.RESTART_ID, sound = false)
+        controller.go(Screen.Guide)
+        controller.go(Screen.Settings)
+        assertEquals(null, controller.restartPrompt.value)
+        controller.tuneTo("other")
+        verify(engine).holdRestart()
+        controller.cancelRestartPrompt()
+        verify(engine).continueRestart()
+        assertEquals(Lineup.RESTART_ID, controller.currentChannelId())
+
+        controller.tuneTo("other")
+        doThrow(IllegalStateException("disk unavailable")).`when`(engine).pauseRestart()
+        controller.confirmRestartLeave(remove = false)
+        assertEquals(Lineup.RESTART_ID, controller.currentChannelId())
+        assertTrue(controller.restartError.value!!.contains("disk unavailable"))
+        verify(engine, never()).tune("other")
+        doAnswer { Unit }.`when`(engine).pauseRestart()
+        controller.confirmRestartLeave(remove = true)
+        verify(repo).removeRestartStation()
+        assertEquals("other", controller.currentChannelId())
+        assertEquals(null, controller.restartPrompt.value)
+    }
+
+    @Test
     fun startOverRejectsMovieClipsOnTheAdStationWithoutChangingPlayback() = runBlocking<Unit> {
         val item = com.rerun.core.plex.PlexParse.movies(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"ad","title":"Commercial","duration":30000}]}}""",
@@ -245,14 +325,13 @@ class TvControllerTest {
         controller.startEpisodeOver()
         shadowOf(Looper.getMainLooper()).idle()
         verify(engine).notify("Start over works while a show or movie is playing.")
-        verify(repo, never()).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
-        verify(engine, never()).armReturn(anyString())
+        verify(repo, never()).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, anyString(), anyBoolean())
         verify(engine, never()).tune(anyString())
         assertEquals(Lineup.ADS_ID, controller.currentChannelId())
     }
 
     @Test
-    fun startOverForAnUnchangedMovieTuneSwitchesToTheHiddenChannel() = runBlocking<Unit> {
+    fun startOverForAnUnchangedMovieTuneSwitchesToTheSavedStation() = runBlocking<Unit> {
         val item = com.rerun.core.plex.PlexParse.movies(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
         ).single()
@@ -264,8 +343,14 @@ class TvControllerTest {
         controller.tuneTo("east")
         controller.startEpisodeOver()
         shadowOf(Looper.getMainLooper()).idle()
-        verify(engine).armReturn("east")
+        val deadline = System.nanoTime() + 5_000_000_000L
+        while (controller.restartBusy.value && System.nanoTime() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        assertFalse(controller.restartBusy.value)
         verify(engine).tune(Lineup.RESTART_ID)
+        verify(repo).airFromStart(item, "east", false)
     }
 
     @Test
@@ -284,16 +369,14 @@ class TvControllerTest {
             @Suppress("UNCHECKED_CAST")
             val continuation = it.arguments.last() as Continuation<Unit>
             (suspend { finish.await() }).startCoroutineUninterceptedOrReturn(continuation)
-        }.`when`(repo).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
+        }.`when`(repo).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, anyString(), anyBoolean())
         controller.tuneTo("east")
         controller.startEpisodeOver()
-        verify(repo).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, org.mockito.ArgumentMatchers.anyLong())
-        controller.tuneTo("other")
-        controller.tuneTo("east")
+        verify(repo, timeout(2_000)).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, anyString(), anyBoolean())
+        controller.stop()
         state.value = state.value.copy(tuneId = 3)
         finish.complete(Unit)
         shadowOf(Looper.getMainLooper()).idle()
-        verify(engine, never()).armReturn(anyString())
         verify(engine, never()).tune(Lineup.RESTART_ID)
         assertEquals("east", controller.currentChannelId())
     }
@@ -305,7 +388,7 @@ class TvControllerTest {
         controller.startEpisodeOver()
         shadowOf(Looper.getMainLooper()).idle()
         verify(engine, timeout(2_000)).notify(anyString())
-        verify(engine, never()).armReturn(anyString())
+        assertEquals(null, controller.restartPrompt.value)
     }
 
     @Test
@@ -364,10 +447,16 @@ class TvControllerTest {
     }
 
     @Test
-    fun leavingRestartNeverAddsTheHiddenChannelToLastChannelHistory() {
+    fun leavingRestartPromptsAndPausePreservesNormalLastChannelHistory() = runBlocking<Unit> {
         controller.tuneTo("east", sound = false)
         controller.tuneTo(Lineup.RESTART_ID, sound = false)
         controller.tuneTo("other", sound = false)
+        assertEquals(Lineup.RESTART_ID, controller.currentChannelId())
+        assertTrue(controller.restartPrompt.value is RestartPrompt.Leave)
+        controller.confirmRestartLeave(remove = false)
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(engine).pauseRestart()
+        verify(repo, never()).removeRestartStation()
         controller.lastChannel()
         assertEquals("east", controller.currentChannelId())
     }

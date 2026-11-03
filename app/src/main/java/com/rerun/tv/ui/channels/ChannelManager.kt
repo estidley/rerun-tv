@@ -44,7 +44,12 @@ fun ChannelManager(controller: TvController) {
             }
             item { BasicText("ON THE AIR (${active.size})", style = Retro.GuideNumber) }
             items(active, key = { it.id }) { ch ->
-                TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = hours(ch.poolMs), leading = { ChannelIcon(ch.id, size = 40.dp) })
+                TvButton("${ch.number}   ${ch.name}", onClick = {
+                    if (ch.id == Lineup.RESTART_ID) {
+                        controller.go(Screen.Player)
+                        controller.tuneTo(ch.id)
+                    } else controller.go(Screen.Editor(ch.id))
+                }, modifier = Modifier.fillMaxWidth(), sub = if (ch.id == Lineup.RESTART_ID) "Resume saved program" else hours(ch.poolMs), leading = { ChannelIcon(ch.id, size = 40.dp) })
             }
             if (hidden.isNotEmpty()) {
                 item { BasicText("HIDDEN (${hidden.size})", style = Retro.GuideNumber) }

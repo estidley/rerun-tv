@@ -19,6 +19,7 @@ import com.rerun.core.schedule.SharedScheduleCode
 import com.rerun.core.schedule.SharedPilotScheduler
 import com.rerun.core.schedule.AdSlot
 import org.json.JSONArray
+import java.util.UUID
 import java.security.SecureRandom
 import kotlin.random.Random
 import kotlinx.coroutines.flow.Flow
@@ -341,7 +342,6 @@ class ScheduleRepo internal constructor(
                         if (!SharedPilotScheduler.participates(row.def)) db.entries().deleteChannel(row.id)
                     }
                     db.states().clear()
-                    db.channels().delete(Lineup.RESTART_ID)
                 }
                 db.settings().put(SettingRow(Settings.SELECTED_LIBRARIES, encoded))
             }
@@ -365,6 +365,11 @@ class ScheduleRepo internal constructor(
                 }
             }
             val contents = items ?: db.items().all().map { it.toItem() }
+            val restart = restartSession()
+            val available = contents.mapTo(HashSet()) { it.key }
+            if (restart != null && restart.keys.drop(restart.index).any { it !in available }) {
+                removeRestart()
+            }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
             val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
             val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs)
@@ -423,23 +428,83 @@ class ScheduleRepo internal constructor(
         }
     }
 
-    /** Plants one episode on the hidden "From the Top" channel, starting now at 0:00. */
-    suspend fun airFromStart(item: MediaItem, nowMs: Long) = mutex.withLock {
+    suspend fun restartSession(): RestartSession? =
+        db.settings().get(RESTART_SESSION_KEY)?.let(RestartSession::decode)
+
+    /** A device-local queue; ordinary channels keep their locked wall-clock schedules. */
+    suspend fun airFromStart(item: MediaItem, returnChannel: String, queueEpisodes: Boolean) = mutex.withLock {
         db.withTransaction {
-            val def = ChannelDef(
-                id = Lineup.RESTART_ID,
-                number = Lineup.RESTART_NUMBER,
-                name = "From the Top",
-                kind = ChannelKind.CUSTOM,
-                rules = Rules(kinds = setOf(item.kind)),
-                hidden = true,
-            )
-            db.channels().upsert(ChannelRow.of(def, builtIn = true, dormant = false, poolMs = item.durationMs))
+            val library = lib().items
+            require(library.any { it.key == item.key }) { "This program is no longer in the library." }
+            val season = item.season
+            val episode = item.episode
+            val following = if (queueEpisodes && item.kind == MediaKind.EPISODE && item.showKey != null &&
+                season != null && episode != null) {
+                library.filter {
+                    val nextSeason = it.season
+                    val nextEpisode = it.episode
+                    it.kind == MediaKind.EPISODE && it.showKey == item.showKey && nextSeason != null && nextEpisode != null &&
+                        (nextSeason > season || (nextSeason == season && nextEpisode > episode))
+                }.sortedWith(compareBy<MediaItem> { it.season }.thenBy { it.episode }.thenBy { it.key })
+                    .distinctBy { it.season to it.episode }
+            } else emptyList()
+            val session = RestartSession(UUID.randomUUID().toString(), listOf(item.key) + following.map { it.key },
+                returnChannel = returnChannel)
+            db.settings().put(SettingRow(RESTART_SESSION_KEY, session.encode()))
+            updateRestartChannel(session, item)
             db.entries().deleteChannel(Lineup.RESTART_ID)
             db.states().delete(Lineup.RESTART_ID)
-            val end = nowMs + item.durationMs.coerceAtLeast(1L)
-            db.entries().insertAll(listOf(EntryRow.of(ScheduleEntry(Lineup.RESTART_ID, nowMs, end, EntryKind.PROGRAM, item.key))))
         }
+        _guideRevision.value++
+    }
+
+    private suspend fun updateRestartChannel(session: RestartSession, item: MediaItem) {
+        val used = db.channels().all().filterNot { it.id == Lineup.RESTART_ID }.map { it.number }.toSet()
+        var number = db.channels().byId(Lineup.RESTART_ID)?.number ?: Lineup.RESTART_NUMBER
+        while (number in used) number++
+        val def = ChannelDef(Lineup.RESTART_ID, number,
+            "From the Top${if (session.paused) " (Paused)" else ""}", ChannelKind.CUSTOM,
+            Rules(kinds = setOf(item.kind)))
+        db.channels().upsert(ChannelRow.of(def, true, false, item.durationMs))
+    }
+
+    suspend fun saveRestartProgress(id: String, index: Int, positionMs: Long, paused: Boolean) = mutex.withLock {
+        require(positionMs >= 0) { "Invalid start-over media position." }
+        db.withTransaction {
+            val session = restartSession() ?: return@withTransaction
+            if (session.id != id || session.index != index) return@withTransaction
+            val updated = session.copy(positionMs = positionMs, paused = paused)
+            db.settings().put(SettingRow(RESTART_SESSION_KEY, updated.encode()))
+            if (session.paused != paused) {
+                db.items().byKey(session.itemKey)?.toItem()?.let { updateRestartChannel(updated, it) }
+                _guideRevision.value++
+            }
+        }
+    }
+
+    suspend fun advanceRestart(id: String, index: Int): RestartSession? = mutex.withLock {
+        db.withTransaction {
+            val session = restartSession() ?: return@withTransaction null
+            check(session.id == id && session.index == index) { "Start-over queue changed." }
+            if (index == session.keys.lastIndex) {
+                removeRestart()
+                null
+            } else {
+                session.copy(index = index + 1, positionMs = 0).also {
+                    db.settings().put(SettingRow(RESTART_SESSION_KEY, it.encode()))
+                }
+            }
+        }.also { _guideRevision.value++ }
+    }
+
+    private suspend fun removeRestart() {
+        db.settings().remove(RESTART_SESSION_KEY)
+        removeChannel(Lineup.RESTART_ID)
+    }
+
+    suspend fun removeRestartStation() = mutex.withLock {
+        db.withTransaction { removeRestart() }
+        _guideRevision.value++
     }
 
     private suspend fun topUp(row: ChannelRow, nowMs: Long, currentTime: () -> Long = { nowMs }) {
@@ -507,15 +572,28 @@ class ScheduleRepo internal constructor(
         }
 
     suspend fun entries(channelId: String, fromMs: Long, toMs: Long): List<ScheduleEntry> =
-        db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
+        if (channelId == Lineup.RESTART_ID) restartEntries(System.currentTimeMillis())
+        else db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
 
-    /** Include the preceding program when the guide window starts during its ad break. */
+    suspend fun restartEntries(nowMs: Long): List<ScheduleEntry> {
+        val session = restartSession() ?: return emptyList()
+        return session.entries(lib().byKey, nowMs)
+    }
+
+    /** Include complete boundary programs and their following breaks for guide details. */
     suspend fun entriesFor(channelIds: Collection<String>, fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
         val ids = channelIds.toList()
         if (ids.isEmpty()) return@withTransaction emptyMap()
-        (db.entries().programsBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs))
+        val scheduled = (db.entries().entriesBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs) +
+            db.entries().followingBreaksFor(ids, fromMs, toMs))
             .distinctBy { it.channelId to it.startMs }
+            .sortedWith(compareBy<EntryRow> { it.channelId }.thenBy { it.startMs })
             .map { it.toEntry() }.groupBy { it.channelId }
+        if (Lineup.RESTART_ID in ids) scheduled + (Lineup.RESTART_ID to
+            listOfNotNull(restartSession()?.let {
+                ScheduleEntry(Lineup.RESTART_ID, fromMs, toMs, EntryKind.PROGRAM, it.itemKey)
+            }))
+        else scheduled
     }
 
     /** After a channel is edited: keep what's on now, rebuild everything after it. */
@@ -547,6 +625,7 @@ class ScheduleRepo internal constructor(
     }
 
     suspend fun deleteChannel(id: String) = mutex.withLock {
+        if (id == Lineup.RESTART_ID) db.settings().remove(RESTART_SESSION_KEY)
         db.withTransaction {
             removeChannel(id)
         }

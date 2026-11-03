@@ -157,9 +157,7 @@ fun GuideScreen(
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
     val visibleBlocks = remember(blocks, windowStart) {
         blocks.mapValues { (_, entries) ->
-            entries.filter { it.endMs > windowStart && it.startMs < windowStart + WINDOW_MS }.map {
-                it.copy(startMs = maxOf(it.startMs, windowStart), endMs = minOf(it.endMs, windowStart + WINDOW_MS))
-            }
+            entries.filter { it.endMs > windowStart && it.startMs < windowStart + WINDOW_MS }
         }
     }
     // Rows near the viewport; only these get schedules topped up and blocks built.
@@ -299,7 +297,8 @@ fun GuideScreen(
 
     fun moveTime(forward: Boolean, b: GuideBlock? = focusedBlock) {
         val minTime = maxOf(clock(), gridFloor(clock()))
-        focusTime = if (forward) (b?.endMs ?: (focusTime + GRID_MS)) else maxOf(minTime, (b?.startMs ?: focusTime) - 1)
+        focusTime = if (forward) minOf(b?.endMs ?: (focusTime + GRID_MS), windowStart + WINDOW_MS)
+            else maxOf(minTime, maxOf(b?.startMs ?: focusTime, windowStart) - 1)
         if (focusTime >= windowStart + WINDOW_MS - GRID_MS) windowStart += GRID_MS
         if (focusTime < windowStart) windowStart = maxOf(gridFloor(clock()), windowStart - GRID_MS)
     }
@@ -312,7 +311,7 @@ fun GuideScreen(
         when (TouchControls.guideTap(selected)) {
             GuideTouchAction.SELECT -> {
                 focusRow = rowIndex
-                focusTime = maxOf(block?.startMs ?: 0L, clock())
+                focusTime = maxOf(block?.startMs ?: windowStart, windowStart, clock())
             }
             GuideTouchAction.WATCH -> { controller.go(Screen.Player); controller.tuneTo(channel.id) }
         }
@@ -371,23 +370,26 @@ fun GuideScreen(
             }
             Spacer(Modifier.height(12.dp))
             key(timeFormat) {
-                DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem), summary, GuideDensity.from(density))
+                DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem), summary,
+                    GuideDensity.from(density), resumable = focusedChannel?.id == Lineup.RESTART_ID)
             }
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 if (loadError != null || rows.isEmpty()) {
-                    Column(Modifier.align(Alignment.Center).testTag("guide-status").guideTouchTap(touch, { if (loadError != null) attempt++ })) {
-                        BasicText(
-                            if (updating) "Updating guide..." else loadError ?: "No channels yet. Open Settings and run a library sync.",
-                            style = Retro.Title,
-                        )
-                        BasicText(
-                            if (updating) "Elapsed: ${elapsedSeconds}s"
-                            else if (loadError != null) { if (touch) "Tap to retry, or tap SETTINGS." else "Press OK to retry, or UP for Settings." }
-                            else if (touch) "Tap SETTINGS." else "Press UP for Settings.",
-                            style = Retro.Body,
-                        )
-                        if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
+                    if (updating) {
+                        GuideUpdateWindow(elapsedSeconds, update.message?.takeIf { update.busy }, Modifier.align(Alignment.Center))
+                    } else {
+                        Column(
+                            Modifier.align(Alignment.Center).testTag("guide-status")
+                                .guideTouchTap(touch, { if (loadError != null) attempt++ }),
+                        ) {
+                            BasicText(loadError ?: "No channels yet. Open Settings and run a library sync.", style = Retro.Title)
+                            BasicText(
+                                if (loadError != null) { if (touch) "Tap to retry, or tap SETTINGS." else "Press OK to retry, or UP for Settings." }
+                                else if (touch) "Tap SETTINGS." else "Press UP for Settings.",
+                                style = Retro.Body,
+                            )
+                        }
                     }
                     return@BoxWithConstraints
                 }
@@ -435,14 +437,7 @@ fun GuideScreen(
                         }
                     }
                     if (updating) {
-                        Column(
-                            Modifier.align(Alignment.Center).background(Retro.GuideBlueDeep.copy(alpha = 0.9f)).padding(24.dp)
-                                .testTag("guide-status"),
-                        ) {
-                            BasicText("Updating guide...", style = Retro.Title)
-                            BasicText("Elapsed: ${elapsedSeconds}s", style = Retro.Body)
-                            if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
-                        }
+                        GuideUpdateWindow(elapsedSeconds, update.message?.takeIf { update.busy }, Modifier.align(Alignment.Center))
                     }
                 }
             }
@@ -456,6 +451,33 @@ fun GuideScreen(
                 },
                 style = Retro.Caption,
             )
+        }
+    }
+}
+
+@Composable
+internal fun GuideUpdateWindow(elapsedSeconds: Long, detail: String?, modifier: Modifier = Modifier) {
+    Column(
+        modifier.width(640.dp).height(220.dp).testTag("guide-status")
+            .background(Retro.GuideBlueDeep).border(3.dp, Retro.Border).padding(3.dp)
+            .border(1.dp, Retro.Cyan).padding(2.dp),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(48.dp).background(Retro.GuideBlueLight)
+                .testTag("guide-update-title-bar").padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicText("Updating Guide", style = Retro.GuideNumber, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            BasicText(
+                detail?.takeIf { it.isNotBlank() } ?: "Building program listings...",
+                style = Retro.Body,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            BasicText("Elapsed: ${elapsedSeconds}s", style = Retro.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -515,8 +537,10 @@ private fun GuideRow(
                 }
             } else {
                 for (b in blocks) {
-                    val x = ((b.startMs - windowStart) * pxPerMs).dp
-                    val w = ((b.endMs - b.startMs) * pxPerMs).dp
+                    val start = maxOf(b.startMs, windowStart)
+                    val end = minOf(b.endMs, windowStart + WINDOW_MS)
+                    val x = ((start - windowStart) * pxPerMs).dp
+                    val w = ((end - start) * pxPerMs).dp
                     val sel = selectedTime >= b.startMs && selectedTime < b.endMs
                     Cell(
                         b, b.itemKey?.let { items[it] }, x, w, sel, rowColor, scale,
@@ -594,7 +618,7 @@ private fun Cell(
 }
 
 @Composable
-private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?, summary: String?, density: GuideDensity) {
+private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?, summary: String?, density: GuideDensity, resumable: Boolean = false) {
     val scale = density.textScale
     val posterH = density.detailHeight - 24f
     Row(Modifier.fillMaxWidth().height(density.detailHeight.dp).background(Retro.GuideBlueDeep.copy(alpha = 0.7f)).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(12.dp)) {
@@ -606,7 +630,7 @@ private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBloc
             BasicText(if (block?.offAir == true) "Off Air" else block?.title ?: describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val bits = listOfNotNull(
                 channelName,
-                block?.let { "${clockDate(it.startMs)}  ${clockTime(it.startMs)} – ${clockTime(it.endMs)}" },
+                if (resumable) "Resumable playback" else block?.let { "${clockDate(it.startMs)}  ${clockTime(it.startMs)} – ${clockTime(it.endMs)}" },
                 item?.contentRating,
                 item?.genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotBlank() },
             )

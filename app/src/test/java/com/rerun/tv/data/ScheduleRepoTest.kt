@@ -333,6 +333,118 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun restartQueueUsesShowIdentityAndEpisodeOrderAndSurvivesPausingAndRepositoryRestart() = runBlocking {
+        fun episode(key: String, season: Int?, number: Int?, show: String = "show") =
+            movie(key).copy(kind = com.rerun.core.model.MediaKind.EPISODE, showKey = show,
+                season = season, episode = number, durationMs = 1_800_000)
+        val current = episode("current", 1, 2)
+        val next = episode("next", 1, 4)
+        val seasonTwo = episode("s2", 2, 1)
+        val library = listOf(seasonTwo, episode("earlier", 1, 1), episode("other", 1, 3, "other"),
+            next, current, episode("unknown", null, 5), episode("special", 0, 1))
+        repo.refreshChannels(false, library)
+        repo.airFromStart(current, "source", queueEpisodes = true)
+        val session = requireNotNull(repo.restartSession())
+        assertEquals(listOf("current", "next", "s2"), session.keys)
+        assertFalse(requireNotNull(repo.channel(Lineup.RESTART_ID)).hidden)
+        repo.saveRestartProgress(session.id, 0, 123_456, paused = true)
+        repo.saveRestartProgress(session.id, 0, 60_000, paused = true)
+
+        val reopened = ScheduleRepo(db, Scheduler(ZoneId.of("UTC")))
+        val restored = requireNotNull(reopened.restartSession())
+        assertEquals(60_000L, restored.positionMs)
+        assertEquals("source", restored.returnChannel)
+        assertTrue(reopened.active().any { it.id == Lineup.RESTART_ID })
+        val tomorrow = now + DAY
+        val projected = reopened.restartEntries(tomorrow)
+        assertEquals(tomorrow - 60_000, projected.first().startMs)
+        assertEquals(session.keys, projected.map { it.itemKey })
+        reopened.refreshChannels(false, library)
+        assertEquals(restored, reopened.restartSession())
+        assertTrue(reopened.active().any { it.id == Lineup.RESTART_ID })
+
+        val advanced = requireNotNull(reopened.advanceRestart(session.id, 0))
+        assertEquals(1, advanced.index)
+        assertEquals(0L, advanced.positionMs)
+        reopened.saveRestartProgress(session.id, 0, 900_000, paused = false)
+        assertEquals(advanced, reopened.restartSession())
+        reopened.advanceRestart(session.id, 1)
+        assertNull(reopened.advanceRestart(session.id, 2))
+        assertNull(reopened.channel(Lineup.RESTART_ID))
+    }
+
+    @Test
+    fun singleProgramRestartRemovalAndSignOutNeverRestoreAnOldCheckpoint() = runBlocking {
+        val item = movie("one")
+        repo.refreshChannels(false, listOf(item))
+        repo.airFromStart(item, "source", queueEpisodes = false)
+        val old = requireNotNull(repo.restartSession())
+        assertEquals(listOf(item.key), old.keys)
+        repo.removeRestartStation()
+        repo.saveRestartProgress(old.id, old.index, 5000, paused = true)
+        assertNull(repo.restartSession())
+        assertNull(repo.channel(Lineup.RESTART_ID))
+        repo.airFromStart(item, "source", queueEpisodes = false)
+        repo.saveRestartProgress(old.id, old.index, 9000, paused = false)
+        assertEquals(0L, requireNotNull(repo.restartSession()).positionMs)
+        db.settings().clearConnection()
+        assertNull(repo.restartSession())
+    }
+
+    @Test
+    fun restartStationAvoidsNumberCollisionsAndInvalidatesWhenQueuedContentIsRemoved() = runBlocking {
+        val item = movie("one")
+        repo.refreshChannels(false, listOf(item))
+        db.channels().upsert(ChannelRow.of(com.rerun.core.model.ChannelDef(
+            "custom", Lineup.RESTART_NUMBER, "Custom", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules()), false, false))
+        repo.airFromStart(item, "source", queueEpisodes = false)
+        assertNotEquals(Lineup.RESTART_NUMBER, repo.channel(Lineup.RESTART_ID)?.number)
+        repo.refreshChannels(false, emptyList())
+        assertNull(repo.restartSession())
+        assertNull(repo.channel(Lineup.RESTART_ID))
+    }
+
+    @Test
+    fun guideQueryIncludesCompleteTrailingBreakChainAndStopsAtProgramsOrGaps() = runBlocking {
+        val program = ScheduleEntry("channel", now + 75 * 60_000, now + 137 * 60_000, EntryKind.PROGRAM, "show")
+        val firstBreak = ScheduleEntry("channel", program.endMs, now + 150 * 60_000, EntryKind.FILLER, null)
+        val lastBreak = ScheduleEntry("channel", firstBreak.endMs, now + 180 * 60_000, EntryKind.FILLER, null)
+        val next = ScheduleEntry("channel", lastBreak.endMs, now + 202 * 60_000, EntryKind.PROGRAM, "later")
+        val nextBreak = ScheduleEntry("channel", next.endMs, now + 210 * 60_000, EntryKind.FILLER, null)
+        val disconnectedBreak = ScheduleEntry("channel", now + 212 * 60_000, now + 220 * 60_000, EntryKind.FILLER, null)
+        db.entries().insertAll(listOf(program, firstBreak, lastBreak, next, nextBreak, disconnectedBreak).map(EntryRow::of))
+        val entries = repo.entriesFor(listOf("channel"), now + 90 * 60_000, now + 120 * 60_000).getValue("channel")
+        assertEquals(listOf(program, firstBreak, lastBreak), entries)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(program.startMs, lastBreak.endMs, "show"),
+        ), com.rerun.core.schedule.guideBlocks(entries, now + 90 * 60_000, now + 120 * 60_000))
+
+        val inBreak = repo.entriesFor(listOf("channel"), now + 155 * 60_000, now + 160 * 60_000).getValue("channel")
+        assertEquals(listOf(program, firstBreak, lastBreak), inBreak)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(program.startMs, lastBreak.endMs, "show"),
+        ), com.rerun.core.schedule.guideBlocks(inBreak, now + 155 * 60_000, now + 160 * 60_000))
+
+        val nextEntries = repo.entriesFor(listOf("channel"), now + 190 * 60_000, now + 200 * 60_000).getValue("channel")
+        assertEquals(listOf(next, nextBreak), nextEntries)
+    }
+
+    @Test
+    fun guideQueryIncludesTheFollowingBreakBeyondTheRightCacheBoundary() = runBlocking {
+        val program = ScheduleEntry("channel", now + 60 * 60_000, now + 82 * 60_000, EntryKind.PROGRAM, "show")
+        val filler = ScheduleEntry("channel", program.endMs, now + 90 * 60_000, EntryKind.FILLER, null)
+        val next = ScheduleEntry("channel", filler.endMs, now + 112 * 60_000, EntryKind.PROGRAM, "later")
+        db.entries().insertAll(listOf(program, filler, next).map(EntryRow::of))
+        val entries = repo.entriesFor(listOf("channel"), now, now + 70 * 60_000).getValue("channel")
+        assertEquals(listOf(program, filler), entries)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(now, program.startMs, null, offAir = true),
+            com.rerun.core.schedule.GuideBlock(program.startMs, filler.endMs, "show"),
+        ), com.rerun.core.schedule.guideBlocks(entries, now, now + 70 * 60_000))
+    }
+
+    @Test
     fun guideStartingInABreakIncludesThePreviousProgramButNotAdTitles() = runBlocking {
         val program = com.rerun.core.schedule.ScheduleEntry(
             "east", now - 1_800_000, now - 480_000, com.rerun.core.schedule.EntryKind.PROGRAM, "show",
@@ -347,7 +459,7 @@ class ScheduleRepoTest {
         val entries = repo.entriesFor(listOf("east"), now, next.endMs).getValue("east")
         assertEquals(listOf(program, filler, next), entries)
         assertEquals(listOf(
-            com.rerun.core.schedule.GuideBlock(now, filler.endMs, "show"),
+            com.rerun.core.schedule.GuideBlock(program.startMs, filler.endMs, "show"),
             com.rerun.core.schedule.GuideBlock(next.startMs, next.endMs, "next"),
         ), com.rerun.core.schedule.guideBlocks(entries, now, next.endMs))
     }

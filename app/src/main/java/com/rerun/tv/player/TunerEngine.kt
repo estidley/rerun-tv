@@ -46,6 +46,8 @@ import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
+import com.rerun.tv.data.RestartSession
+import com.rerun.tv.data.entries
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +60,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.NonCancellable
 import java.util.UUID
 
 enum class Phase { TUNING, PLAYING, UP_NEXT, OFF_AIR, DIFFICULTIES }
@@ -118,9 +121,16 @@ class TunerEngine(
     private var selectedSubtitle: SubtitleStream? = null
     private var embeddedSubtitleIndex = -1
     private var transcoded = false
-    private var restartReturn: String? = null
-    private var restartFresh = false
-    private data class PlaybackIdentity(val channel: String, val start: Long, val item: String?)
+    private var restartSession: RestartSession? = null
+    private var restartPrepared = false
+    private var restartMediaOffsetMs = 0L
+    private var restartHeld = false
+    private var checkpointJob: Job? = null
+    private var saveJob: Job? = null
+    private sealed interface PlaybackIdentity {
+        data class Scheduled(val channel: String, val start: Long, val item: String?) : PlaybackIdentity
+        data class Restart(val sessionId: String, val index: Int) : PlaybackIdentity
+    }
     private var identity: PlaybackIdentity? = null
     private var audioOverride: Int? = null
     private var hdrFallback = false
@@ -130,7 +140,7 @@ class TunerEngine(
     private var normalizingAudio = false
     private val metadataCache = PlaybackMetadataCache()
 
-    /** Called when the hidden start-over channel finishes and the TV should go back. */
+    /** Called when the saved start-over queue finishes and the TV should go back. */
     var onReturned: ((String) -> Unit)? = null
 
     private val _state = MutableStateFlow(TunerState())
@@ -183,9 +193,8 @@ class TunerEngine(
                         _state.value = _state.value.copy(phase = Phase.PLAYING)
                     }
                     if (playbackState != Player.STATE_ENDED || _state.value.phase != Phase.PLAYING) return
-                    // The start-over channel is a one-shot. When the episode ends, go back.
                     if (_state.value.channel?.id == Lineup.RESTART_ID) {
-                        leaveRestart()
+                        finishRestartEpisode()
                         return
                     }
                     // File ended early (duration in Plex was longer than the real file): wait on the card.
@@ -215,15 +224,55 @@ class TunerEngine(
         _state.value.channel?.id?.let(::tune)
     }
 
-    /** Remember which channel to restore when the start-over episode ends. */
     /** Surfaces a one-off message on the current tune; the next tune clears it. */
     fun notify(text: String) {
         _state.value = _state.value.copy(message = text)
     }
 
-    fun armReturn(channelId: String) {
-        restartReturn = channelId
-        restartFresh = true
+    private fun saveRestart(paused: Boolean) {
+        checkpointJob?.cancel()
+        val session = restartSession ?: return
+        val position = if (restartPrepared)
+            restartMediaOffsetMs + player.currentPosition.coerceAtLeast(0)
+        else session.positionMs
+        restartSession = session.copy(positionMs = position, paused = paused)
+        val previous = saveJob
+        saveJob = scope.launch {
+            withContext(NonCancellable) {
+                previous?.join()
+                try {
+                    repo.saveRestartProgress(session.id, session.index, position, paused)
+                } catch (e: Exception) {
+                    android.util.Log.e("TunerEngine", "Unable to save start-over progress (${e.javaClass.simpleName})")
+                    notify("Couldn't save start-over progress. Try again before leaving.")
+                }
+            }
+        }
+    }
+
+    suspend fun awaitRestartSave() { saveJob?.join() }
+
+    fun holdRestart() {
+        restartHeld = true
+        player.pause()
+    }
+
+    fun continueRestart() {
+        restartHeld = false
+        player.playWhenReady = true
+    }
+
+    suspend fun pauseRestart() {
+        checkpointJob?.cancel()
+        tuneJob?.cancel()
+        clearTimers()
+        player.pause()
+        val session = restartSession ?: repo.restartSession() ?: error("Start-over playback is not ready.")
+        val position = if (restartPrepared) restartMediaOffsetMs + player.currentPosition.coerceAtLeast(0) else session.positionMs
+        saveJob?.join()
+        repo.saveRestartProgress(session.id, session.index, position, paused = true)
+        restartSession = session.copy(positionMs = position, paused = true)
+        restartPrepared = false
     }
 
     /** Subtitle switch. Direct play selects a text track; a transcode has to be requested again. */
@@ -235,7 +284,9 @@ class TunerEngine(
     }
 
     fun tune(channelId: String) {
-        if (channelId != Lineup.RESTART_ID) restartReturn = null
+        if (channelId != Lineup.RESTART_ID) restartHeld = false
+        saveRestart(paused = channelId != Lineup.RESTART_ID)
+        restartPrepared = false
         tuneJob?.cancel()
         clearTimers()
         val previous = _state.value
@@ -247,6 +298,7 @@ class TunerEngine(
         normalizingAudio = false
         val seq = ++tuneSeq
         tuneJob = scope.launch {
+            saveJob?.join()
             if (sameChannel && previous.phase == Phase.PLAYING) {
                 _state.value = previous.copy(sameChannelTransition = true, fadingOut = true)
                 delay(CLIP_FADE_MS.toLong())
@@ -258,6 +310,7 @@ class TunerEngine(
             if (channel == null) return@launch difficulties()
             if (channelId != Lineup.RESTART_ID) settings.setLastChannel(channelId)
             try {
+                restartSession = if (channelId == Lineup.RESTART_ID) repo.restartSession() else null
                 val subs = withContext(Dispatchers.IO) {
                     repo.ensure(channelId, t0)
                     settings.isOn(Settings.SUBTITLES)
@@ -265,11 +318,20 @@ class TunerEngine(
                 subtitlesOn = subs
                 subtitleLanguage = settings.subtitleLanguageValue()
                 val now = clock()
-                val entries = withContext(Dispatchers.IO) { repo.entries(channelId, now - 1, now + 6 * 3_600_000L) }
+                val entries = withContext(Dispatchers.IO) {
+                    if (channelId == Lineup.RESTART_ID) {
+                        val session = restartSession ?: error("Saved start-over station is unavailable.")
+                        val items = session.keys.drop(session.index).map { key ->
+                            key to requireNotNull(repo.item(key)) { "A queued program is no longer in the library." }
+                        }.toMap()
+                        session.entries(items, now)
+                    } else repo.entries(channelId, now - 1, now + 6 * 3_600_000L)
+                }
                 val sharedTiming = withContext(Dispatchers.IO) { repo.sharedTiming(channelId, now) }
-                val loc = locate(entries, now, skipTail = channelId != Lineup.ADS_ID && !sharedTiming)
+                val loc = locate(entries, now, skipTail = channelId != Lineup.ADS_ID &&
+                    channelId != Lineup.RESTART_ID && !sharedTiming)
                 if (loc == null) {
-                    if (channelId == Lineup.RESTART_ID) return@launch leaveRestart()
+                    if (channelId == Lineup.RESTART_ID) error("Saved start-over progress is outside this program.")
                     val upcoming = entries.firstOrNull { it.startMs > now }
                     if (upcoming == null) return@launch difficulties()
                     // Nothing stored for right now. Off Air waits for the next entry.
@@ -296,7 +358,10 @@ class TunerEngine(
                     }
                 } else null
                 val item = if (loc.entry.kind == EntryKind.FILLER) ad?.item else channelItem(channelId, loc.entry.itemKey)
-                val nextIdentity = PlaybackIdentity(channelId, loc.entry.startMs, item?.key)
+                val nextIdentity = if (channelId == Lineup.RESTART_ID) {
+                    val saved = requireNotNull(restartSession)
+                    PlaybackIdentity.Restart(saved.id, saved.index)
+                } else PlaybackIdentity.Scheduled(channelId, loc.entry.startMs, item?.key)
                 if (identity != nextIdentity) {
                     identity = nextIdentity
                     audioOverride = null
@@ -356,11 +421,10 @@ class TunerEngine(
                 embeddedSubtitleIndex = subtitleStreams.filter { it.key == null }.indexOfFirst { it.id == subtitle?.id }
                 subtitleAvailable = subtitle != null
                 // Whatever time loading took, add it back so we land exactly on schedule.
-                // Only the first tune starts at zero; retries and subtitle changes keep position.
-                val fromStart = channelId == Lineup.RESTART_ID && restartFresh
-                restartFresh = false
                 val lag = clock() - now
-                val offset = if (fromStart) 0L else (ad?.let { now - it.startMs } ?: loc.offsetMs) + lag
+                val onRestart = channelId == Lineup.RESTART_ID
+                val offset = if (onRestart) requireNotNull(restartSession).positionMs
+                    else (ad?.let { now - it.startMs } ?: loc.offsetMs) + lag
                 when (val plan = planPlayback(
                     item?.let { if (audio?.codec != null) it.copy(audioCodec = audio.codec) else it },
                     base, settings.clientId, "$session-$seq", offset, subtitlesOn && subtitleAvailable,
@@ -387,8 +451,11 @@ class TunerEngine(
                             ))
                         }
                         player.setMediaSource(DefaultMediaSourceFactory(http).createMediaSource(media.build()))
+                        player.playWhenReady = !onRestart || !restartHeld
                         player.prepare()
-                        player.seekTo(if (fromStart) 0L else plan.startMs + (clock() - now - lag))
+                        player.seekTo(if (onRestart) offset else plan.startMs + (clock() - now - lag))
+                        restartMediaOffsetMs = 0
+                        restartPrepared = onRestart
                     }
                     is PlaybackPlan.Transcoded -> {
                         transcoded = true
@@ -402,7 +469,10 @@ class TunerEngine(
                                 )
                         }
                         player.setMediaSource(source)
+                        player.playWhenReady = !onRestart || !restartHeld
                         player.prepare()
+                        restartMediaOffsetMs = offset / 1000 * 1000
+                        restartPrepared = onRestart
                     }
                     is PlaybackPlan.UpNext -> {
                         transcoded = false
@@ -410,6 +480,24 @@ class TunerEngine(
                         if (item?.kind == MediaKind.TRACK) {
                             difficulties("Unable to prepare this music track. Re-sync the music library in Settings.")
                         } else _state.value = _state.value.copy(phase = Phase.UP_NEXT)
+                    }
+                }
+                if (restartPrepared) {
+                    val session = requireNotNull(restartSession)
+                    repo.saveRestartProgress(session.id, session.index, session.positionMs, paused = false)
+                    checkpointJob = scope.launch {
+                        while (true) {
+                            delay(5_000)
+                            val position = restartMediaOffsetMs + player.currentPosition.coerceAtLeast(0)
+                            try {
+                                repo.saveRestartProgress(session.id, session.index, position, paused = false)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                android.util.Log.e("TunerEngine", "Unable to checkpoint start-over (${e.javaClass.simpleName})")
+                                notify("Couldn't save start-over progress.")
+                            }
+                        }
                     }
                 }
             } catch (e: CancellationException) {
@@ -441,12 +529,34 @@ class TunerEngine(
         handler.postDelayed(r, (endMs - clock()).coerceAtLeast(0))
     }
 
-    private fun leaveRestart() {
-        val back = restartReturn ?: return
-        restartReturn = null
+    private fun finishRestartEpisode() {
+        val session = restartSession ?: return
+        checkpointJob?.cancel()
+        restartSession = null
+        restartPrepared = false
         clearTimers()
-        onReturned?.invoke(back)
-        tune(back)
+        tuneJob = scope.launch {
+            try {
+                saveJob?.join()
+                if (repo.advanceRestart(session.id, session.index) != null) {
+                    tune(Lineup.RESTART_ID)
+                } else {
+                    val active = repo.active()
+                    val back = active.firstOrNull { it.id == session.returnChannel }?.id ?: active.firstOrNull()?.id
+                    if (back == null) {
+                        clear()
+                        notify("Start-over finished. No regular stations are available.")
+                    } else {
+                        onReturned?.invoke(back)
+                        tune(back)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                difficulties("Couldn't advance the start-over queue. Check the library and try again.")
+            }
+        }
     }
 
     private fun applySubtitles(tracks: Tracks) {
@@ -484,6 +594,8 @@ class TunerEngine(
     }
 
     private fun difficulties(message: String? = null) {
+        saveRestart(paused = true)
+        restartPrepared = false
         player.stop()
         _state.value = _state.value.copy(phase = Phase.DIFFICULTIES, message = message)
         val id = _state.value.channel?.id ?: return
@@ -501,15 +613,19 @@ class TunerEngine(
     }
 
     fun stop() {
+        saveRestart(paused = true)
+        restartPrepared = false
         tuneJob?.cancel()
         clearTimers()
         player.stop()
     }
 
     fun clear() {
+        restartSession = null
+        restartHeld = false
         stop()
         metadataCache.clear()
-        restartReturn = null
+        restartSession = null
         identity = null
         audioOverride = null
         hdrFallback = false
