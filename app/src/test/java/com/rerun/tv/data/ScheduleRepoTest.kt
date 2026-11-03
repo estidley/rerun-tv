@@ -406,6 +406,20 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun guideQueryIncludesTheFollowingBreakBeyondTheRightCacheBoundary() = runBlocking {
+        val program = ScheduleEntry("channel", now + 60 * 60_000, now + 82 * 60_000, EntryKind.PROGRAM, "show")
+        val filler = ScheduleEntry("channel", program.endMs, now + 90 * 60_000, EntryKind.FILLER, null)
+        val next = ScheduleEntry("channel", filler.endMs, now + 112 * 60_000, EntryKind.PROGRAM, "later")
+        db.entries().insertAll(listOf(program, filler, next).map(EntryRow::of))
+        val entries = repo.entriesFor(listOf("channel"), now, now + 70 * 60_000).getValue("channel")
+        assertEquals(listOf(program, filler), entries)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(now, program.startMs, null, offAir = true),
+            com.rerun.core.schedule.GuideBlock(program.startMs, filler.endMs, "show"),
+        ), com.rerun.core.schedule.guideBlocks(entries, now, now + 70 * 60_000))
+    }
+
+    @Test
     fun guideStartingInABreakIncludesThePreviousProgramButNotAdTitles() = runBlocking {
         val program = com.rerun.core.schedule.ScheduleEntry(
             "east", now - 1_800_000, now - 480_000, com.rerun.core.schedule.EntryKind.PROGRAM, "show",

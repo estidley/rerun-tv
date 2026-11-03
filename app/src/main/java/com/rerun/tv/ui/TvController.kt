@@ -560,7 +560,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         _restartPrompt.value = null
         _restartError.value = null
         if (currentId == Lineup.RESTART_ID && foreground) {
-            if (retryPlayback) engine.tune(Lineup.RESTART_ID) else engine.continueRestart()
+            engine.continueRestart()
+            if (retryPlayback) engine.tune(Lineup.RESTART_ID)
         }
     }
 

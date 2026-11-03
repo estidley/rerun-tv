@@ -30,8 +30,11 @@ class GuideBlocksTest {
 
     @Test
     fun overlappingProgramsKeepScheduledBoundariesIncludingFollowingFiller() {
-        val blocks = guideBlocks(listOf(p(-60, 47, "movie"), f(47, 60), p(60, 82, "ep")), t0, t0 + 70 * MIN)
-        assertEquals(listOf(GuideBlock(t0 - 60 * MIN, t0 + 60 * MIN, "movie"), GuideBlock(t0 + 60 * MIN, t0 + 82 * MIN, "ep")), blocks)
+        val blocks = guideBlocks(
+            listOf(p(-60, 47, "movie"), f(47, 60), p(60, 82, "ep"), f(82, 90), p(90, 112, "later")),
+            t0, t0 + 70 * MIN,
+        )
+        assertEquals(listOf(GuideBlock(t0 - 60 * MIN, t0 + 60 * MIN, "movie"), GuideBlock(t0 + 60 * MIN, t0 + 90 * MIN, "ep")), blocks)
     }
 
     @Test

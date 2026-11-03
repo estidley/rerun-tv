@@ -183,9 +183,11 @@ history, at 999 or the next free number. Episode starts offer just this episode 
 available same-show episodes across seasons, ordered by season/episode and matched by Plex show key.
 Changing stations pauses the picture and prompts Pause until later / Remove station / Cancel;
 opening menus does not prompt. Pause retains the queue and cursor in Room settings across app restarts.
+The leave prompt holds playback through pending preparation and retries until the viewer decides.
+Retuning the same saved episode preserves its audio choice and HDR fallback independently of projected timestamps.
 The guide labels this station as resumable playback, not a linear time range. Completion advances
 on media end, not the metadata deadline, and removes the finished station before returning to the
-source (or an available fallback). Progress checkpoints every five seconds and on stop, retune or
+source if still active (or an active fallback). Progress checkpoints every five seconds and on stop, retune or
 explicit pause, including the base offset for Plex transcoding; abrupt process loss may replay
 the last checkpoint interval. New start-over requests confirm before replacing a saved station.
 Sign-out clears the saved queue; removal of queued library content invalidates the station.

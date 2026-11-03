@@ -269,6 +269,7 @@ class TvControllerTest {
         verify(engine, never()).tune(anyString())
         assertTrue(controller.restartPrompt.value is RestartPrompt.Leave)
         controller.cancelRestartPrompt()
+        verify(engine).continueRestart()
         verify(engine).tune(Lineup.RESTART_ID)
 
         controller.tuneTo("other", sound = false)
