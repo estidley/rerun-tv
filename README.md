@@ -4,6 +4,8 @@ Old-school cable TV, built from your own Plex library. For Fire TV and Android T
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
+The 0.4 feature milestone is prepared as Android app version 1.0.3 (versionCode 5); Settings > About displays the installed app version.
+
 - **Network channels:** Dinky Channel, Dinky XD, Slimelodeon, Cartoon Notwork, Kaboomerang, Toonuki, PBJ Kids, Sigh-Fi Channel, USB Network, HMO, and more. The names on screen are parodies; each channel keeps its real network name behind the scenes. With TMDB lists (below), a show lands on every network it really aired on. Without them, shows land by the network and studio stored in Plex.
 - **Streaming originals follow the studio and the audience:**
   - Disney+ kids shows go to Dinky Channel.
@@ -112,7 +114,7 @@ This product uses the TMDB API but is not endorsed or certified by TMDB.
 |---|---|---|
 | ▲ / ▼ | Channel up / down | Move between channels |
 | ◀ | Last channel | Earlier |
-| Hold ◀ 2s | Start current episode over | — |
+| Hold ◀ 2s | Start current movie or episode over | — |
 | ▶ / OK | Info banner | Later / tune in |
 | Hold OK 2s | Cycle CRT look (Off / Subtle / Full) | — |
 | Hold ▶ 2s | Select current program audio track | — |
@@ -172,7 +174,7 @@ From the repository root on Windows:
 ```powershell
 . .\scripts\jdk.ps1
 Set-RerunJdk
-.\gradlew.bat :core:test :app:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain --quiet
+.\gradlew.bat :core:test :app:testDebugUnitTest :tmdb:assemble :app:assembleDebug :app:lintDebug --console=plain --quiet
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
 ```
 

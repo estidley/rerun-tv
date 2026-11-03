@@ -6,9 +6,9 @@ comes from the user's included Plex libraries. A nostalgic name alone never clas
 
 ## Matching and minimum programming
 
-- Network stations match a recognized Plex network, then studio, then the existing
-  owner/audience/genre routing fallback. Their names describe the cable inspiration,
-  **not a mandatory genre**. Studio-only matches can legitimately include documentaries.
+- Network stations match TMDB reference lists first (a show can match multiple networks),
+  then the network Plex reports. Owner-family routing applies only when neither matches.
+  Their names describe the cable inspiration, **not a mandatory genre**.
 - Genre stations match Plex genre tags. Include sources (network, show, genre, collection,
   label or metadata ID) are alternatives; exclusions, years, ratings and media kinds
   narrow that match. Selecting a network and a genre in the editor does not mean AND.
@@ -45,7 +45,7 @@ only recognized old stock names are replaced automatically.
 | 102 | Kid Castle | Kids' cable clubhouse; Nickelodeon-family metadata and routing |
 | 103 | Toon Tower | All-cartoon cable; Cartoon Network metadata plus the weekday curated action block |
 | 104 | The Attic | Rerun cartoon vault; Boomerang metadata or the curated classic-series list |
-| 105 | Midnight Block | After-school/late-night action-cartoon blocks; Toonami metadata or curated series |
+| 105 | Toonuki | Anime-tagged movies and episodes from included libraries, regardless of network, title or rating; animation alone does not qualify |
 | 106 | Public Square | Public broadcasting on the cable dial; PBS metadata |
 | 107 | Story Yard | Children's public broadcasting; PBS Kids metadata and preschool routing |
 | 108 | Action Club | Action-oriented children's cable; Disney XD/Jetix metadata and routing |
@@ -128,7 +128,7 @@ stock stations would increase schedule/storage costs without necessarily improvi
 | Decade TV (1100+) | 24 hours | Episodes by decade, alongside genre stations |
 | Decade music (3000+) | 12 hours | Tracks by decade; hourly guide blocks rather than song cells |
 | Buy Me Maybe (preferred 998) | One valid synced ad | Commercials-only novelty station; back-to-back clips, hourly guide cells |
-| From the Top (reserved 999) | One selected episode | Hidden one-shot start-over; not an ordinary lineup station |
+| From the Top (reserved 999) | One movie or episode, optionally followed by the remaining episodes of its show | Hidden device-local start-over station; movies require confirmation |
 
 Decades span 1900s–2090s based on library years, including the requested 1970s–2010s cable
 eras. Preferred numbers resolve collisions without changing IDs. No live channels, new

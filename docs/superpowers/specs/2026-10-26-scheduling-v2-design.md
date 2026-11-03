@@ -211,7 +211,7 @@ not a hosted publisher. Identical regular-video inputs and effective rules are s
 - Playback continues to follow wall-clock time (existing invariant). Ads never delay the next
   program.
 
-## 2. Current code facts (main at 6078bcd, after PR #11)
+## 2. Current code facts (main at 638ac71, after PR #21; app version 1.0.2)
 
 | Area | Today | Where |
 |---|---|---|

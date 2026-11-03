@@ -76,7 +76,7 @@ Measure cold indexing and tune responsiveness on a TV before performance claims.
 
 ## Preserved prior work
 
-The CI/release-preparation files are a separate change included in the owner's
-full-worktree review/commit/PR request.
+CI and release preparation are shared repository infrastructure documented in
+[README](../../README.md) and [AGENTS.md](../../AGENTS.md), not pilot-specific work.
 The earlier experimental SharedManifest core model/codec/test was removed rather
 than leaving an unused publisher protocol beside the deterministic pilot.

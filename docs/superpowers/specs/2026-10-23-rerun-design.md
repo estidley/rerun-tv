@@ -1,6 +1,6 @@
 # Rerun architecture and behavior
 
-Current implementation reference, updated 2026-10-25. This replaces the original speculative design.
+Current implementation reference, updated 2026-11-02. This replaces the original speculative design.
 Installation, features, remote controls, and Plex prerequisites live in [README](../../../README.md);
 contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.md).
 
@@ -27,7 +27,7 @@ automatically split compilations or classify ads. Users must review their own ad
 | `core` | Models, catalog/routing/resolution, deterministic scheduler, guide/tune math, ad planning, Plex parsing and playback plans |
 | `RerunApp` | Process-level Room, settings, HTTP, repository and sync wiring; awaited startup lineup refresh |
 | `LibrarySync` | Serialized paged imports, persistent library selections, ad catalog updates and lineup rebuilds |
-| `ScheduleRepo` | Transactional channel/library changes, cached library snapshot, schedule top-ups, West mirroring and guide revision |
+| `ScheduleRepo` | Transactional channel/library changes, cached library snapshot, schedule top-ups and guide revision |
 | `TvController` | Activity-owned navigation, foreground eligibility, startup state, scans, progress/errors and playback reconciliation |
 | `TunerEngine` | Single Media3 player, metadata cache, wall-clock seeks/rollovers, tracks, compatibility policy and playback errors |
 | Compose screens | Render state and remote focus; local overlay/music timers, not whole-player clock polling |
@@ -43,7 +43,7 @@ Toonuki (channel 105, stable ID `toonami`) uses only the Anime genre for episode
 without network/title or rating restrictions. Animation alone does not match. Stock legacy rules
 upgrade on lineup refresh while preserving channel names/numbers/order and explicitly edited pools.
 Rule upgrades and stale non-anime Toonuki queues discard future entries after the current airing;
-West is remirrored from East. Ordinary refreshes preserve valid locked schedules.
+ordinary refreshes preserve valid locked schedules.
 
 ## Network reference lists
 
