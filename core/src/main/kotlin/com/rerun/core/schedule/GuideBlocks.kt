@@ -14,7 +14,6 @@ fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<Gu
     if (fromMs >= toMs) return emptyList()
     val scheduled = ArrayList<GuideBlock>()
     for (e in entries.sortedBy { it.startMs }) {
-        if (e.startMs >= toMs) continue
         val last = scheduled.lastOrNull()
         if (e.kind == EntryKind.FILLER && last != null && last.endMs == e.startMs) {
             scheduled[scheduled.size - 1] = last.copy(endMs = e.endMs)
@@ -25,7 +24,7 @@ fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<Gu
     val out = ArrayList<GuideBlock>(scheduled.size + 2)
     var cursor = fromMs
     for (block in scheduled) {
-        if (block.endMs <= fromMs) continue
+        if (block.endMs <= fromMs || block.startMs >= toMs) continue
         if (block.startMs > cursor) out += GuideBlock(cursor, block.startMs, null, offAir = true)
         out += block
         cursor = maxOf(cursor, block.endMs)

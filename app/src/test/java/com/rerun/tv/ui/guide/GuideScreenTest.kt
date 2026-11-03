@@ -171,22 +171,29 @@ class GuideScreenTest {
 
     @Test
     fun programDetailsKeepScheduledTimesWhileCellsClipToTheMovingWindow() = runBlocking<Unit> {
+        shadowOf(RuntimeEnvironment.getApplication().packageManager)
+            .setSystemFeature(PackageManager.FEATURE_TOUCHSCREEN, true)
         val start = java.time.Instant.parse("2026-11-02T07:00:00Z").toEpochMilli()
         val end = start + 2 * 3_600_000L
         val nextEnd = end + 7 * 3_600_000L
+        val lastEnd = nextEnd + 1_800_000L
         var testNow = start + 35 * 60_000L
-        channels.value = listOf(channels.value.first())
+        channels.value = channels.value.take(2)
         `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
             "test:0" to listOf(
                 ScheduleEntry("test:0", start, end, EntryKind.PROGRAM, null),
                 ScheduleEntry("test:0", end, nextEnd, EntryKind.PROGRAM, null),
+                ScheduleEntry("test:0", nextEnd, lastEnd, EntryKind.PROGRAM, null),
             ),
         ))
         fun assertRange(from: Long, to: Long) {
-            compose.onNodeWithText(
-                "A long channel name 0  ·  ${com.rerun.tv.ui.player.clockDate(from)}  " +
-                    "${com.rerun.tv.ui.player.clockTime(from)} – ${com.rerun.tv.ui.player.clockTime(to)}",
-            ).assertExists()
+            val label = "A long channel name 0  ·  ${com.rerun.tv.ui.player.clockDate(from)}  " +
+                "${com.rerun.tv.ui.player.clockTime(from)} – ${com.rerun.tv.ui.player.clockTime(to)}"
+            compose.waitUntil(10_000) {
+                if (!compose.mainClock.autoAdvance) compose.mainClock.advanceTimeByFrame()
+                compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText(label).assertExists()
             val cell = compose.onNode(hasAnyAncestor(hasTestTag("guide-row:test:0")) and isSelected())
                 .fetchSemanticsNode().boundsInRoot
             val channel = compose.onNodeWithTag("guide-channel:test:0").fetchSemanticsNode().boundsInRoot
@@ -195,7 +202,7 @@ class GuideScreenTest {
             assertTrue(cell.right <= row.right)
         }
         compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
-        compose.waitForIdle()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
         assertRange(start, end)
 
         compose.mainClock.autoAdvance = false
@@ -208,6 +215,26 @@ class GuideScreenTest {
         compose.mainClock.advanceTimeBy(100)
         compose.waitForIdle()
         assertRange(end, nextEnd)
+        repeat(10) {
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            compose.mainClock.advanceTimeBy(100)
+            assertRange(end, nextEnd)
+        }
+        compose.onNodeWithTag("guide-channel:test:1").performTouchInput { click() }
+        compose.onNodeWithTag("guide-channel:test:0").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(100)
+        assertRange(end, nextEnd)
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.mainClock.advanceTimeBy(100)
+        assertRange(nextEnd, lastEnd)
+        repeat(10) {
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+            compose.mainClock.advanceTimeBy(100)
+            assertRange(end, nextEnd)
+        }
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.mainClock.advanceTimeBy(100)
+        assertRange(start, end)
     }
 
     @Test
