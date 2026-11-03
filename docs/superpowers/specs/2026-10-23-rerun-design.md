@@ -182,6 +182,8 @@ Start-over alone begins at zero and uses a saved device-local media cursor rathe
 From the Top is visible in the guide/channel list, outside the ordinary channel editor and last-channel
 history, at 999 or the next free number. Episode starts offer just this episode or all remaining
 available same-show episodes across seasons, ordered by season/episode and matched by Plex show key.
+Movies instead wait for explicit Start movie / Cancel confirmation, never showing episode-queue choices.
+Start-over dialogs use 32 sp titles and 24 sp body/button text rather than the larger general menu styles.
 Changing stations pauses the picture and prompts Pause until later / Remove station / Cancel;
 opening menus does not prompt. Pause retains the queue and cursor in Room settings across app restarts.
 The leave prompt holds playback through pending preparation and retries until the viewer decides.

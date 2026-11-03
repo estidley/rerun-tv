@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.rerun.core.model.MediaKind
 import com.rerun.tv.ui.RestartPrompt
@@ -44,6 +45,8 @@ internal fun RestartChoices(
     onLeave: (Boolean) -> Unit,
 ) {
     val first = remember { FocusRequester() }
+    val titleStyle = Retro.Title.copy(fontSize = 32.sp)
+    val bodyStyle = Retro.Body.copy(fontSize = 24.sp)
     Dialog(onDismissRequest = { if (!busy) onCancel() }) {
         LaunchedEffect(prompt, busy) { if (!busy) first.requestFocus() }
         Column(
@@ -53,29 +56,33 @@ internal fun RestartChoices(
         ) {
             when (prompt) {
                 is RestartPrompt.Start -> {
-                    BasicText("Start from the beginning", style = Retro.Title)
-                    BasicText(describe(prompt.item), style = Retro.Body)
+                    BasicText("Start from the beginning", style = titleStyle)
+                    BasicText(describe(prompt.item), style = bodyStyle)
                     if (prompt.replacing) {
-                        BasicText("Starting this program replaces your saved From the Top station.", style = Retro.Body)
+                        BasicText("Starting this program replaces your saved From the Top station.", style = bodyStyle)
                     }
                     if (prompt.item.kind == MediaKind.EPISODE) {
-                        BasicText("Queue the remaining available episodes of this show across seasons?", style = Retro.Body)
-                        TvButton("Queue next episodes", { onStart(true) }, Modifier.focusRequester(first), enabled = !busy)
-                        TvButton("Just this episode", { onStart(false) }, enabled = !busy)
+                        BasicText("Queue the remaining available episodes of this show across seasons?", style = bodyStyle)
+                        TvButton("Queue next episodes", { onStart(true) }, Modifier.focusRequester(first),
+                            enabled = !busy, textStyle = bodyStyle)
+                        TvButton("Just this episode", { onStart(false) }, enabled = !busy, textStyle = bodyStyle)
                     } else {
-                        TvButton("Start movie", { onStart(false) }, Modifier.focusRequester(first), enabled = !busy)
+                        BasicText("Do you want to start this from the beginning?", style = bodyStyle)
+                        TvButton("Start movie", { onStart(false) }, Modifier.focusRequester(first),
+                            enabled = !busy, textStyle = bodyStyle)
                     }
                 }
                 is RestartPrompt.Leave -> {
-                    BasicText("Leave From the Top?", style = Retro.Title)
-                    BasicText("Pause saves your place and queue in the guide, including after restarting the app.", style = Retro.Body)
-                    TvButton("Pause until later", { onLeave(false) }, Modifier.focusRequester(first), enabled = !busy)
-                    TvButton("Remove station", { onLeave(true) }, enabled = !busy)
+                    BasicText("Leave From the Top?", style = titleStyle)
+                    BasicText("Pause saves your place and queue in the guide, including after restarting the app.", style = bodyStyle)
+                    TvButton("Pause until later", { onLeave(false) }, Modifier.focusRequester(first),
+                        enabled = !busy, textStyle = bodyStyle)
+                    TvButton("Remove station", { onLeave(true) }, enabled = !busy, textStyle = bodyStyle)
                 }
             }
-            TvButton("Cancel", onCancel, enabled = !busy)
-            if (busy) BasicText("Saving...", style = Retro.Body)
-            if (error != null) BasicText(error, style = Retro.Body.copy(color = Retro.Yellow))
+            TvButton("Cancel", onCancel, enabled = !busy, textStyle = bodyStyle)
+            if (busy) BasicText("Saving...", style = bodyStyle)
+            if (error != null) BasicText(error, style = bodyStyle.copy(color = Retro.Yellow))
         }
     }
 }

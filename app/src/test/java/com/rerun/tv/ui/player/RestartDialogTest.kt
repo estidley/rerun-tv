@@ -21,6 +21,26 @@ class RestartDialogTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
+    fun movieShowsConfirmationWithoutEpisodeQueueChoicesAndWaitsForTheViewer() {
+        val item = PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
+        ).single()
+        var action = ""
+        compose.setContent {
+            RestartChoices(RestartPrompt.Start(item, "source", 1, replacing = false),
+                false, null, { action = "cancel" }, { action = "queue:$it" }, {})
+        }
+        compose.onNodeWithText("Do you want to start this from the beginning?").assertExists()
+        compose.onNodeWithText("Queue next episodes").assertDoesNotExist()
+        compose.onNodeWithText("Just this episode").assertDoesNotExist()
+        assertEquals("", action)
+        compose.onNodeWithText("Cancel").performClick()
+        assertEquals("cancel", action)
+        compose.onNodeWithText("Start movie").performClick()
+        assertEquals("queue:false", action)
+    }
+
+    @Test
     fun queueAndLeaveChoicesWorkWithTouchAndShowErrorsWithoutDismissing() {
         val item = PlexParse.movies(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Episode","duration":1800000}]}}""",
