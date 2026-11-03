@@ -144,7 +144,10 @@ Failures and confirmed empty states retain the wordmark but not the spinner. Mis
 connection/initial-sync configuration returns to onboarding.
 
 Music, re-sync, ad catalog and included-library updates are controller-owned and survive screen navigation.
-Guide rebuilding hides rows behind progress/elapsed time and permits only Channels and Settings controls.
+Guide rebuilding hides rows behind a fixed-size, square-framed retro window with an Updating Guide
+title bar above bounded progress details and elapsed time. The same window is used over skeleton
+rows and while an empty lineup loads; messages and timer changes do not resize it. Colors follow
+the selected theme, and only Channels and Settings controls are available during rebuilding.
 Failed flag updates restore the previous value; failed imports preserve selections until commit.
 Playback reconciliation preserves open menus. Completing a scan after activity stop does not tune;
 resume starts the appropriate current/replacement station. Sign-out cancels and joins controller work.

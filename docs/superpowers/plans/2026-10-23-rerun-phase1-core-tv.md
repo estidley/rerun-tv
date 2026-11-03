@@ -31,6 +31,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - TV remote navigation, adaptive guide, display themes/density, CRT/effects and margined Settings.
 - Guide opening selects the currently airing station/program; RR launcher artwork and locally bundled Barlow Semi Condensed complement VT323 display text.
 - Navigation-safe scans, guide progress/elapsed time and restricted update controls.
+- Fixed-size retro Updating Guide window with a title bar, bounded details and elapsed time,
+  shared by empty-lineup loading and skeleton rows and styled in the selected color theme.
 - Startup loading/error/confirmed-empty states; beret wordmark and animated loading spinner,
   with no premature Settings/sync prompt during restore.
 - Foreground-only playback reconciliation, including library changes completed after screen navigation.

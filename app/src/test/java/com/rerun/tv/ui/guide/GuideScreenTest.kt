@@ -195,7 +195,9 @@ class GuideScreenTest {
             assertTrue(cell.right <= row.right)
         }
         compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
-        compose.waitForIdle()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty()
+        }
         assertRange(start, end)
 
         compose.mainClock.autoAdvance = false
@@ -225,6 +227,70 @@ class GuideScreenTest {
     }
 
     @Test
+    fun updateWindowKeepsItsFrameAsDetailsElapsedTimeAndThemeChange() {
+        val detail = mutableStateOf<String?>(null)
+        val elapsed = mutableStateOf(0L)
+        val theme = mutableStateOf(ColorTheme.STANDARD_BLUE)
+        compose.setContent {
+            ProvideColorTheme(theme.value) { GuideUpdateWindow(elapsed.value, detail.value) }
+        }
+        val frame = compose.onNodeWithTag("guide-status").fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithTag("guide-update-title-bar").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Updating Guide").assertExists()
+        compose.onNodeWithText("Building program listings...").assertExists()
+        val longDetail = "Reading a large library and rebuilding program listings for all the " +
+            "newly enabled channels before filling the guide with updated programs."
+        for (color in ColorTheme.entries) {
+            compose.runOnIdle {
+                detail.value = longDetail
+                elapsed.value = 1000
+                theme.value = color
+            }
+            assertEquals(frame, compose.onNodeWithTag("guide-status").fetchSemanticsNode().boundsInRoot)
+            assertEquals(title, compose.onNodeWithTag("guide-update-title-bar").fetchSemanticsNode().boundsInRoot)
+            compose.onNodeWithText("Elapsed: 1000s").assertExists()
+            val layouts = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithText(longDetail).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            assertEquals(2, layouts.single().lineCount)
+            val body = compose.onNodeWithText(longDetail).fetchSemanticsNode().boundsInRoot
+            val timer = compose.onNodeWithText("Elapsed: 1000s").fetchSemanticsNode().boundsInRoot
+            assertTrue(body.top >= title.bottom)
+            assertTrue(body.bottom <= timer.top)
+            assertTrue(timer.bottom <= frame.bottom)
+            val image = compose.onNodeWithTag("guide-update-title-bar").captureToImage().toPixelMap()
+            assertEquals(color.palette.light, image[image.width - 4, image.height / 2])
+        }
+        compose.runOnIdle { detail.value = "Done" }
+        assertEquals(frame, compose.onNodeWithTag("guide-status").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test
+    fun updateWindowKeepsTheSameSizeWhenAnEmptyLineupGainsSkeletonRows() = runBlocking<Unit> {
+        val row = channels.value.first()
+        channels.value = emptyList()
+        val finish = CompletableDeferred<Unit>()
+        `when`(sync.sync()).thenReturn(flow {
+            emit(SyncProgress("Reading libraries", 1, 2))
+            finish.await()
+        })
+        controller.resyncLibrary()
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
+        val initial = compose.onNodeWithTag("guide-status").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle { channels.value = listOf(row) }
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithTag("guide-skeleton").fetchSemanticsNodes().isNotEmpty()
+        }
+        val populated = compose.onNodeWithTag("guide-status").fetchSemanticsNode().boundsInRoot
+        assertEquals(initial.width, populated.width, 0f)
+        assertEquals(initial.height, populated.height, 0f)
+        compose.onNodeWithText("Updating Guide").assertExists()
+        compose.onNodeWithText("Reading libraries 1/2").assertExists()
+        compose.onNodeWithText("Elapsed:", substring = true).assertExists()
+        compose.runOnIdle { finish.complete(Unit) }
+        compose.waitUntil(10_000) { !controller.lineupUpdate.value.busy }
+    }
+
+    @Test
     fun emptyLineupShowsSyncProgressUntilCompletion() = runBlocking<Unit> {
         channels.value = emptyList()
         val finish = CompletableDeferred<Unit>()
@@ -234,7 +300,7 @@ class GuideScreenTest {
         })
         controller.resyncLibrary()
         compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
-        compose.onNodeWithText("Updating guide...").assertExists()
+        compose.onNodeWithText("Updating Guide").assertExists()
         compose.onNodeWithText("Elapsed: 0s").assertExists()
         compose.onNodeWithText("Reading libraries 1/2").assertExists()
         compose.onNodeWithText("No channels yet. Open Settings and run a library sync.").assertDoesNotExist()
@@ -415,7 +481,7 @@ class GuideScreenTest {
         controller.tuneTo("test:30", sound = false)
         try {
             compose.setContent { if (showGuide.value) GuideScreen(controller, schedule, clock = { baseNow }) }
-            compose.onNodeWithText("Updating guide...").assertExists()
+            compose.onNodeWithText("Updating Guide").assertExists()
         } finally {
             release.countDown()
         }
@@ -578,7 +644,7 @@ class GuideScreenTest {
         })
         controller.setMusicEnabled(true)
         compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
-        compose.onNodeWithText("Updating guide...").assertExists()
+        compose.onNodeWithText("Updating Guide").assertExists()
         compose.onNodeWithText("Music 1/2").assertExists()
         compose.onNodeWithTag("guide-grid").assertDoesNotExist()
         verify(schedule, never()).ensure(anyCollection(), anyLong())
@@ -614,7 +680,7 @@ class GuideScreenTest {
         }.`when`(schedule).ensure(anyCollection(), anyLong())
         try {
             compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
-            compose.onNodeWithText("Updating guide...").assertExists()
+            compose.onNodeWithText("Updating Guide").assertExists()
             compose.onNodeWithText("Elapsed: 0s").assertExists()
             compose.onNodeWithTag("guide-grid").assertDoesNotExist()
             compose.onRoot().performKeyInput {

@@ -375,18 +375,20 @@ fun GuideScreen(
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                 if (loadError != null || rows.isEmpty()) {
-                    Column(Modifier.align(Alignment.Center).testTag("guide-status").guideTouchTap(touch, { if (loadError != null) attempt++ })) {
-                        BasicText(
-                            if (updating) "Updating guide..." else loadError ?: "No channels yet. Open Settings and run a library sync.",
-                            style = Retro.Title,
-                        )
-                        BasicText(
-                            if (updating) "Elapsed: ${elapsedSeconds}s"
-                            else if (loadError != null) { if (touch) "Tap to retry, or tap SETTINGS." else "Press OK to retry, or UP for Settings." }
-                            else if (touch) "Tap SETTINGS." else "Press UP for Settings.",
-                            style = Retro.Body,
-                        )
-                        if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
+                    if (updating) {
+                        GuideUpdateWindow(elapsedSeconds, update.message?.takeIf { update.busy }, Modifier.align(Alignment.Center))
+                    } else {
+                        Column(
+                            Modifier.align(Alignment.Center).testTag("guide-status")
+                                .guideTouchTap(touch, { if (loadError != null) attempt++ }),
+                        ) {
+                            BasicText(loadError ?: "No channels yet. Open Settings and run a library sync.", style = Retro.Title)
+                            BasicText(
+                                if (loadError != null) { if (touch) "Tap to retry, or tap SETTINGS." else "Press OK to retry, or UP for Settings." }
+                                else if (touch) "Tap SETTINGS." else "Press UP for Settings.",
+                                style = Retro.Body,
+                            )
+                        }
                     }
                     return@BoxWithConstraints
                 }
@@ -434,14 +436,7 @@ fun GuideScreen(
                         }
                     }
                     if (updating) {
-                        Column(
-                            Modifier.align(Alignment.Center).background(Retro.GuideBlueDeep.copy(alpha = 0.9f)).padding(24.dp)
-                                .testTag("guide-status"),
-                        ) {
-                            BasicText("Updating guide...", style = Retro.Title)
-                            BasicText("Elapsed: ${elapsedSeconds}s", style = Retro.Body)
-                            if (update.busy) update.message?.let { BasicText(it, style = Retro.Body) }
-                        }
+                        GuideUpdateWindow(elapsedSeconds, update.message?.takeIf { update.busy }, Modifier.align(Alignment.Center))
                     }
                 }
             }
@@ -455,6 +450,33 @@ fun GuideScreen(
                 },
                 style = Retro.Caption,
             )
+        }
+    }
+}
+
+@Composable
+internal fun GuideUpdateWindow(elapsedSeconds: Long, detail: String?, modifier: Modifier = Modifier) {
+    Column(
+        modifier.width(640.dp).height(220.dp).testTag("guide-status")
+            .background(Retro.GuideBlueDeep).border(3.dp, Retro.Border).padding(3.dp)
+            .border(1.dp, Retro.Cyan).padding(2.dp),
+    ) {
+        Box(
+            Modifier.fillMaxWidth().height(48.dp).background(Retro.GuideBlueLight)
+                .testTag("guide-update-title-bar").padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicText("Updating Guide", style = Retro.GuideNumber, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            BasicText(
+                detail?.takeIf { it.isNotBlank() } ?: "Building program listings...",
+                style = Retro.Body,
+                minLines = 2,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            BasicText("Elapsed: ${elapsedSeconds}s", style = Retro.Caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
