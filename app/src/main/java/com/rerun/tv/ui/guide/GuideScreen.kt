@@ -369,7 +369,8 @@ fun GuideScreen(
             }
             Spacer(Modifier.height(12.dp))
             key(timeFormat) {
-                DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem), summary, GuideDensity.from(density))
+                DetailPanel(focusedChannel?.name, focusedItem, focusedBlock, controller.posterUrl(focusedItem), summary,
+                    GuideDensity.from(density), resumable = focusedChannel?.id == Lineup.RESTART_ID)
             }
             Spacer(Modifier.height(12.dp))
             BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
@@ -594,7 +595,7 @@ private fun Cell(
 }
 
 @Composable
-private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?, summary: String?, density: GuideDensity) {
+private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBlock?, poster: String?, summary: String?, density: GuideDensity, resumable: Boolean = false) {
     val scale = density.textScale
     val posterH = density.detailHeight - 24f
     Row(Modifier.fillMaxWidth().height(density.detailHeight.dp).background(Retro.GuideBlueDeep.copy(alpha = 0.7f)).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(12.dp)) {
@@ -606,7 +607,7 @@ private fun DetailPanel(channelName: String?, item: MediaItem?, block: GuideBloc
             BasicText(if (block?.offAir == true) "Off Air" else block?.title ?: describe(item), style = Retro.Title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val bits = listOfNotNull(
                 channelName,
-                block?.let { "${clockDate(it.startMs)}  ${clockTime(it.startMs)} – ${clockTime(it.endMs)}" },
+                if (resumable) "Resumable playback" else block?.let { "${clockDate(it.startMs)}  ${clockTime(it.startMs)} – ${clockTime(it.endMs)}" },
                 item?.contentRating,
                 item?.genres?.take(3)?.joinToString(", ")?.takeIf { it.isNotBlank() },
             )

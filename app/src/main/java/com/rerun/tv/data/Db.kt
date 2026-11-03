@@ -289,6 +289,7 @@ interface SettingDao {
         listOf(
             Settings.SERVER_BASE, Settings.SERVER_NAME, Settings.SERVER_ID, Settings.LAST_SYNC,
             Settings.LAST_CHANNEL, Settings.SELECTED_LIBRARIES, Settings.AD_LIBRARY, Settings.AD_LAST_SYNC,
+            RESTART_SESSION_KEY,
         ).forEach { remove(it) }
     }
 

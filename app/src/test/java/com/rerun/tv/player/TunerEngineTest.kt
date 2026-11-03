@@ -265,14 +265,60 @@ class TunerEngineTest {
             emptyMap(),
         ).single()
         prepare(Lineup.RESTART_ID, item)
-        engine.armReturn("east")
+        val session = com.rerun.tv.data.RestartSession("saved", listOf(item.key), returnChannel = "east")
+        `when`(repo.restartSession()).thenReturn(session)
         engine.tune(Lineup.RESTART_ID)
         await { sources.size == 1 }
         assertTrue(sources[0].mediaItem.localConfiguration!!.uri.toString().contains("&offset=0&"))
+        `when`(player.currentPosition).thenReturn(65_000)
+        `when`(repo.restartSession()).thenReturn(session.copy(positionMs = 65_000))
         engine.tune(Lineup.RESTART_ID)
         await { sources.size == 2 }
         val offset = sources[1].mediaItem.localConfiguration!!.uri.getQueryParameter("offset")!!.toLong()
         assertTrue(offset >= 60)
+    }
+
+    @Test
+    fun savedRestartResumesDirectPlaybackAtMediaPositionIncludingRewindsRegardlessOfWallTime() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare(Lineup.RESTART_ID, item)
+        val saved = com.rerun.tv.data.RestartSession("saved", listOf(item.key), positionMs = 123_000,
+            returnChannel = "east")
+        `when`(repo.restartSession()).thenReturn(saved)
+        wallTime = System.currentTimeMillis() + 10 * 86_400_000L
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 1 }
+        verify(player).seekTo(123_000)
+        listener.onRenderedFirstFrame()
+        `when`(player.currentPosition).thenReturn(90_000)
+        wallTime = requireNotNull(wallTime) + 600_000
+        engine.pauseRestart()
+        verify(repo).saveRestartProgress("saved", 0, 90_000, true)
+        verify(player).pause()
+        engine.tune("east")
+        verify(repo, never()).saveRestartProgress("saved", 0, 725_000, true)
+    }
+
+    @Test
+    fun restartQueueAdvancesOnMediaEndAndStartsTheNextEpisodeAtZero() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        val next = item.copy(key = "next")
+        prepare(Lineup.RESTART_ID, item)
+        `when`(repo.item(next.key)).thenReturn(next)
+        val saved = com.rerun.tv.data.RestartSession("saved", listOf(item.key, next.key), returnChannel = "east")
+        val advanced = saved.copy(index = 1)
+        `when`(repo.restartSession()).thenReturn(saved, advanced)
+        `when`(repo.advanceRestart("saved", 0)).thenReturn(advanced)
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        `when`(player.currentPosition).thenReturn(item.durationMs)
+        listener.onPlaybackStateChanged(Player.STATE_ENDED)
+        await { sources.size == 2 }
+        assertEquals(next.key, engine.state.value.item?.key)
+        verify(player, times(2)).seekTo(0)
+        verify(repo).advanceRestart("saved", 0)
+        verify(settings, never()).setLastChannel(Lineup.RESTART_ID)
     }
 
     @Test
@@ -282,16 +328,21 @@ class TunerEngineTest {
             emptyMap(),
         ).single()
         prepare(Lineup.RESTART_ID, item)
+        `when`(repo.channel("east")).thenReturn(ChannelRow.of(
+            ChannelDef("east", 1, "Source", ChannelKind.CUSTOM, Rules()), true, false,
+        ))
+        `when`(repo.restartSession()).thenReturn(
+            com.rerun.tv.data.RestartSession("saved", listOf(item.key), returnChannel = "east"),
+        )
         var returned: String? = null
         engine.onReturned = { returned = it }
-        engine.armReturn("east")
         engine.tune(Lineup.RESTART_ID)
         await { sources.size == 1 }
         listener.onRenderedFirstFrame()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(11))
         assertNull(returned)
         listener.onPlaybackStateChanged(Player.STATE_ENDED)
-        assertEquals("east", returned)
+        await { returned == "east" }
     }
 
     @Test

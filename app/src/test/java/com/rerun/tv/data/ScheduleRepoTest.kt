@@ -333,6 +333,79 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun restartQueueUsesShowIdentityAndEpisodeOrderAndSurvivesPausingAndRepositoryRestart() = runBlocking {
+        fun episode(key: String, season: Int?, number: Int?, show: String = "show") =
+            movie(key).copy(kind = com.rerun.core.model.MediaKind.EPISODE, showKey = show,
+                season = season, episode = number, durationMs = 1_800_000)
+        val current = episode("current", 1, 2)
+        val next = episode("next", 1, 4)
+        val seasonTwo = episode("s2", 2, 1)
+        val library = listOf(seasonTwo, episode("earlier", 1, 1), episode("other", 1, 3, "other"),
+            next, current, episode("unknown", null, 5), episode("special", 0, 1))
+        repo.refreshChannels(false, library)
+        repo.airFromStart(current, "source", queueEpisodes = true)
+        val session = requireNotNull(repo.restartSession())
+        assertEquals(listOf("current", "next", "s2"), session.keys)
+        assertFalse(requireNotNull(repo.channel(Lineup.RESTART_ID)).hidden)
+        repo.saveRestartProgress(session.id, 0, 123_456, paused = true)
+        repo.saveRestartProgress(session.id, 0, 60_000, paused = true)
+
+        val reopened = ScheduleRepo(db, Scheduler(ZoneId.of("UTC")))
+        val restored = requireNotNull(reopened.restartSession())
+        assertEquals(60_000L, restored.positionMs)
+        assertEquals("source", restored.returnChannel)
+        assertTrue(reopened.active().any { it.id == Lineup.RESTART_ID })
+        val tomorrow = now + DAY
+        val projected = reopened.restartEntries(tomorrow)
+        assertEquals(tomorrow - 60_000, projected.first().startMs)
+        assertEquals(session.keys, projected.map { it.itemKey })
+        reopened.refreshChannels(false, library)
+        assertEquals(restored, reopened.restartSession())
+        assertTrue(reopened.active().any { it.id == Lineup.RESTART_ID })
+
+        val advanced = requireNotNull(reopened.advanceRestart(session.id, 0))
+        assertEquals(1, advanced.index)
+        assertEquals(0L, advanced.positionMs)
+        reopened.saveRestartProgress(session.id, 0, 900_000, paused = false)
+        assertEquals(advanced, reopened.restartSession())
+        reopened.advanceRestart(session.id, 1)
+        assertNull(reopened.advanceRestart(session.id, 2))
+        assertNull(reopened.channel(Lineup.RESTART_ID))
+    }
+
+    @Test
+    fun singleProgramRestartRemovalAndSignOutNeverRestoreAnOldCheckpoint() = runBlocking {
+        val item = movie("one")
+        repo.refreshChannels(false, listOf(item))
+        repo.airFromStart(item, "source", queueEpisodes = false)
+        val old = requireNotNull(repo.restartSession())
+        assertEquals(listOf(item.key), old.keys)
+        repo.removeRestartStation()
+        repo.saveRestartProgress(old.id, old.index, 5000, paused = true)
+        assertNull(repo.restartSession())
+        assertNull(repo.channel(Lineup.RESTART_ID))
+        repo.airFromStart(item, "source", queueEpisodes = false)
+        repo.saveRestartProgress(old.id, old.index, 9000, paused = false)
+        assertEquals(0L, requireNotNull(repo.restartSession()).positionMs)
+        db.settings().clearConnection()
+        assertNull(repo.restartSession())
+    }
+
+    @Test
+    fun restartStationAvoidsNumberCollisionsAndInvalidatesWhenQueuedContentIsRemoved() = runBlocking {
+        val item = movie("one")
+        repo.refreshChannels(false, listOf(item))
+        db.channels().upsert(ChannelRow.of(com.rerun.core.model.ChannelDef(
+            "custom", Lineup.RESTART_NUMBER, "Custom", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules()), false, false))
+        repo.airFromStart(item, "source", queueEpisodes = false)
+        assertNotEquals(Lineup.RESTART_NUMBER, repo.channel(Lineup.RESTART_ID)?.number)
+        repo.refreshChannels(false, emptyList())
+        assertNull(repo.restartSession())
+        assertNull(repo.channel(Lineup.RESTART_ID))
+    }
+
+    @Test
     fun guideStartingInABreakIncludesThePreviousProgramButNotAdTitles() = runBlocking {
         val program = com.rerun.core.schedule.ScheduleEntry(
             "east", now - 1_800_000, now - 480_000, com.rerun.core.schedule.EntryKind.PROGRAM, "show",

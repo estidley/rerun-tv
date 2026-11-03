@@ -59,6 +59,11 @@ data class StartupState(
     val error: String? = null,
 )
 
+sealed interface RestartPrompt {
+    data class Start(val item: MediaItem, val returnChannel: String, val tuneId: Long, val replacing: Boolean) : RestartPrompt
+    data class Leave(val channelId: String, val sound: Boolean) : RestartPrompt
+}
+
 sealed interface Screen {
     data object Onboarding : Screen
     data object Player : Screen
@@ -107,6 +112,14 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     private val _sharedPilot = MutableStateFlow(com.rerun.tv.data.SharedPilotStatus())
     val sharedPilot = _sharedPilot.asStateFlow()
     private var sharedStatusJob: Job? = null
+    private val _restartPrompt = MutableStateFlow<RestartPrompt?>(null)
+    val restartPrompt = _restartPrompt.asStateFlow()
+    private val _restartBusy = MutableStateFlow(false)
+    val restartBusy = _restartBusy.asStateFlow()
+    private val _restartError = MutableStateFlow<String?>(null)
+    val restartError = _restartError.asStateFlow()
+    private var restartJob: Job? = null
+    private var restartHeldAcrossStop = false
 
     fun loadSharedPilot() {
         if (signingOut) return
@@ -334,6 +347,9 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     init {
         engine.setVisible(_screen.value == Screen.Player)
         engine.onReturned = { id ->
+            _restartPrompt.value = null
+            _restartError.value = null
+            restartHeldAcrossStop = false
             currentId = id
             previousId = channelBeforeRestart
             channelBeforeRestart = null
@@ -346,6 +362,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         engine.setVisible(foreground && screen == Screen.Player)
         _screen.value = if (screen is Screen.Editor && screen.channelId == Lineup.ADS_ID) {
             Screen.AdLibrary
+        } else if (screen is Screen.Editor && screen.channelId == Lineup.RESTART_ID) {
+            Screen.Guide
         } else screen
     }
 
@@ -356,10 +374,17 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             startupJob?.cancelAndJoin()
             lineupJob?.cancelAndJoin()
             sharedStatusJob?.cancelAndJoin()
+            restartJob?.cancelAndJoin()
+            _restartPrompt.value = null
+            _restartBusy.value = false
+            _restartError.value = null
+            restartHeldAcrossStop = false
             _sharedPilot.value = com.rerun.tv.data.SharedPilotStatus()
             sharedRefreshAttemptMs = null
             _startup.value = StartupState()
             _lineupUpdate.value = LineupUpdate()
+            engine.stop()
+            engine.awaitRestartSave()
             engine.clear()
             app.sync.signOut()
             currentId = null
@@ -430,11 +455,15 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         if (!app.settings.isSignedIn) {
             engine.clear()
             go(Screen.Onboarding)
-        } else currentId?.let { engine.tune(it) } ?: startWatching()
+        } else if (_restartPrompt.value !is RestartPrompt.Leave) {
+            restartHeldAcrossStop = false
+            currentId?.let { engine.tune(it) } ?: startWatching()
+        }
     }
 
     fun stop() {
         foreground = false
+        if (_restartPrompt.value is RestartPrompt.Leave) restartHeldAcrossStop = true
         engine.setVisible(false)
         engine.stop()
     }
@@ -457,6 +486,17 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     }
 
     fun tuneTo(id: String, sound: Boolean = true) {
+        if (_restartBusy.value || _restartPrompt.value != null || signingOut) return
+        if (currentId == Lineup.RESTART_ID && id != Lineup.RESTART_ID) {
+            _restartError.value = null
+            _restartPrompt.value = RestartPrompt.Leave(id, sound)
+            engine.holdRestart()
+            return
+        }
+        tuneImmediately(id, sound)
+    }
+
+    private fun tuneImmediately(id: String, sound: Boolean = true) {
         if (currentId == Lineup.RESTART_ID && id != Lineup.RESTART_ID) {
             previousId = previousId?.takeUnless { it == id } ?: channelBeforeRestart
             channelBeforeRestart = null
@@ -482,12 +522,10 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     fun lastChannel() { previousId?.let { tuneTo(it) } }
 
-    /**
-     * Hold Left while an episode is on. The episode starts over on a hidden channel
-     * so the one you were watching keeps its schedule. When it ends, the TV comes back.
-     */
+    /** Start-over stays device-local; the original station keeps its wall-clock schedule. */
     fun startEpisodeOver() {
-        scope.launch {
+        if (_restartBusy.value || _restartPrompt.value != null || restartJob?.isActive == true || signingOut) return
+        restartJob = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             val returnTo = currentId ?: return@launch
             if (returnTo == Lineup.RESTART_ID) return@launch
             val snap = engine.state.value
@@ -500,17 +538,77 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
                 return@launch
             }
             try {
-                app.schedule.airFromStart(item, System.currentTimeMillis())
+                val replacing = app.schedule.restartSession() != null
+                if (!foreground || currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
+                val prompt = RestartPrompt.Start(item, returnTo, snap.tuneId, replacing)
+                _restartError.value = null
+                _restartPrompt.value = prompt
+                if (item.kind == MediaKind.MOVIE && !replacing) confirmRestartStart(queueEpisodes = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                engine.notify("Couldn't start over: ${e.message}")
-                return@launch
+                engine.notify("Couldn't read saved start-over station: ${e.message}")
             }
-            if (!foreground || currentId != returnTo || engine.state.value.tuneId != snap.tuneId) return@launch
-            channelBeforeRestart = previousId
-            engine.armReturn(returnTo)
-            tuneTo(Lineup.RESTART_ID)
+        }
+        restartJob?.start()
+    }
+
+    fun cancelRestartPrompt() {
+        if (_restartBusy.value) return
+        val retryPlayback = _restartError.value != null || restartHeldAcrossStop
+        restartHeldAcrossStop = false
+        _restartPrompt.value = null
+        _restartError.value = null
+        if (currentId == Lineup.RESTART_ID && foreground) {
+            if (retryPlayback) engine.tune(Lineup.RESTART_ID) else engine.continueRestart()
+        }
+    }
+
+    fun confirmRestartStart(queueEpisodes: Boolean) {
+        val prompt = _restartPrompt.value as? RestartPrompt.Start ?: return
+        if (_restartBusy.value || signingOut) return
+        _restartBusy.value = true
+        restartJob = scope.launch {
+            try {
+                check(foreground && currentId == prompt.returnChannel && engine.state.value.tuneId == prompt.tuneId) {
+                    "The program changed. Cancel and try Start over again."
+                }
+                withContext(Dispatchers.Default) {
+                    app.schedule.airFromStart(prompt.item, prompt.returnChannel, queueEpisodes)
+                }
+                _restartPrompt.value = null
+                if (!foreground || currentId != prompt.returnChannel || engine.state.value.tuneId != prompt.tuneId) return@launch
+                channelBeforeRestart = previousId
+                tuneImmediately(Lineup.RESTART_ID)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _restartError.value = "Couldn't start over: ${e.message}"
+            } finally {
+                _restartBusy.value = false
+            }
+        }
+    }
+
+    fun confirmRestartLeave(remove: Boolean) {
+        val prompt = _restartPrompt.value as? RestartPrompt.Leave ?: return
+        if (_restartBusy.value || signingOut) return
+        _restartBusy.value = true
+        restartJob = scope.launch {
+            try {
+                engine.pauseRestart()
+                if (remove) app.schedule.removeRestartStation()
+                _restartPrompt.value = null
+                _restartError.value = null
+                restartHeldAcrossStop = false
+                tuneImmediately(prompt.channelId, prompt.sound)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _restartError.value = "Couldn't ${if (remove) "remove" else "pause"} start-over station: ${e.message}"
+            } finally {
+                _restartBusy.value = false
+            }
         }
     }
 

@@ -174,7 +174,18 @@ and playback failures are visible, not silent volume guarantees.
 Station changes retain configurable static/roll effects. Same-station clips fade to black before media
 replacement, hold black while loading, and fade in on the first frame (or music readiness).
 Load/fade time is included in wall-clock seeking; menu muting survives replacement.
-Start-over alone begins at zero and returns to the prior station when the one-shot ends.
+Start-over alone begins at zero and uses a saved device-local media cursor rather than wall time.
+From the Top is visible in the guide/channel list, outside the ordinary channel editor and last-channel
+history, at 999 or the next free number. Episode starts offer just this episode or all remaining
+available same-show episodes across seasons, ordered by season/episode and matched by Plex show key.
+Changing stations pauses the picture and prompts Pause until later / Remove station / Cancel;
+opening menus does not prompt. Pause retains the queue and cursor in Room settings across app restarts.
+The guide labels this station as resumable playback, not a linear time range. Completion advances
+on media end, not the metadata deadline, and removes the finished station before returning to the
+source (or an available fallback). Progress checkpoints every five seconds and on stop, retune or
+explicit pause, including the base offset for Plex transcoding; abrupt process loss may replay
+the last checkpoint interval. New start-over requests confirm before replacing a saved station.
+Sign-out clears the saved queue; removal of queued library content invalidates the station.
 The separate ad-only station is not eligible for start-over; its clips stay in the ad catalog,
 and a rejected request displays the normal notification without interrupting playback.
 Pending start-over work validates the tune generation before switching, so rollover or retuning
