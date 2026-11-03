@@ -185,7 +185,7 @@ not a hosted publisher. Identical regular-video inputs and effective rules are s
 - **Music stations:** back to back, no grid, no ads, hourly guide blocks.
 - **Buy Me Maybe:** ad clips back to back, no padding, hourly guide blocks, generated only from a
   nonempty enabled ad catalog.
-- **From the Top** (hidden start-over channel): unchanged by v2. Since PR #11 it restarts movies
+- **From the Top** (device-local resumable start-over station): unchanged by v2. Since PR #11 it restarts movies
   as well as episodes (its rules use the restarted item's own kind) and never the Buy Me Maybe
   station.
 

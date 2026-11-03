@@ -18,7 +18,7 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - Updated parody network names with preserved user edits; optional build-time TMDB network/company lists and multi-network membership, falling back to Plex metadata without lists.
 - Plex sign-in/server choice, persistent selected libraries and explicit Room migrations.
 - Network/curated/theme/movie/custom channels, deterministic scheduling and channel editing.
-- Genre music stations, Off Air and Up Next states, hidden episode start-over.
+- Genre music stations, Off Air and Up Next states, and a visible resumable From the Top station with optional same-show episode queues across seasons.
 - Single-schedule channels; removed East/West option with an explicit data-preserving upgrade
   that retires saved West feeds and restores the last channel to its original station.
 - Content-driven TV/music decade stations at 24/12 hours respectively, using a single qualification
@@ -31,6 +31,8 @@ See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 - TV remote navigation, adaptive guide, display themes/density, CRT/effects and margined Settings.
 - Guide opening selects the currently airing station/program; RR launcher artwork and locally bundled Barlow Semi Condensed complement VT323 display text.
 - Navigation-safe scans, guide progress/elapsed time and restricted update controls.
+- Fixed-size retro Updating Guide window with a title bar, bounded details and elapsed time,
+  shared by empty-lineup loading and skeleton rows and styled in the selected color theme.
 - Startup loading/error/confirmed-empty states; beret wordmark and animated loading spinner,
   with no premature Settings/sync prompt during restore.
 - Foreground-only playback reconciliation, including library changes completed after screen navigation.
@@ -53,6 +55,11 @@ The suite includes regression coverage for:
 - Same-station fades, cancellation during fade, menu mute and wall-clock offsets.
 - Ad station lifecycle, short-clip playback and hourly guide grouping without changing clip boundaries.
 - Current-program guide focus, music conversion fallback and readable/display typography roles across themes.
+- Full scheduled guide times across opening, window advances and clipped cells, with complete contiguous filler chains retained beyond query boundaries and grid geometry/navigation bounded to the viewport, including long programs and touch reselection.
+- Start-over queue ordering/identity, persisted media-position resume, playback-end advancement,
+  Pause/Remove/Cancel and episode-queue prompts, stale-checkpoint rejection and sign-out cleanup.
+- Start-over leave holds survive preparation/retries; saved-session identity preserves audio
+  overrides and HDR fallback across retunes, and completion returns only to active stations.
 - Decade eligibility boundaries, media/year isolation, Music switch, edits, number collisions,
   persisted schedule retention/removal, and a 40,000-item workload checking bounded library passes.
 - TBS documentary/comedy separation, stock-name migration, renamed-channel threshold guards,
@@ -88,6 +95,9 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
   remain, and original channel edits, schedules and unrelated settings survive.
 - [ ] Enable Music or save library changes, leave the screen, and confirm final lineup and muted menu playback. Press Home mid-scan; no playback starts until resume.
 - [ ] Tune near program end, observe ads at the break, and confirm the next program starts on schedule.
+- [ ] Start over a movie and an episode on a TV; exercise both queue choices, remote/touch
+  Pause/Remove/Cancel, reopening menus without prompts, direct/transcoded resume after
+  backgrounding/app restart, queued season transitions and return after the final episode.
 - [ ] Enable/sync ads and tune Buy Me Maybe; confirm hourly guide blocks, short clips playing back-to-back, regular sync preserving the station, and disabling ads returning to another station without unmuting menus.
 - [ ] Check RR launcher artwork and readable guide/menu typography at normal TV viewing distance.
 - [ ] Restore an existing lineup: old stock TBS/Comedy/MTV names update without losing personal

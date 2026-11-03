@@ -9,12 +9,11 @@ data class GuideBlock(
     val title: String? = null,
 )
 
-/** Turns a channel's entries into guide cells, clipped to [fromMs, toMs). */
+/** Guide cells overlapping [fromMs, toMs), retaining scheduled boundaries for program details. */
 fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<GuideBlock> {
     if (fromMs >= toMs) return emptyList()
     val scheduled = ArrayList<GuideBlock>()
     for (e in entries.sortedBy { it.startMs }) {
-        if (e.startMs >= toMs) continue
         val last = scheduled.lastOrNull()
         if (e.kind == EntryKind.FILLER && last != null && last.endMs == e.startMs) {
             scheduled[scheduled.size - 1] = last.copy(endMs = e.endMs)
@@ -25,11 +24,10 @@ fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<Gu
     val out = ArrayList<GuideBlock>(scheduled.size + 2)
     var cursor = fromMs
     for (block in scheduled) {
-        if (block.endMs <= fromMs) continue
-        val b = block.copy(startMs = maxOf(block.startMs, fromMs), endMs = minOf(block.endMs, toMs))
-        if (b.startMs > cursor) out += GuideBlock(cursor, b.startMs, null, offAir = true)
-        out += b
-        cursor = maxOf(cursor, b.endMs)
+        if (block.endMs <= fromMs || block.startMs >= toMs) continue
+        if (block.startMs > cursor) out += GuideBlock(cursor, block.startMs, null, offAir = true)
+        out += block
+        cursor = maxOf(cursor, block.endMs)
     }
     if (cursor < toMs) out += GuideBlock(cursor, toMs, null, offAir = true)
     return out
@@ -38,7 +36,8 @@ fun guideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long): List<Gu
 /** Groups continuous playback into hour-long station blocks. Gaps stay Off Air. */
 fun hourlyGuideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long, title: String): List<GuideBlock> {
     val spans = ArrayList<GuideBlock>()
-    for (block in guideBlocks(entries, fromMs, toMs)) {
+    for (scheduled in guideBlocks(entries, fromMs, toMs)) {
+        val block = scheduled.copy(startMs = maxOf(scheduled.startMs, fromMs), endMs = minOf(scheduled.endMs, toMs))
         val previous = spans.lastOrNull()
         if (!block.offAir && previous != null && !previous.offAir && previous.endMs == block.startMs) {
             spans[spans.lastIndex] = previous.copy(endMs = block.endMs)

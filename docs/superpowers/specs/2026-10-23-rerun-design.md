@@ -112,6 +112,8 @@ This section describes shipped behavior. An approved replacement (local quarter-
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.
+- Program details retain the full scheduled start/end, including following filler; only grid geometry is clipped to the visible window, not the underlying program times.
+- Guide queries follow contiguous filler chains on either side of the query boundary, stopping at a program or gap, so split shared breaks retain their full range.
 - Each guide opening selects the current station and wall-clock program after loading; subsequent browsing is not reset by schedule reloads.
 - The upper-right channel badge appears on channel changes or explicit program info, not on successive commercial or program transitions within the same channel.
 - Guide data is bounded to nearby rows and a nine-hour range around the three-hour view; only visible cells are composed. Horizontal movement within that range uses cached blocks and metadata. Revisions, clock jumps, retries and ten-minute top-ups refresh the cache, and distant rows/metadata are evicted.
@@ -143,7 +145,10 @@ Failures and confirmed empty states retain the wordmark but not the spinner. Mis
 connection/initial-sync configuration returns to onboarding.
 
 Music, re-sync, ad catalog and included-library updates are controller-owned and survive screen navigation.
-Guide rebuilding hides rows behind progress/elapsed time and permits only Channels and Settings controls.
+Guide rebuilding hides rows behind a fixed-size, square-framed retro window with an Updating Guide
+title bar above bounded progress details and elapsed time. The same window is used over skeleton
+rows and while an empty lineup loads; messages and timer changes do not resize it. Colors follow
+the selected theme, and only Channels and Settings controls are available during rebuilding.
 Failed flag updates restore the previous value; failed imports preserve selections until commit.
 Playback reconciliation preserves open menus. Completing a scan after activity stop does not tune;
 resume starts the appropriate current/replacement station. Sign-out cancels and joins controller work.
@@ -173,7 +178,20 @@ and playback failures are visible, not silent volume guarantees.
 Station changes retain configurable static/roll effects. Same-station clips fade to black before media
 replacement, hold black while loading, and fade in on the first frame (or music readiness).
 Load/fade time is included in wall-clock seeking; menu muting survives replacement.
-Start-over alone begins at zero and returns to the prior station when the one-shot ends.
+Start-over alone begins at zero and uses a saved device-local media cursor rather than wall time.
+From the Top is visible in the guide/channel list, outside the ordinary channel editor and last-channel
+history, at 999 or the next free number. Episode starts offer just this episode or all remaining
+available same-show episodes across seasons, ordered by season/episode and matched by Plex show key.
+Changing stations pauses the picture and prompts Pause until later / Remove station / Cancel;
+opening menus does not prompt. Pause retains the queue and cursor in Room settings across app restarts.
+The leave prompt holds playback through pending preparation and retries until the viewer decides.
+Retuning the same saved episode preserves its audio choice and HDR fallback independently of projected timestamps.
+The guide labels this station as resumable playback, not a linear time range. Completion advances
+on media end, not the metadata deadline, and removes the finished station before returning to the
+source if still active (or an active fallback). Progress checkpoints every five seconds and on stop, retune or
+explicit pause, including the base offset for Plex transcoding; abrupt process loss may replay
+the last checkpoint interval. New start-over requests confirm before replacing a saved station.
+Sign-out clears the saved queue; removal of queued library content invalidates the station.
 The separate ad-only station is not eligible for start-over; its clips stay in the ad catalog,
 and a rejected request displays the normal notification without interrupting playback.
 Pending start-over work validates the tune generation before switching, so rollover or retuning

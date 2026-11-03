@@ -224,11 +224,25 @@ interface EntryDao {
     suspend fun rangeFor(channelIds: List<String>, fromMs: Long, toMs: Long): List<EntryRow>
 
     @Query(
-        "SELECT p.* FROM entries p INNER JOIN entries f ON p.channelId = f.channelId AND p.endMs = f.startMs " +
-            "WHERE p.channelId IN (:channelIds) AND p.kind = 'PROGRAM' AND f.kind = 'FILLER' " +
-            "AND f.startMs <= :fromMs AND f.endMs > :fromMs",
+        "WITH RECURSIVE preceding AS (" +
+            "SELECT * FROM entries WHERE channelId IN (:channelIds) AND kind = 'FILLER' " +
+            "AND startMs <= :fromMs AND endMs > :fromMs " +
+            "UNION SELECT p.* FROM entries p INNER JOIN preceding f " +
+            "ON p.channelId = f.channelId AND p.endMs = f.startMs " +
+            "WHERE f.kind = 'FILLER' AND p.startMs < p.endMs) " +
+            "SELECT * FROM preceding",
     )
-    suspend fun programsBeforeBreakFor(channelIds: List<String>, fromMs: Long): List<EntryRow>
+    suspend fun entriesBeforeBreakFor(channelIds: List<String>, fromMs: Long): List<EntryRow>
+
+    @Query(
+        "WITH RECURSIVE following AS (" +
+            "SELECT * FROM entries WHERE channelId IN (:channelIds) AND endMs > :fromMs AND startMs < :toMs " +
+            "UNION SELECT f.* FROM entries f INNER JOIN following p " +
+            "ON f.channelId = p.channelId AND f.startMs = p.endMs " +
+            "WHERE f.kind = 'FILLER' AND f.startMs < f.endMs) " +
+            "SELECT * FROM following WHERE kind = 'FILLER'",
+    )
+    suspend fun followingBreaksFor(channelIds: List<String>, fromMs: Long, toMs: Long): List<EntryRow>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(rows: List<EntryRow>)
@@ -289,6 +303,7 @@ interface SettingDao {
         listOf(
             Settings.SERVER_BASE, Settings.SERVER_NAME, Settings.SERVER_ID, Settings.LAST_SYNC,
             Settings.LAST_CHANNEL, Settings.SELECTED_LIBRARIES, Settings.AD_LIBRARY, Settings.AD_LAST_SYNC,
+            RESTART_SESSION_KEY,
         ).forEach { remove(it) }
     }
 

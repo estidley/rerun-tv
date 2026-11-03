@@ -28,6 +28,7 @@ import com.rerun.tv.data.AdRow
 import com.rerun.tv.data.PlexApi
 import com.rerun.tv.data.ScheduleRepo
 import com.rerun.tv.data.Settings
+import com.rerun.tv.data.RestartSession
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import okhttp3.OkHttpClient
@@ -259,20 +260,189 @@ class TunerEngineTest {
     }
 
     @Test
+    fun restartLeaveHoldSurvivesPendingPreparationAndErrorRetriesUntilCancelled() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare(Lineup.RESTART_ID, item)
+        `when`(repo.restartSession()).thenReturn(RestartSession("saved", listOf(item.key), returnChannel = "east"))
+        val ready = java.util.concurrent.CountDownLatch(1)
+        doAnswer {
+            check(ready.await(10, java.util.concurrent.TimeUnit.SECONDS))
+            item
+        }.`when`(repo).item(item.key)
+        clearInvocations(player)
+        engine.tune(Lineup.RESTART_ID)
+        engine.holdRestart()
+        ready.countDown()
+        await { sources.size == 1 }
+        verify(player, never()).setPlayWhenReady(true)
+        verify(player).setPlayWhenReady(false)
+        listener.onRenderedFirstFrame()
+        listener.onPlayerError(PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_DECODING_FAILED))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(15))
+        await { sources.size == 2 }
+        verify(player, never()).setPlayWhenReady(true)
+        engine.continueRestart()
+        verify(player).setPlayWhenReady(true)
+    }
+
+    @Test
+    fun restartLeaveHoldAlsoAppliesToTranscodedPreparation() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("pgs")
+        val item = PlexParse.movies(metadata).single()
+        prepare(Lineup.RESTART_ID, item)
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(repo.restartSession()).thenReturn(RestartSession("saved", listOf(item.key), returnChannel = "east"))
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        clearInvocations(player)
+        engine.tune(Lineup.RESTART_ID)
+        engine.holdRestart()
+        await { sources.size == 1 }
+        assertTrue(sources.single().mediaItem.localConfiguration!!.uri.toString().contains("/transcode/"))
+        verify(player, never()).setPlayWhenReady(true)
+        verify(player).setPlayWhenReady(false)
+    }
+
+    @Test
+    fun restartAudioSelectionSurvivesProjectedTimeChangesButResetsForTheNextQueueItem() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""",
+            """"id":21,"streamType":2,"languageCode":"eng","codec":"aac","selected":true},
+            {"id":22,"streamType":2,"languageCode":"spa","codec":"aac"},{"id":7,"streamType":3""",
+        )
+        val item = PlexParse.movies(metadata).single()
+        prepare(Lineup.RESTART_ID, item)
+        val saved = RestartSession("saved", listOf(item.key, item.key), returnChannel = "east")
+        `when`(repo.restartSession()).thenReturn(saved)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        wallTime = System.currentTimeMillis()
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 1 }
+        assertEquals(21, engine.state.value.selectedAudioId)
+        wallTime = requireNotNull(wallTime) + 60_000
+        engine.selectAudioTrack(22, engine.state.value.tuneId)
+        await { sources.size == 2 }
+        assertEquals(22, engine.state.value.selectedAudioId)
+        assertEquals("22", sources.last().mediaItem.localConfiguration!!.uri.getQueryParameter("audioStreamID"))
+        wallTime = requireNotNull(wallTime) + 60_000
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 3 }
+        assertEquals(22, engine.state.value.selectedAudioId)
+        `when`(repo.restartSession()).thenReturn(saved.copy(index = 1))
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 4 }
+        assertEquals(21, engine.state.value.selectedAudioId)
+    }
+
+    @Test
+    fun restartHdrFallbackSurvivesProjectedTimeChangesAcrossTheRetry() = runBlocking<Unit> {
+        hdrSupported = true
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        val item = PlexParse.movies(metadata).single()
+        prepare(Lineup.RESTART_ID, item)
+        `when`(repo.restartSession()).thenReturn(RestartSession("saved", listOf(item.key), returnChannel = "east"))
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        wallTime = System.currentTimeMillis()
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 1 }
+        assertFalse(engine.state.value.convertingHdr)
+        wallTime = requireNotNull(wallTime) + 60_000
+        listener.onPlayerError(PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_DECODING_FAILED))
+        await { sources.size == 2 }
+        assertTrue(engine.state.value.convertingHdr)
+        listener.onPlayerError(PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_DECODING_FAILED))
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertEquals(2, sources.size)
+    }
+
+    @Test
+    fun finishedRestartReturnsOnlyToAnActiveStationWhenItsSourceIsHiddenOrDormant() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        val fallback = ChannelRow.of(ChannelDef("fallback", 2, "Fallback", ChannelKind.CUSTOM, Rules()), true, false)
+        `when`(repo.active()).thenReturn(listOf(fallback))
+        for (hidden in listOf(true, false)) {
+            prepare(Lineup.RESTART_ID, item)
+            `when`(repo.channel("source")).thenReturn(ChannelRow.of(
+                ChannelDef("source", 1, "Source", ChannelKind.CUSTOM, Rules(), hidden = hidden),
+                true, dormant = !hidden,
+            ))
+            `when`(repo.restartSession()).thenReturn(
+                RestartSession("saved-$hidden", listOf(item.key), returnChannel = "source"),
+            )
+            var returned: String? = null
+            engine.onReturned = { returned = it }
+            val before = sources.size
+            engine.tune(Lineup.RESTART_ID)
+            await { sources.size == before + 1 }
+            listener.onRenderedFirstFrame()
+            listener.onPlaybackStateChanged(Player.STATE_ENDED)
+            await { returned == "fallback" }
+        }
+        verify(repo, never()).channel("source")
+    }
+
+    @Test
     fun restartedTranscodeDoesNotReturnToZeroOnRetune() = runBlocking {
         val item = PlexParse.episodes(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Episode","duration":1800000}]}}""",
             emptyMap(),
         ).single()
         prepare(Lineup.RESTART_ID, item)
-        engine.armReturn("east")
+        val session = com.rerun.tv.data.RestartSession("saved", listOf(item.key), returnChannel = "east")
+        `when`(repo.restartSession()).thenReturn(session)
         engine.tune(Lineup.RESTART_ID)
         await { sources.size == 1 }
         assertTrue(sources[0].mediaItem.localConfiguration!!.uri.toString().contains("&offset=0&"))
+        `when`(player.currentPosition).thenReturn(65_000)
+        `when`(repo.restartSession()).thenReturn(session.copy(positionMs = 65_000))
         engine.tune(Lineup.RESTART_ID)
         await { sources.size == 2 }
         val offset = sources[1].mediaItem.localConfiguration!!.uri.getQueryParameter("offset")!!.toLong()
         assertTrue(offset >= 60)
+    }
+
+    @Test
+    fun savedRestartResumesDirectPlaybackAtMediaPositionIncludingRewindsRegardlessOfWallTime() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        prepare(Lineup.RESTART_ID, item)
+        val saved = com.rerun.tv.data.RestartSession("saved", listOf(item.key), positionMs = 123_000,
+            returnChannel = "east")
+        `when`(repo.restartSession()).thenReturn(saved)
+        wallTime = System.currentTimeMillis() + 10 * 86_400_000L
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 1 }
+        verify(player).seekTo(123_000)
+        listener.onRenderedFirstFrame()
+        `when`(player.currentPosition).thenReturn(90_000)
+        wallTime = requireNotNull(wallTime) + 600_000
+        engine.pauseRestart()
+        verify(repo).saveRestartProgress("saved", 0, 90_000, true)
+        verify(player).pause()
+        engine.tune("east")
+        verify(repo, never()).saveRestartProgress("saved", 0, 725_000, true)
+    }
+
+    @Test
+    fun restartQueueAdvancesOnMediaEndAndStartsTheNextEpisodeAtZero() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single()
+        val next = item.copy(key = "next")
+        prepare(Lineup.RESTART_ID, item)
+        `when`(repo.item(next.key)).thenReturn(next)
+        val saved = com.rerun.tv.data.RestartSession("saved", listOf(item.key, next.key), returnChannel = "east")
+        val advanced = saved.copy(index = 1)
+        `when`(repo.restartSession()).thenReturn(saved, advanced)
+        `when`(repo.advanceRestart("saved", 0)).thenReturn(advanced)
+        engine.tune(Lineup.RESTART_ID)
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        `when`(player.currentPosition).thenReturn(item.durationMs)
+        listener.onPlaybackStateChanged(Player.STATE_ENDED)
+        await { sources.size == 2 }
+        assertEquals(next.key, engine.state.value.item?.key)
+        verify(player, times(2)).seekTo(0)
+        verify(repo).advanceRestart("saved", 0)
+        verify(settings, never()).setLastChannel(Lineup.RESTART_ID)
     }
 
     @Test
@@ -282,16 +452,21 @@ class TunerEngineTest {
             emptyMap(),
         ).single()
         prepare(Lineup.RESTART_ID, item)
+        `when`(repo.active()).thenReturn(listOf(ChannelRow.of(
+            ChannelDef("east", 1, "Source", ChannelKind.CUSTOM, Rules()), true, false,
+        )))
+        `when`(repo.restartSession()).thenReturn(
+            com.rerun.tv.data.RestartSession("saved", listOf(item.key), returnChannel = "east"),
+        )
         var returned: String? = null
         engine.onReturned = { returned = it }
-        engine.armReturn("east")
         engine.tune(Lineup.RESTART_ID)
         await { sources.size == 1 }
         listener.onRenderedFirstFrame()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(11))
         assertNull(returned)
         listener.onPlaybackStateChanged(Player.STATE_ENDED)
-        assertEquals("east", returned)
+        await { returned == "east" }
     }
 
     @Test
