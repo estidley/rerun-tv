@@ -406,6 +406,31 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun guideQueryIncludesCompleteTrailingBreakChainAndStopsAtProgramsOrGaps() = runBlocking {
+        val program = ScheduleEntry("channel", now + 75 * 60_000, now + 137 * 60_000, EntryKind.PROGRAM, "show")
+        val firstBreak = ScheduleEntry("channel", program.endMs, now + 150 * 60_000, EntryKind.FILLER, null)
+        val lastBreak = ScheduleEntry("channel", firstBreak.endMs, now + 180 * 60_000, EntryKind.FILLER, null)
+        val next = ScheduleEntry("channel", lastBreak.endMs, now + 202 * 60_000, EntryKind.PROGRAM, "later")
+        val nextBreak = ScheduleEntry("channel", next.endMs, now + 210 * 60_000, EntryKind.FILLER, null)
+        val disconnectedBreak = ScheduleEntry("channel", now + 212 * 60_000, now + 220 * 60_000, EntryKind.FILLER, null)
+        db.entries().insertAll(listOf(program, firstBreak, lastBreak, next, nextBreak, disconnectedBreak).map(EntryRow::of))
+        val entries = repo.entriesFor(listOf("channel"), now + 90 * 60_000, now + 120 * 60_000).getValue("channel")
+        assertEquals(listOf(program, firstBreak, lastBreak), entries)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(program.startMs, lastBreak.endMs, "show"),
+        ), com.rerun.core.schedule.guideBlocks(entries, now + 90 * 60_000, now + 120 * 60_000))
+
+        val inBreak = repo.entriesFor(listOf("channel"), now + 155 * 60_000, now + 160 * 60_000).getValue("channel")
+        assertEquals(listOf(program, firstBreak, lastBreak), inBreak)
+        assertEquals(listOf(
+            com.rerun.core.schedule.GuideBlock(program.startMs, lastBreak.endMs, "show"),
+        ), com.rerun.core.schedule.guideBlocks(inBreak, now + 155 * 60_000, now + 160 * 60_000))
+
+        val nextEntries = repo.entriesFor(listOf("channel"), now + 190 * 60_000, now + 200 * 60_000).getValue("channel")
+        assertEquals(listOf(next, nextBreak), nextEntries)
+    }
+
+    @Test
     fun guideQueryIncludesTheFollowingBreakBeyondTheRightCacheBoundary() = runBlocking {
         val program = ScheduleEntry("channel", now + 60 * 60_000, now + 82 * 60_000, EntryKind.PROGRAM, "show")
         val filler = ScheduleEntry("channel", program.endMs, now + 90 * 60_000, EntryKind.FILLER, null)
