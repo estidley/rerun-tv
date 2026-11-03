@@ -230,6 +230,13 @@ interface EntryDao {
     )
     suspend fun programsBeforeBreakFor(channelIds: List<String>, fromMs: Long): List<EntryRow>
 
+    @Query(
+        "SELECT f.* FROM entries p INNER JOIN entries f ON p.channelId = f.channelId AND p.endMs = f.startMs " +
+            "WHERE p.channelId IN (:channelIds) AND p.kind = 'PROGRAM' AND f.kind = 'FILLER' " +
+            "AND p.endMs > :fromMs AND p.startMs < :toMs",
+    )
+    suspend fun followingBreaksFor(channelIds: List<String>, fromMs: Long, toMs: Long): List<EntryRow>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(rows: List<EntryRow>)
 

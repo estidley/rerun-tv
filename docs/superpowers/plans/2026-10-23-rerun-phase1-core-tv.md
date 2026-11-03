@@ -53,7 +53,7 @@ The suite includes regression coverage for:
 - Same-station fades, cancellation during fade, menu mute and wall-clock offsets.
 - Ad station lifecycle, short-clip playback and hourly guide grouping without changing clip boundaries.
 - Current-program guide focus, music conversion fallback and readable/display typography roles across themes.
-- Full scheduled guide times across opening, window advances and clipped cells, with following filler retained and grid geometry bounded to the viewport.
+- Full scheduled guide times across opening, window advances and clipped cells, with following filler retained beyond query boundaries and grid geometry/navigation bounded to the viewport, including long programs and touch reselection.
 - Decade eligibility boundaries, media/year isolation, Music switch, edits, number collisions,
   persisted schedule retention/removal, and a 40,000-item workload checking bounded library passes.
 - TBS documentary/comedy separation, stock-name migration, renamed-channel threshold guards,

@@ -297,7 +297,8 @@ fun GuideScreen(
 
     fun moveTime(forward: Boolean, b: GuideBlock? = focusedBlock) {
         val minTime = maxOf(clock(), gridFloor(clock()))
-        focusTime = if (forward) (b?.endMs ?: (focusTime + GRID_MS)) else maxOf(minTime, (b?.startMs ?: focusTime) - 1)
+        focusTime = if (forward) minOf(b?.endMs ?: (focusTime + GRID_MS), windowStart + WINDOW_MS)
+            else maxOf(minTime, maxOf(b?.startMs ?: focusTime, windowStart) - 1)
         if (focusTime >= windowStart + WINDOW_MS - GRID_MS) windowStart += GRID_MS
         if (focusTime < windowStart) windowStart = maxOf(gridFloor(clock()), windowStart - GRID_MS)
     }
@@ -310,7 +311,7 @@ fun GuideScreen(
         when (TouchControls.guideTap(selected)) {
             GuideTouchAction.SELECT -> {
                 focusRow = rowIndex
-                focusTime = maxOf(block?.startMs ?: 0L, clock())
+                focusTime = maxOf(block?.startMs ?: windowStart, windowStart, clock())
             }
             GuideTouchAction.WATCH -> { controller.go(Screen.Player); controller.tuneTo(channel.id) }
         }

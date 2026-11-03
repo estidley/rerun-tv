@@ -509,12 +509,14 @@ class ScheduleRepo internal constructor(
     suspend fun entries(channelId: String, fromMs: Long, toMs: Long): List<ScheduleEntry> =
         db.entries().range(channelId, fromMs, toMs).map { it.toEntry() }
 
-    /** Include the preceding program when the guide window starts during its ad break. */
+    /** Include complete boundary programs and their following breaks for guide details. */
     suspend fun entriesFor(channelIds: Collection<String>, fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
         val ids = channelIds.toList()
         if (ids.isEmpty()) return@withTransaction emptyMap()
-        (db.entries().programsBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs))
+        (db.entries().programsBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs) +
+            db.entries().followingBreaksFor(ids, fromMs, toMs))
             .distinctBy { it.channelId to it.startMs }
+            .sortedWith(compareBy<EntryRow> { it.channelId }.thenBy { it.startMs })
             .map { it.toEntry() }.groupBy { it.channelId }
     }
 
