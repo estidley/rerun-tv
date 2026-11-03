@@ -1,6 +1,6 @@
 # Core TV delivery and PR readiness
 
-Updated 2026-10-25. The original implementation scaffold and unchecked task recipes have been
+Updated 2026-11-02. The original implementation scaffold and unchecked task recipes have been
 retired; this file tracks delivered scope and real acceptance gaps, not instructions to recreate the app.
 See [README](../../../README.md), [AGENTS.md](../../../AGENTS.md), and the
 [current design reference](../specs/2026-10-23-rerun-design.md).
@@ -86,7 +86,7 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
   cold-start costs. This is not established by JVM checks.
 
 - [ ] Inspect Marvel/DC matching on the real Plex library, annotate unrecognized titles with Marvel/DC labels, and verify MCU seasons, legacy-universe transitions, missing files and restart continuation.
-- [ ] Approve the five SVG samples before generating/integrating the full icon library; check TV-distance legibility in all guide themes.
+- [ ] Check the integrated icon library's legibility at TV distance in all guide themes.
 
 - [ ] Confirm Toonuki activates with four hours of Anime-tagged Plex content and excludes Animation-only items after refresh.
 
@@ -96,8 +96,9 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
   remain, and original channel edits, schedules and unrelated settings survive.
 - [ ] Enable Music or save library changes, leave the screen, and confirm final lineup and muted menu playback. Press Home mid-scan; no playback starts until resume.
 - [ ] Tune near program end, observe ads at the break, and confirm the next program starts on schedule.
-- [ ] Start over a movie and an episode on a TV; exercise both queue choices, remote/touch
-  Pause/Remove/Cancel, reopening menus without prompts, direct/transcoded resume after
+- [ ] Start over a movie and an episode on a TV; confirm the movie prompt and exercise both
+  episode queue choices, remote/touch Pause/Remove/Cancel, reopening menus without prompts,
+  direct/transcoded resume after
   backgrounding/app restart, queued season transitions and return after the final episode.
 - [ ] Enable/sync ads and tune Buy Me Maybe; confirm hourly guide blocks, short clips playing back-to-back, regular sync preserving the station, and disabling ads returning to another station without unmuting menus.
 - [ ] Check RR launcher artwork and readable guide/menu typography at normal TV viewing distance.

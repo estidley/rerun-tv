@@ -31,7 +31,7 @@ CI requires both Android version fields to increase together when changed and va
 ## Behavioral invariants
 
 - Comic channels use specific franchise metadata, curated title/year matches or explicit Marvel/DC labels/collections, never generic studio ownership. Marvelous Timeline combines movies/episodes in persisted universe-group order and season positions; normal channels retain their shuffle behavior. New station numbers must avoid custom-channel collisions. Missing franchise JSON fields decode to empty sets.
-- Generate/integrate the full SVG icon library only after the user approves the five sample designs.
+- The five SVG samples have been approved and the full icon library is integrated. Preserve it; get approval before regenerating or replacing the library.
 
 - Toonuki uses only the Anime genre for movies/episodes; it has no network/title or age-rating restriction. Upgrade only its legacy stock rules and preserve user-edited pools.
 - Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only.
@@ -46,7 +46,7 @@ CI requires both Android version fields to increase together when changed and va
   selection for them or let local ads move shared program boundaries.
 - Stock decade stations require 24 hours of episodes or 12 hours of music; keep qualification a single metadata aggregation pass, preserve edited stations, and honor the Music setting. Do not generate genre-by-decade combinations.
 - Apply `Lineup.minimumContentMs`/`isDormant` consistently on save and refresh, including renamed/generated stations. Only a persisted `minimumContentHours` override waives the normal minimum; empty pools never activate. Catalog identities and matching rules are documented in `docs/channel-lineup.md`.
-- Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception: device-local From the Top uses saved media position, an optional same-show episode queue, and playback-end advancement. Changing stations prompts Pause/Remove/Cancel; menus do not. Keep paused progress/queues in the guide across restarts without changing ordinary schedules or Plex watch history.
+- Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception: device-local From the Top uses saved media position, an optional same-show episode queue, and playback-end advancement. Movies require Start movie/Cancel confirmation; only episodes offer queue choices. Changing stations prompts Pause/Remove/Cancel; menus do not. Keep paused progress/queues in the guide across restarts without changing ordinary schedules or Plex watch history.
 - Ads come from a separately persisted catalog and fit inside scheduled filler; they must never delay the next program. Guide cells include the following break without listing individual ads.
 - Buy Me Maybe is generated from a nonempty enabled ad catalog only. Keep its clips separate from regular library pools, back-to-back without padding/tail skipping. Show hourly station blocks in the guide without changing clip-level playback schedules.
 - Keep audio muted in menus across retunes and rollovers. Activity stop cancels playback, not scans; scan completion must not start background playback.

@@ -129,6 +129,14 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun startOverHelpExplainsMovieConfirmationAndEpisodeQueue() {
+        compose.onNodeWithText("Hold Left for 2 seconds during a movie or episode to start over.", substring = true)
+            .assertExists()
+        compose.onNodeWithText("Movies ask for confirmation; episodes can play once or queue the rest of the show.", substring = true)
+            .assertExists()
+    }
+
+    @Test
     fun regionalFeedOptionIsAbsent() {
         compose.onNodeWithText("East and West").assertDoesNotExist()
     }

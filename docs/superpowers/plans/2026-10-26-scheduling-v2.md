@@ -2,7 +2,7 @@
 
 Status: **not started**. The design is approved in the
 [scheduling v2 design spec](../specs/2026-10-26-scheduling-v2-design.md); read it first, since
-section numbers below (§) refer to it. Base: `main` at `6078bcd` (v1.0.1 plus PR #11, merged 2026-10-26). No implementation code
+section numbers below (§) refer to it. Base: `main` at `638ac71` (v1.0.2 plus PR #21, merged 2026-11-03). No implementation code
 exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
 
 ## Handoff summary

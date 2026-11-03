@@ -204,7 +204,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                 style = Retro.Caption,
             )
             BasicText(
-                "Hold Left for 2 seconds during an episode to start it over. It plays on its own channel, then the TV returns. A short Left still jumps to the last channel.",
+                "Hold Left for 2 seconds during a movie or episode to start over. Movies ask for confirmation; episodes can play once or queue the rest of the show. Playback uses a temporary channel, then returns. A short Left still jumps to the last channel.",
                 style = Retro.Caption,
             )
 
