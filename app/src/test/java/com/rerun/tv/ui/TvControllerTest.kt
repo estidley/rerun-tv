@@ -331,7 +331,7 @@ class TvControllerTest {
     }
 
     @Test
-    fun startOverForAnUnchangedMovieTuneSwitchesToTheSavedStation() = runBlocking<Unit> {
+    fun movieStartOverWaitsForConfirmationBeforeCreatingTheStation() = runBlocking<Unit> {
         val item = com.rerun.core.plex.PlexParse.movies(
             """{"MediaContainer":{"Metadata":[{"ratingKey":"1","title":"Movie","duration":1800000}]}}""",
         ).single()
@@ -343,6 +343,16 @@ class TvControllerTest {
         controller.tuneTo("east")
         controller.startEpisodeOver()
         shadowOf(Looper.getMainLooper()).idle()
+        val prompt = controller.restartPrompt.value as RestartPrompt.Start
+        assertEquals(item, prompt.item)
+        assertFalse(prompt.replacing)
+        verify(repo, never()).airFromStart(eq(item) ?: item, anyString(), anyBoolean())
+        verify(engine, never()).tune(Lineup.RESTART_ID)
+        controller.cancelRestartPrompt()
+        assertEquals(null, controller.restartPrompt.value)
+        assertEquals("east", controller.currentChannelId())
+        controller.startEpisodeOver()
+        controller.confirmRestartStart(queueEpisodes = false)
         val deadline = System.nanoTime() + 5_000_000_000L
         while (controller.restartBusy.value && System.nanoTime() < deadline) {
             shadowOf(Looper.getMainLooper()).idle()
@@ -372,6 +382,7 @@ class TvControllerTest {
         }.`when`(repo).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, anyString(), anyBoolean())
         controller.tuneTo("east")
         controller.startEpisodeOver()
+        controller.confirmRestartStart(queueEpisodes = false)
         verify(repo, timeout(2_000)).airFromStart(org.mockito.ArgumentMatchers.eq(item) ?: item, anyString(), anyBoolean())
         controller.stop()
         state.value = state.value.copy(tuneId = 3)

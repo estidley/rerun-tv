@@ -543,7 +543,6 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
                 val prompt = RestartPrompt.Start(item, returnTo, snap.tuneId, replacing)
                 _restartError.value = null
                 _restartPrompt.value = prompt
-                if (item.kind == MediaKind.MOVIE && !replacing) confirmRestartStart(queueEpisodes = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

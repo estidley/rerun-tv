@@ -57,7 +57,8 @@ The suite includes regression coverage for:
 - Current-program guide focus, music conversion fallback and readable/display typography roles across themes.
 - Full scheduled guide times across opening, window advances and clipped cells, with complete contiguous filler chains retained beyond query boundaries and grid geometry/navigation bounded to the viewport, including long programs and touch reselection.
 - Start-over queue ordering/identity, persisted media-position resume, playback-end advancement,
-  Pause/Remove/Cancel and episode-queue prompts, stale-checkpoint rejection and sign-out cleanup.
+  movie confirmation without episode choices, Pause/Remove/Cancel and episode-queue prompts,
+  stale-checkpoint rejection and sign-out cleanup.
 - Start-over leave holds survive preparation/retries; saved-session identity preserves audio
   overrides and HDR fallback across retunes, and completion returns only to active stations.
 - Decade eligibility boundaries, media/year isolation, Music switch, edits, number collisions,

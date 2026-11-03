@@ -54,6 +54,7 @@ fun TvButton(
     enabled: Boolean = true,
     sub: String? = null,
     selectedIndicator: String? = if (selected) "■" else null,
+    textStyle: TextStyle = Retro.Body,
     leading: (@Composable () -> Unit)? = null,
 ) {
     val source = remember { MutableInteractionSource() }
@@ -82,7 +83,7 @@ fun TvButton(
                     selected -> Retro.Cyan
                     else -> Retro.White
                 }
-                BasicText((selectedIndicator?.let { "$it " } ?: "") + text, style = Retro.Body.copy(color = color, shadow = null))
+                BasicText((selectedIndicator?.let { "$it " } ?: "") + text, style = textStyle.copy(color = color, shadow = null))
                 if (sub != null) BasicText(sub, style = Retro.Caption)
             }
         }
