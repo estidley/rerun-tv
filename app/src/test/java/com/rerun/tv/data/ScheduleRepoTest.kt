@@ -347,7 +347,7 @@ class ScheduleRepoTest {
         val entries = repo.entriesFor(listOf("east"), now, next.endMs).getValue("east")
         assertEquals(listOf(program, filler, next), entries)
         assertEquals(listOf(
-            com.rerun.core.schedule.GuideBlock(now, filler.endMs, "show"),
+            com.rerun.core.schedule.GuideBlock(program.startMs, filler.endMs, "show"),
             com.rerun.core.schedule.GuideBlock(next.startMs, next.endMs, "next"),
         ), com.rerun.core.schedule.guideBlocks(entries, now, next.endMs))
     }

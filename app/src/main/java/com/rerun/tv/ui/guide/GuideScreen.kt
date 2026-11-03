@@ -157,9 +157,7 @@ fun GuideScreen(
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
     val visibleBlocks = remember(blocks, windowStart) {
         blocks.mapValues { (_, entries) ->
-            entries.filter { it.endMs > windowStart && it.startMs < windowStart + WINDOW_MS }.map {
-                it.copy(startMs = maxOf(it.startMs, windowStart), endMs = minOf(it.endMs, windowStart + WINDOW_MS))
-            }
+            entries.filter { it.endMs > windowStart && it.startMs < windowStart + WINDOW_MS }
         }
     }
     // Rows near the viewport; only these get schedules topped up and blocks built.
@@ -515,8 +513,10 @@ private fun GuideRow(
                 }
             } else {
                 for (b in blocks) {
-                    val x = ((b.startMs - windowStart) * pxPerMs).dp
-                    val w = ((b.endMs - b.startMs) * pxPerMs).dp
+                    val start = maxOf(b.startMs, windowStart)
+                    val end = minOf(b.endMs, windowStart + WINDOW_MS)
+                    val x = ((start - windowStart) * pxPerMs).dp
+                    val w = ((end - start) * pxPerMs).dp
                     val sel = selectedTime >= b.startMs && selectedTime < b.endMs
                     Cell(
                         b, b.itemKey?.let { items[it] }, x, w, sel, rowColor, scale,

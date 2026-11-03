@@ -170,6 +170,47 @@ class GuideScreenTest {
     }
 
     @Test
+    fun programDetailsKeepScheduledTimesWhileCellsClipToTheMovingWindow() = runBlocking<Unit> {
+        val start = java.time.Instant.parse("2026-11-02T07:00:00Z").toEpochMilli()
+        val end = start + 2 * 3_600_000L
+        val nextEnd = end + 7 * 3_600_000L
+        var testNow = start + 35 * 60_000L
+        channels.value = listOf(channels.value.first())
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
+            "test:0" to listOf(
+                ScheduleEntry("test:0", start, end, EntryKind.PROGRAM, null),
+                ScheduleEntry("test:0", end, nextEnd, EntryKind.PROGRAM, null),
+            ),
+        ))
+        fun assertRange(from: Long, to: Long) {
+            compose.onNodeWithText(
+                "A long channel name 0  ·  ${com.rerun.tv.ui.player.clockDate(from)}  " +
+                    "${com.rerun.tv.ui.player.clockTime(from)} – ${com.rerun.tv.ui.player.clockTime(to)}",
+            ).assertExists()
+            val cell = compose.onNode(hasAnyAncestor(hasTestTag("guide-row:test:0")) and isSelected())
+                .fetchSemanticsNode().boundsInRoot
+            val channel = compose.onNodeWithTag("guide-channel:test:0").fetchSemanticsNode().boundsInRoot
+            val row = compose.onNodeWithTag("guide-row:test:0").fetchSemanticsNode().boundsInRoot
+            assertTrue(cell.left >= channel.right)
+            assertTrue(cell.right <= row.right)
+        }
+        compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
+        compose.waitForIdle()
+        assertRange(start, end)
+
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { testNow += 30 * 60_000L }
+        compose.mainClock.advanceTimeBy(30_100)
+        compose.waitForIdle()
+        assertRange(start, end)
+
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.mainClock.advanceTimeBy(100)
+        compose.waitForIdle()
+        assertRange(end, nextEnd)
+    }
+
+    @Test
     fun stationaryGuideStillRefreshesItsPrefetchedDataAfterTenMinutes() = runBlocking<Unit> {
         var testNow = baseNow
         compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
