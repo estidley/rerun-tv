@@ -18,6 +18,11 @@ exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
   descriptions.
 - **Marvelous Timeline (decided):** same quarter-hour grid and ad fill as every channel, with
   strict order and no fillers (§1.6). The earlier fixed-2-ads rule is superseded.
+- **Implemented separately, not part of these eight PRs:** the opt-in
+  [sharing-code pilot](../specs/2026-10-26-shared-schedules-design.md).
+  Preserve its stable identities and explicit algorithm/state versions during the v2 rewrite.
+  Different Plex users can participate with matching effective access. It uses no-service
+  seekable video blocks; commercials and music stay local.
 
 ## Repository rules (from AGENTS.md and owner instructions)
 
@@ -27,9 +32,11 @@ exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
 - **Don't install to or uninstall from Ethan's Fire TV Cube.** Debug builds can't update the
   release-signed install, and uninstalling wipes the saved Plex sign-in.
 - **Release flow** (only when asked):
-  - Bump `versionCode` and `versionName` in `app/build.gradle.kts`. **The next release is 1.0.2,
-    versionCode 4**; 1.0.1 already used code 3. Settings > About reads `BuildConfig.VERSION_NAME`,
-    so no other file holds the version.
+  - Run the **Prepare release** workflow on `main` (patch/minor/major) and review its version-bump
+    PR. It increments both values in `app/build.gradle.kts`; feature PRs need no bump.
+    The workflow derives the next version from `main`; a patch increments the patch component
+    and `versionCode` by one. Settings > About reads
+    `BuildConfig.VERSION_NAME`, so no other file holds the version.
   - Run `gradlew assembleRelease bundleRelease`, signed by the local gitignored
     `rerun-release.jks` and `keystore.properties`. Never commit or print them.
   - Run `apksigner verify --print-certs`. The certificate SHA-256 must stay

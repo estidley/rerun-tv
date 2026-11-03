@@ -260,6 +260,12 @@ interface StateDao {
 
 @Dao
 interface SettingDao {
+    @Query("SELECT * FROM settings WHERE substr(`key`, 1, length(:prefix)) = :prefix")
+    suspend fun withPrefix(prefix: String): List<SettingRow>
+
+    @Query("DELETE FROM settings WHERE substr(`key`, 1, length(:prefix)) = :prefix")
+    suspend fun removePrefix(prefix: String)
+
     @Query("DELETE FROM entries")
     suspend fun clearEntries()
 
@@ -279,6 +285,7 @@ interface SettingDao {
         clearChannels()
         clearItems()
         clearAds()
+        removePrefix(Settings.SHARED_PREFIX)
         listOf(
             Settings.SERVER_BASE, Settings.SERVER_NAME, Settings.SERVER_ID, Settings.LAST_SYNC,
             Settings.LAST_CHANNEL, Settings.SELECTED_LIBRARIES, Settings.AD_LIBRARY, Settings.AD_LAST_SYNC,

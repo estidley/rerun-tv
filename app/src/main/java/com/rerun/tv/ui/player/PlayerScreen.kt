@@ -214,7 +214,7 @@ internal fun PlaybackTransition(state: TunerState, static: Boolean, roll: Boolea
 
 @Composable
 internal fun BoxScope.PlayerOverlays(state: TunerState, bannerUntil: Long) {
-    val osdUntil = remember(state.tuneId) { System.currentTimeMillis() + 3_000 }
+    val osdUntil = remember(state.channel?.id) { System.currentTimeMillis() + 3_000 }
     val osdVisible = visibleUntil(osdUntil)
     val bannerVisible = visibleUntil(bannerUntil)
     AnimatedVisibility(

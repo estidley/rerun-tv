@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.delay
 import java.net.URLEncoder
 
 data class Effects(
@@ -65,6 +66,7 @@ sealed interface Screen {
     data object Channels : Screen
     data class Editor(val channelId: String?) : Screen
     data object Settings : Screen
+    data object SharedPilot : Screen
     data object Libraries : Screen
     data object AdLibrary : Screen
     data object SubtitleLanguage : Screen
@@ -102,12 +104,71 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
 
     private val _lineupUpdate = MutableStateFlow(LineupUpdate())
     val lineupUpdate = _lineupUpdate.asStateFlow()
+    private val _sharedPilot = MutableStateFlow(com.rerun.tv.data.SharedPilotStatus())
+    val sharedPilot = _sharedPilot.asStateFlow()
+    private var sharedStatusJob: Job? = null
+
+    fun loadSharedPilot() {
+        if (signingOut) return
+        sharedStatusJob?.cancel()
+        sharedStatusJob = scope.launch {
+            try {
+                _sharedPilot.value = withContext(Dispatchers.Default) { app.schedule.sharedPilotStatus() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _lineupUpdate.value = _lineupUpdate.value.copy(error = "Couldn't read shared scheduling status")
+            }
+        }
+    }
+
+    fun setSharedPilot(text: String? = null, generate: Boolean = false) {
+        updateLineup("Updating shared scheduling...", "Shared scheduling failed") {
+            val now = System.currentTimeMillis()
+            val code = if (generate) com.rerun.core.schedule.SharedScheduleCode.generate(now).encode() else text
+            // Invalid input never triggers a library mutation or network request.
+            if (code != null) com.rerun.tv.data.validateSharedCode(code, now)
+            if (code != null) {
+                syncLibrary()
+                reconcileChannels()
+            }
+            withContext(Dispatchers.Default) { app.schedule.setSharedPilot(code, System.currentTimeMillis()) }
+            _sharedPilot.value = withContext(Dispatchers.Default) { app.schedule.sharedPilotStatus() }
+            _lineupUpdate.value = _lineupUpdate.value.copy(
+                message = "Saved. Existing programs finish safely; see per-channel UTC cutovers.",
+            )
+        }
+    }
     private var lineupJob: Job? = null
     private var signingOut = false
     private val _startup = MutableStateFlow(StartupState(loading = app.settings.isSignedIn))
     val startup = _startup.asStateFlow()
     private var startupJob: Job? = null
     private var foreground = true
+    private var sharedRefreshAttemptMs: Long? = null
+
+    init {
+        scope.launch {
+            app.schedule.sharedRefreshRequests.collect { ids ->
+                // A manual scan/join already owns the same operation slot. Recheck afterward.
+                while (_lineupUpdate.value.busy && !signingOut) delay(250)
+                if (!foreground || signingOut) return@collect
+                val generation = connectionGeneration
+                val now = System.currentTimeMillis()
+                if (sharedRefreshAttemptMs?.let { now - it < 5 * 60_000L } == true) return@collect
+                if (!app.schedule.sharedRefreshDue(now)) return@collect
+                if (!foreground || signingOut || generation != connectionGeneration) return@collect
+                updateLineup("Refreshing shared schedule library...", "Shared schedule refresh failed; using saved library") {
+                    sharedRefreshAttemptMs = System.currentTimeMillis()
+                    syncLibrary()
+                    reconcileChannels()
+                    // Bulk sync deliberately skips pilot channels; only requested rows are extended here.
+                    app.schedule.ensure(ids, System.currentTimeMillis())
+                    _lineupUpdate.value = _lineupUpdate.value.copy(message = "Shared schedule library refreshed")
+                }
+            }
+        }
+    }
 
     fun setMusicEnabled(enabled: Boolean) {
         updateLineup("Updating music...", "Sync failed", music = enabled) {
@@ -294,6 +355,9 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             connectionGeneration++
             startupJob?.cancelAndJoin()
             lineupJob?.cancelAndJoin()
+            sharedStatusJob?.cancelAndJoin()
+            _sharedPilot.value = com.rerun.tv.data.SharedPilotStatus()
+            sharedRefreshAttemptMs = null
             _startup.value = StartupState()
             _lineupUpdate.value = LineupUpdate()
             engine.clear()

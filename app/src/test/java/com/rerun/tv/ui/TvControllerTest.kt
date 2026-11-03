@@ -42,6 +42,7 @@ class TvControllerTest {
     private lateinit var repo: ScheduleRepo
     private lateinit var sync: com.rerun.tv.data.LibrarySync
     private val rows = MutableStateFlow<List<ChannelRow>>(emptyList())
+    private val sharedRequests = kotlinx.coroutines.flow.MutableSharedFlow<Set<String>>(extraBufferCapacity = 1)
 
     @Before
     fun setUp() = runBlocking {
@@ -54,6 +55,9 @@ class TvControllerTest {
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(repo)
         `when`(repo.activeChannels()).thenReturn(rows)
+        `when`(repo.active()).thenReturn(emptyList())
+        `when`(repo.sharedRefreshRequests).thenReturn(sharedRequests)
+        `when`(repo.sharedRefreshDue(anyLong())).thenReturn(false)
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
         `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
@@ -68,6 +72,141 @@ class TvControllerTest {
 
     @After
     fun tearDown() = controller.dispose()
+
+    @Test
+    fun invalidSharedCodeReportsErrorWithoutSyncOrScheduleMutation() = runBlocking<Unit> {
+        controller.setSharedPilot("not-a-code")
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.lineupUpdate.value.error!!.contains("Shared scheduling failed"))
+        verify(sync, never()).sync()
+        verify(repo, never()).setSharedPilot(anyString(), anyLong())
+    }
+
+    @Test
+    fun sharedJoinSurvivesNavigationAndSerializesWithOtherLineupUpdates() = runBlocking {
+        val finish = CompletableDeferred<Unit>()
+        val code = com.rerun.core.schedule.SharedScheduleCode.generate(System.currentTimeMillis()).encode()
+        `when`(sync.sync()).thenReturn(flow {
+            emit(com.rerun.tv.data.SyncProgress("Reading", 0, 1))
+            finish.await()
+        })
+        `when`(repo.sharedPilotStatus()).thenReturn(com.rerun.tv.data.SharedPilotStatus(code))
+        controller.setSharedPilot(code)
+        controller.setSharedPilot(code)
+        controller.go(Screen.Guide)
+        assertTrue(controller.lineupUpdate.value.busy)
+        verify(sync, times(1)).sync()
+        finish.complete(Unit)
+        awaitSharedUpdate()
+        verify(repo).setSharedPilot(eq(code), anyLong())
+        assertEquals(code, controller.sharedPilot.value.code)
+        assertEquals(Screen.Guide, controller.screen.value)
+    }
+
+    @Test
+    fun failedSharedJoinRefreshDoesNotReplaceRecipe() = runBlocking<Unit> {
+        `when`(sync.sync()).thenReturn(flow { throw IllegalStateException("Refresh unavailable") })
+        controller.setSharedPilot(com.rerun.core.schedule.SharedScheduleCode.generate(System.currentTimeMillis()).encode())
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.lineupUpdate.value.error!!.contains("Refresh unavailable"))
+        verify(repo, never()).setSharedPilot(anyString(), anyLong())
+    }
+
+    private fun awaitSharedUpdate() {
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (controller.lineupUpdate.value.busy && System.nanoTime() < deadline) {
+            shadowOf(Looper.getMainLooper()).idle()
+            Thread.sleep(10)
+        }
+        assertFalse("Shared update did not finish", controller.lineupUpdate.value.busy)
+    }
+
+    @Test
+    fun staleSharedRequestRefreshesOnceWithoutBlockingTuningOrStartingBackgroundPlayback() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        `when`(repo.sharedRefreshDue(anyLong())).thenReturn(true)
+        `when`(sync.sync()).thenReturn(flow {
+            emit(com.rerun.tv.data.SyncProgress("Refreshing", 0, 1))
+            finish.await()
+        })
+        sharedRequests.emit(setOf("tbs"))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.lineupUpdate.value.busy)
+        controller.stop()
+        clearInvocations(engine)
+        finish.complete(Unit)
+        awaitSharedUpdate()
+        verify(sync, times(1)).sync()
+        verify(repo).ensure(eq(setOf("tbs")) ?: setOf("tbs"), anyLong())
+        verify(engine, never()).tune(anyString())
+        sharedRequests.emit(setOf("tbs"))
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(sync, times(1)).sync()
+    }
+
+    @Test
+    fun sharedRefreshFailureIsVisibleAndThrottledWithoutDiscardingTheSavedSchedule() = runBlocking {
+        `when`(repo.sharedRefreshDue(anyLong())).thenReturn(true)
+        `when`(sync.sync()).thenReturn(flow { throw IllegalStateException("Refresh unavailable") })
+        sharedRequests.emit(setOf("tbs"))
+        shadowOf(Looper.getMainLooper()).idle()
+        awaitSharedUpdate()
+        assertTrue(controller.lineupUpdate.value.error!!.contains("using saved library"))
+        sharedRequests.emit(setOf("tbs"))
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(sync, times(1)).sync()
+        verify(repo, never()).setSharedPilot(anyString(), anyLong())
+    }
+
+    @Test
+    fun freshOrDisabledPilotRequestsNeverStartAScan() = runBlocking<Unit> {
+        sharedRequests.emit(setOf("tbs"))
+        shadowOf(Looper.getMainLooper()).idle()
+        verify(sync, never()).sync()
+    }
+
+    @Test
+    fun sharedJoinReconcilesRemovedCurrentChannelWithoutLeavingOrUnmutingTheMenu() = runBlocking {
+        val code = com.rerun.core.schedule.SharedScheduleCode.generate(System.currentTimeMillis()).encode()
+        `when`(sync.sync()).thenReturn(flow {
+            `when`(repo.active()).thenReturn(listOf(channel("replacement")))
+            emit(com.rerun.tv.data.SyncProgress("Done", 1, 1, true))
+        })
+        `when`(repo.sharedPilotStatus()).thenReturn(com.rerun.tv.data.SharedPilotStatus(code))
+        controller.tuneTo("removed", sound = false)
+        controller.go(Screen.SharedPilot)
+        clearInvocations(engine)
+        controller.setSharedPilot(code)
+        awaitSharedUpdate()
+        assertEquals("replacement", controller.currentChannelId())
+        assertEquals(Screen.SharedPilot, controller.screen.value)
+        verify(engine).tune("replacement")
+        verify(engine, never()).setVisible(true)
+    }
+
+    @Test
+    fun staleSharedRefreshReconcilesRemovedCurrentButDoesNotStartPlaybackAfterStop() = runBlocking<Unit> {
+        val finish = CompletableDeferred<Unit>()
+        `when`(repo.sharedRefreshDue(anyLong())).thenReturn(true)
+        `when`(sync.sync()).thenReturn(flow {
+            finish.await()
+            `when`(repo.active()).thenReturn(listOf(channel("replacement")))
+            emit(com.rerun.tv.data.SyncProgress("Done", 1, 1, true))
+        })
+        controller.tuneTo("removed", sound = false)
+        controller.go(Screen.Guide)
+        sharedRequests.emit(setOf("removed"))
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.lineupUpdate.value.busy)
+        controller.stop()
+        clearInvocations(engine)
+        finish.complete(Unit)
+        awaitSharedUpdate()
+        assertEquals("replacement", controller.currentChannelId())
+        assertEquals(Screen.Guide, controller.screen.value)
+        verify(engine, never()).tune(anyString())
+        verify(engine, never()).setVisible(true)
+    }
 
     @Test
     fun summaryRetriesHttpTimeoutAndCachesTheSuccessfulResponse() = runBlocking<Unit> {

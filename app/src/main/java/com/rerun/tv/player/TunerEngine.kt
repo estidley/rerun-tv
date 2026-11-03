@@ -266,7 +266,8 @@ class TunerEngine(
                 subtitleLanguage = settings.subtitleLanguageValue()
                 val now = clock()
                 val entries = withContext(Dispatchers.IO) { repo.entries(channelId, now - 1, now + 6 * 3_600_000L) }
-                val loc = locate(entries, now, skipTail = channelId != Lineup.ADS_ID)
+                val sharedTiming = withContext(Dispatchers.IO) { repo.sharedTiming(channelId, now) }
+                val loc = locate(entries, now, skipTail = channelId != Lineup.ADS_ID && !sharedTiming)
                 if (loc == null) {
                     if (channelId == Lineup.RESTART_ID) return@launch leaveRestart()
                     val upcoming = entries.firstOrNull { it.startMs > now }
@@ -283,9 +284,15 @@ class TunerEngine(
                     scheduleRollover(channelId, upcoming.startMs)
                     return@launch
                 }
+                var localAdEnd: Long? = null
                 val ad = if (loc.entry.kind == EntryKind.FILLER) {
                     withContext(Dispatchers.IO) {
-                        adFiller(loc.entry, repo.adCatalog().map { it.toItem() }, now)
+                        if (sharedTiming || repo.isSharedFiller(loc.entry)) {
+                            val slot = repo.sharedAd(loc.entry, now)
+                            localAdEnd = slot?.endMs ?: repo.sharedAdNextChange(loc.entry, now)
+                            slot
+                        }
+                        else adFiller(loc.entry, repo.adCatalog().map { it.toItem() }, now)
                     }
                 } else null
                 val item = if (loc.entry.kind == EntryKind.FILLER) ad?.item else channelItem(channelId, loc.entry.itemKey)
@@ -303,7 +310,9 @@ class TunerEngine(
                 val nextItem = nextProgram?.let { channelItem(channelId, it.itemKey) }
                 _state.value = _state.value.copy(located = loc, item = item, nextItem = nextItem, nextStartMs = nextProgram?.startMs)
                 scheduleRollover(channelId, if (loc.entry.kind == EntryKind.FILLER && loc.entry.startMs > now)
-                    loc.entry.startMs else ad?.endMs ?: loc.entry.endMs)
+                    loc.entry.startMs else ad?.endMs ?: localAdEnd ?: loc.entry.endMs,
+                    hardEnd = sharedTiming || localAdEnd != null || (loc.entry.kind == EntryKind.PROGRAM &&
+                        item != null && item.durationMs > loc.entry.endMs - loc.entry.startMs))
 
                 if (loc.entry.kind == EntryKind.FILLER && ad == null) {
                     player.stop()
@@ -419,9 +428,15 @@ class TunerEngine(
         if (channelId == Lineup.ADS_ID) repo.adItem(key) else repo.item(key)
 
     /** Linear channels follow wall time; start-over returns on playback end, not a metadata timer. */
-    private fun scheduleRollover(channelId: String, endMs: Long) {
+    private fun scheduleRollover(channelId: String, endMs: Long, hardEnd: Boolean = false) {
         if (channelId == Lineup.RESTART_ID) return
-        val r = Runnable { tune(channelId) }
+        val r = Runnable {
+            if (hardEnd) {
+                player.stop()
+                _state.value = _state.value.copy(phase = Phase.UP_NEXT)
+            }
+            tune(channelId)
+        }
         rollover = r
         handler.postDelayed(r, (endMs - clock()).coerceAtLeast(0))
     }

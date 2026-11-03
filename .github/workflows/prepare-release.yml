@@ -1,0 +1,67 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increment (opens a PR; does not sign, publish or tag)
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare version and open PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUMP: ${{ inputs.bump }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . .\scripts\version.ps1
+          .\scripts\check-version.ps1
+          $path = Join-Path $PWD 'app\build.gradle.kts'
+          $text = Get-RerunBumpedVersion -Text (Get-Content -LiteralPath $path -Raw) -Bump $env:BUMP
+          $version = Get-RerunVersion -Text $text
+          $branch = "release/v$($version.Name)"
+          git switch -c $branch
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot create release branch' }
+          [IO.File]::WriteAllText($path, $text)
+          .\scripts\check-version.ps1 -BaseRef HEAD
+          git config user.name 'github-actions[bot]'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot set commit name' }
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot set commit email' }
+          git add -- app/build.gradle.kts
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot stage version' }
+          git -c commit.gpgsign=false commit -m "Prepare release $($version.Name)"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot commit version' }
+          git push origin $branch
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot push release branch; check for an existing release PR' }
+          gh pr create --base main --head $branch --title "Prepare release $($version.Name)" --body "Bumps Android to $($version.Name) (versionCode $($version.Code)). Review and merge before signing and publishing manually. This workflow does not create a tag or release."
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot open PR; enable Actions PR creation in repository settings' }
+          # GITHUB_TOKEN pushes/PRs do not trigger pull_request CI; dispatch explicitly.
+          gh workflow run ci.yml --ref $branch
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot dispatch release-branch verification' }

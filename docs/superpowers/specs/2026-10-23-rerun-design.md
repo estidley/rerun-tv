@@ -113,6 +113,26 @@ This section describes shipped behavior. An approved replacement (local quarter-
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.
 - Each guide opening selects the current station and wall-clock program after loading; subsequent browsing is not reset by schedule reloads.
+- The upper-right channel badge appears on channel changes or explicit program info, not on successive commercial or program transitions within the same channel.
+- Guide data is bounded to nearby rows and a nine-hour range around the three-hour view; only visible cells are composed. Horizontal movement within that range uses cached blocks and metadata. Revisions, clock jumps, retries and ten-minute top-ups refresh the cache, and distant rows/metadata are evicted.
+
+### Opt-in shared-code pilot
+
+The opt-in shared pilot is separate from ordinary scheduling and scheduling v2.
+Its [design](2026-10-26-shared-schedules-design.md) specifies predefined stock video channels
+configured at 100-199, fixed 3-hour UTC windows and a compact 24-symbol recipe. Custom,
+edited/unsupported policies, music and start-over stay independent. Core generation seeks
+directly through catalog-bounded episode transitions rather than replaying calendar history.
+Only main programs are shared; commercial selections remain local and cannot move program
+boundaries. Settings provides code generation, grouped copy/paste entry and disabling, plus
+per-channel cutovers and manually comparable input hints.
+Code text uses a larger monospace font with a digit-zero hint. Join opens a dedicated
+focused entry form with paste, validation, explicit confirmation and cancellation; generation
+is a separate action lower on the main shared-settings page.
+Changes preserve airing programs
+before a UTC-window cutover. Stale-library refresh requests are controller-owned and do not
+block playback; saved snapshots remain usable, with failures distinct from empty content.
+The ordinary scheduler remains the default. Physical two-device/TV acceptance remains open.
 
 ## Startup, updates and lifecycle
 

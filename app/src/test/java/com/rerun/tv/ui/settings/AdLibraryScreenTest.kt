@@ -31,6 +31,7 @@ class AdLibraryScreenTest {
 
     private suspend fun controller(app: RerunApp, settings: Settings): TvController {
         val schedule = mock(com.rerun.tv.data.ScheduleRepo::class.java)
+        `when`(schedule.sharedRefreshRequests).thenReturn(kotlinx.coroutines.flow.MutableSharedFlow())
         `when`(app.schedule).thenReturn(schedule)
         `when`(schedule.activeChannels()).thenReturn(flowOf(emptyList()))
         `when`(schedule.active()).thenReturn(emptyList())

@@ -59,6 +59,9 @@ class Settings(context: Context, private val dao: SettingDao) {
     suspend fun serverId(): String? = dao.get(SERVER_ID)
     suspend fun setServerId(v: String) {
         if (serverId() != v) {
+            dao.removePrefix(SHARED_PREFIX)
+            dao.clearEntries()
+            dao.clearStates()
             dao.remove(SELECTED_LIBRARIES)
             dao.remove(AD_LIBRARY)
             dao.remove(AD_LAST_SYNC)
@@ -200,6 +203,9 @@ class Settings(context: Context, private val dao: SettingDao) {
     }
 
     companion object {
+        const val SHARED_PREFIX = "shared_pilot:"
+        const val SHARED_CODE = "${SHARED_PREFIX}code"
+        const val SHARED_EFFECTIVE = "${SHARED_PREFIX}effective"
         const val MUSIC = "opt_music"
         const val SUBTITLES = "opt_subtitles"
         const val DEVICE_PREFS = "rerun_device"

@@ -9,6 +9,14 @@ reference (and README, AGENTS.md, `docs/channel-lineup.md`) as each step lands.
 Items marked **(default)** are defaults chosen during review; Ethan didn't pick them explicitly.
 Keep them configurable or easy to change. Everything else is an explicit decision.
 
+Implemented separately: the opt-in
+[shared scheduling pilot using a sharing code](2026-10-26-shared-schedules-design.md).
+This supports the same Plex server with independently authenticated users when their effective
+media access matches. The pilot is implemented, but the scheduling-v2 rewrite described here
+remains unimplemented; the pilot is not part of its approved delivery sequence.
+It uses seekable, code-derived video blocks with device-local commercials and independent music,
+not a hosted publisher. Identical regular-video inputs and effective rules are still required.
+
 ## 1. Decisions
 
 ### 1.1 Grid: local quarter hour for every channel
