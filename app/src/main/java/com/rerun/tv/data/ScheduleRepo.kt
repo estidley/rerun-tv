@@ -513,7 +513,7 @@ class ScheduleRepo internal constructor(
     suspend fun entriesFor(channelIds: Collection<String>, fromMs: Long, toMs: Long): Map<String, List<ScheduleEntry>> = db.withTransaction {
         val ids = channelIds.toList()
         if (ids.isEmpty()) return@withTransaction emptyMap()
-        (db.entries().programsBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs) +
+        (db.entries().entriesBeforeBreakFor(ids, fromMs) + db.entries().rangeFor(ids, fromMs, toMs) +
             db.entries().followingBreaksFor(ids, fromMs, toMs))
             .distinctBy { it.channelId to it.startMs }
             .sortedWith(compareBy<EntryRow> { it.channelId }.thenBy { it.startMs })
