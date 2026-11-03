@@ -124,9 +124,13 @@ class TunerEngine(
     private var restartSession: RestartSession? = null
     private var restartPrepared = false
     private var restartMediaOffsetMs = 0L
+    private var restartHeld = false
     private var checkpointJob: Job? = null
     private var saveJob: Job? = null
-    private data class PlaybackIdentity(val channel: String, val start: Long, val item: String?)
+    private sealed interface PlaybackIdentity {
+        data class Scheduled(val channel: String, val start: Long, val item: String?) : PlaybackIdentity
+        data class Restart(val sessionId: String, val index: Int) : PlaybackIdentity
+    }
     private var identity: PlaybackIdentity? = null
     private var audioOverride: Int? = null
     private var hdrFallback = false
@@ -248,9 +252,15 @@ class TunerEngine(
 
     suspend fun awaitRestartSave() { saveJob?.join() }
 
-    fun holdRestart() { player.pause() }
+    fun holdRestart() {
+        restartHeld = true
+        player.pause()
+    }
 
-    fun continueRestart() { player.playWhenReady = true }
+    fun continueRestart() {
+        restartHeld = false
+        player.playWhenReady = true
+    }
 
     suspend fun pauseRestart() {
         checkpointJob?.cancel()
@@ -274,6 +284,7 @@ class TunerEngine(
     }
 
     fun tune(channelId: String) {
+        if (channelId != Lineup.RESTART_ID) restartHeld = false
         saveRestart(paused = channelId != Lineup.RESTART_ID)
         restartPrepared = false
         tuneJob?.cancel()
@@ -347,7 +358,10 @@ class TunerEngine(
                     }
                 } else null
                 val item = if (loc.entry.kind == EntryKind.FILLER) ad?.item else channelItem(channelId, loc.entry.itemKey)
-                val nextIdentity = PlaybackIdentity(channelId, loc.entry.startMs, item?.key)
+                val nextIdentity = if (channelId == Lineup.RESTART_ID) {
+                    val saved = requireNotNull(restartSession)
+                    PlaybackIdentity.Restart(saved.id, saved.index)
+                } else PlaybackIdentity.Scheduled(channelId, loc.entry.startMs, item?.key)
                 if (identity != nextIdentity) {
                     identity = nextIdentity
                     audioOverride = null
@@ -437,9 +451,9 @@ class TunerEngine(
                             ))
                         }
                         player.setMediaSource(DefaultMediaSourceFactory(http).createMediaSource(media.build()))
+                        player.playWhenReady = !onRestart || !restartHeld
                         player.prepare()
                         player.seekTo(if (onRestart) offset else plan.startMs + (clock() - now - lag))
-                        player.playWhenReady = true
                         restartMediaOffsetMs = 0
                         restartPrepared = onRestart
                     }
@@ -455,8 +469,8 @@ class TunerEngine(
                                 )
                         }
                         player.setMediaSource(source)
+                        player.playWhenReady = !onRestart || !restartHeld
                         player.prepare()
-                        player.playWhenReady = true
                         restartMediaOffsetMs = offset / 1000 * 1000
                         restartPrepared = onRestart
                     }
@@ -527,7 +541,8 @@ class TunerEngine(
                 if (repo.advanceRestart(session.id, session.index) != null) {
                     tune(Lineup.RESTART_ID)
                 } else {
-                    val back = repo.channel(session.returnChannel)?.id ?: repo.active().firstOrNull()?.id
+                    val active = repo.active()
+                    val back = active.firstOrNull { it.id == session.returnChannel }?.id ?: active.firstOrNull()?.id
                     if (back == null) {
                         clear()
                         notify("Start-over finished. No regular stations are available.")
@@ -607,6 +622,7 @@ class TunerEngine(
 
     fun clear() {
         restartSession = null
+        restartHeld = false
         stop()
         metadataCache.clear()
         restartSession = null

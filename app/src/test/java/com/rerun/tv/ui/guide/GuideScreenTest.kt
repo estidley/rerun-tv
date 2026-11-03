@@ -366,7 +366,7 @@ class GuideScreenTest {
             mapOf("test:2" to listOf(ScheduleEntry("test:2", now - 60_000, now + 600_000, EntryKind.PROGRAM, null))),
         )
         compose.setContent { GuideScreen(controller, schedule) }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-channel:test:2").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Swipe to browse", substring = true).assertExists()
 
         compose.onNodeWithTag("guide-channel:test:2").performTouchInput { click() }
