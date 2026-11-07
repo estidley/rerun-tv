@@ -10,15 +10,20 @@ class ColorThemeTest {
         assertEquals(ColorTheme.STANDARD_BLUE, ColorTheme.from("unknown"))
         for (theme in ColorTheme.entries) assertEquals(theme, ColorTheme.from(theme.name))
         assertEquals("STANDARD_BLUE", ColorTheme.STANDARD_BLUE.name)
-        assertEquals("SEVENTIES", ColorTheme.SEVENTIES.name)
         assertEquals("FIFTIES", ColorTheme.FIFTIES.name)
+        assertEquals("SEVENTIES", ColorTheme.SEVENTIES.name)
+        assertEquals("EIGHTIES", ColorTheme.EIGHTIES.name)
+        assertEquals("NINETIES", ColorTheme.NINETIES.name)
     }
 
     @Test
     fun displayNamesAndDetailsIdentifyTheDecadeReferences() {
-        assertEquals(listOf("Default", "Partridge", "Lucy"), ColorTheme.entries.map { it.label })
+        assertEquals(listOf("Default", "Lucy", "Partridge", "Headroom", "Gak"), ColorTheme.entries.map { it.label })
         assertEquals(
-            listOf("Classic cable blue", "1970s · harvest gold & avocado", "1950s · cherry & mint"),
+            listOf(
+                "Classic cable blue", "1950s · cherry & mint", "1970s · harvest gold & avocado",
+                "1980s · neon & midnight", "1990s · slime & grape",
+            ),
             ColorTheme.entries.map { it.detail },
         )
     }
@@ -32,6 +37,6 @@ class ColorThemeTest {
             assertNotEquals(palette.accent, palette.alternate)
             assertNotEquals(palette.text, palette.background)
         }
-        assertEquals(3, ColorTheme.entries.map { it.palette.background }.distinct().size)
+        assertEquals(ColorTheme.entries.size, ColorTheme.entries.map { it.palette.background }.distinct().size)
     }
 }

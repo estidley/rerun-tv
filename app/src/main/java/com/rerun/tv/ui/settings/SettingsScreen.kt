@@ -65,7 +65,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     var signingOut by remember { mutableStateOf(false) }
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
     val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 4, 1, 3, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 5, 3, 4, 1, 3, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
@@ -80,8 +80,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             next = order.getOrNull(index + 1) ?: FocusRequester.Cancel
             left = availableRows[row].getOrNull(availableRows[row].indexOf(current) - 1) ?: FocusRequester.Cancel
             right = availableRows[row].getOrNull(availableRows[row].indexOf(current) + 1) ?: FocusRequester.Cancel
-            up = vertical(row - 1)
-            down = vertical(row + 1)
+            up = if (row == 3 && column >= 3) focusRows[row][column - 3] else vertical(row - 1)
+            down = if (row == 3 && column + 3 < focusRows[row].size) focusRows[row][column + 3] else vertical(row + 1)
         }
     }
 
@@ -127,7 +127,14 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
 
             BasicText("THEME COLORS", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ColorTheme.entries.forEachIndexed { i, choice ->
+                ColorTheme.entries.take(3).forEachIndexed { i, choice ->
+                    TvButton(choice.label, { controller.setColorTheme(choice) }, modifier = buttonFocus(3, i),
+                        selected = ColorTheme.from(theme) == choice, sub = choice.detail)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ColorTheme.entries.drop(3).forEachIndexed { offset, choice ->
+                    val i = offset + 3
                     TvButton(choice.label, { controller.setColorTheme(choice) }, modifier = buttonFocus(3, i),
                         selected = ColorTheme.from(theme) == choice, sub = choice.detail)
                 }

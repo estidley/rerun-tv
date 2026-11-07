@@ -144,7 +144,7 @@ class SettingsScreenTest {
         }
         val labels = listOf(
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
-            "■ CRT Off", "CRT Subtle", "CRT Full", "■ Default", "Partridge", "Lucy",
+            "■ CRT Off", "CRT Subtle", "CRT Full", "■ Default", "Lucy", "Partridge", "Headroom", "Gak",
             "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic", "Size: Medium", "Color: White",
             "Shared scheduling pilot", "Low (4 hours)", "■ Medium (12 hours)", "High (24 hours)",
             "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
@@ -174,6 +174,28 @@ class SettingsScreenTest {
         compose.onNodeWithText("CRT Subtle").assertIsFocused()
         compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
         compose.onNodeWithText("Static sound").assertIsFocused()
+    }
+
+    @Test
+    fun dpadMovesAcrossBothThemeRows() {
+        repeat(9) { compose.onRoot().performKeyInput { pressKey(Key.Tab) } }
+        compose.onAllNodesWithText("■ Default").filter(isFocused()).assertCountEquals(1)
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Lucy").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Lucy").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Partridge").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onAllNodesWithText("■ Default").filter(isFocused()).assertCountEquals(1)
     }
 
     @Test

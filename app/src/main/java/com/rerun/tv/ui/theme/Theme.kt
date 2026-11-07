@@ -34,6 +34,13 @@ enum class ColorTheme(val label: String, val detail: String, val palette: RetroP
         text = Color(0xFFF2F2F2), dim = Color(0xFFB0BCDC),
         border = Color(0xFF4A6BC8), osd = Color(0xFF39FF14),
     )),
+    FIFTIES("Lucy", "1950s · cherry & mint", RetroPalette(
+        background = Color(0xFF173F43), deep = Color(0xFF0B272B),
+        light = Color(0xFF2C6265), alternate = Color(0xFF235257),
+        accent = Color(0xFFFF6B81), secondary = Color(0xFFA8E6CF),
+        text = Color(0xFFFFF4E3), dim = Color(0xFFC5D8CE),
+        border = Color(0xFF77AAA2), osd = Color(0xFFA8E6CF),
+    )),
     SEVENTIES("Partridge", "1970s · harvest gold & avocado", RetroPalette(
         background = Color(0xFF4A2C17), deep = Color(0xFF261A12),
         light = Color(0xFF875127), alternate = Color(0xFF614127),
@@ -41,12 +48,19 @@ enum class ColorTheme(val label: String, val detail: String, val palette: RetroP
         text = Color(0xFFFFF2D5), dim = Color(0xFFD8BD93),
         border = Color(0xFFB07B45), osd = Color(0xFFFFC65C),
     )),
-    FIFTIES("Lucy", "1950s · cherry & mint", RetroPalette(
-        background = Color(0xFF173F43), deep = Color(0xFF0B272B),
-        light = Color(0xFF2C6265), alternate = Color(0xFF235257),
-        accent = Color(0xFFFF6B81), secondary = Color(0xFFA8E6CF),
-        text = Color(0xFFFFF4E3), dim = Color(0xFFC5D8CE),
-        border = Color(0xFF77AAA2), osd = Color(0xFFA8E6CF),
+    EIGHTIES("Headroom", "1980s · neon & midnight", RetroPalette(
+        background = Color(0xFF24164A), deep = Color(0xFF100A28),
+        light = Color(0xFF51318A), alternate = Color(0xFF382263),
+        accent = Color(0xFFFF4FA3), secondary = Color(0xFF55E6E8),
+        text = Color(0xFFF7F2FF), dim = Color(0xFFC8B9E6),
+        border = Color(0xFF8C62C9), osd = Color(0xFF55E6E8),
+    )),
+    NINETIES("Gak", "1990s · slime & grape", RetroPalette(
+        background = Color(0xFF27224A), deep = Color(0xFF15132E),
+        light = Color(0xFF4A3C78), alternate = Color(0xFF38305F),
+        accent = Color(0xFFC8F04A), secondary = Color(0xFFFF9E4A),
+        text = Color(0xFFFAF7E9), dim = Color(0xFFC6C0DC),
+        border = Color(0xFF7667A5), osd = Color(0xFFC8F04A),
     ));
 
     companion object {
