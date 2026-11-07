@@ -22,10 +22,22 @@ data class PlannedChannel(
 /** Channels to write, and generated rows whose schedule should be deleted. */
 data class LineupPlan(val channels: List<PlannedChannel>, val deleteIds: List<String>)
 
+enum class MinimumContentLevel(val hours: Int) {
+    LOW(4),
+    MEDIUM(12),
+    HIGH(24),
+    ;
+
+    companion object {
+        val DEFAULT = MEDIUM
+        fun from(value: String?): MinimumContentLevel = entries.firstOrNull { it.name == value } ?: DEFAULT
+    }
+}
+
 /**
  * What goes on the dial.
  *
- * Built-in channels always exist (dormant until they have 4 hours). Extra themes, movie
+ * Built-in channels always exist (dormant until they have enough content). Extra themes, movie
  * overflow, and music stations are created only once their pool is long enough.
  */
 object Lineup {
@@ -49,14 +61,17 @@ object Lineup {
             id.startsWith("music:") || id.startsWith("marvel:") || id.startsWith("dc:")
 
     /** Built-ins plus every extra that currently has enough content. */
-    fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
+    fun channels(
+        library: List<MediaItem>, music: Boolean,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
         val movieMs = moviePoolMs(library)
-        val extras = optionalThemes().filter { qualified(it, library) }
-        val features = movieChannels().filter { movieMs >= movieThreshold(it.id) }
-        val stations = if (music) musicTemplates(library).filter { qualified(it, library) } else emptyList()
+        val extras = optionalThemes().filter { qualified(it, library, minimum) }
+        val features = movieChannels().filter { movieMs >= minimumContentMs(it, minimum) }
+        val stations = if (music) musicTemplates(library).filter { qualified(it, library, minimum) } else emptyList()
         val totals = decadeTotals(library)
         val decades = decadeTemplates.filter {
-            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= decadeMinimum(it)
+            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= minimumContentMs(it, minimum)
         }
         return Catalog.builtInChannels() + extras + features + stations + decades
     }
@@ -72,7 +87,7 @@ object Lineup {
      */
     fun plan(
         library: List<MediaItem>, existing: List<StoredChannel>, music: Boolean,
-        adsPoolMs: Long = 0,
+        adsPoolMs: Long = 0, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
     ): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
         val durations = HashMap<ChannelDef, Long>()
@@ -99,7 +114,7 @@ object Lineup {
             ) stored.copy(rules = template.rules, kidsSafe = template.kidsSafe) else stored ?: template
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
             val pool = duration(base)
-            val dormant = isDormant(base, pool, music)
+            val dormant = isDormant(base, pool, music, minimum)
             if (isGenerated(template.id) && dormant && (prev == null || looksStock(prev.def, template))) continue
             upserts += PlannedChannel(base.copy(name = baseName), prev?.builtIn ?: true, dormant, pool)
             seen += template.id
@@ -112,12 +127,12 @@ object Lineup {
                 // A genre can disappear completely; retain edits even without a live template.
                 if ((id.startsWith("music:") && !looksStockMusic(prev.def)) || isEditedRetiredAnime(prev.def)) {
                     val pool = duration(prev.def)
-                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = isDormant(prev.def, pool, music), poolMs = pool)
+                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = isDormant(prev.def, pool, music, minimum), poolMs = pool)
                 }
                 continue
             }
             val pool = duration(prev.def)
-            val dormant = isDormant(prev.def, pool, music)
+            val dormant = isDormant(prev.def, pool, music, minimum)
             upserts += PlannedChannel(prev.def, prev.builtIn, dormant, pool)
         }
 
@@ -151,8 +166,8 @@ object Lineup {
         }
     }
 
-    private fun qualified(def: ChannelDef, library: List<MediaItem>): Boolean =
-        !Resolver.isDormant(Resolver.pool(def, library))
+    private fun qualified(def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel): Boolean =
+        !isDormant(def, poolMs(def, library), minimum = minimum)
 
     private fun poolMs(def: ChannelDef, library: List<MediaItem>): Long =
         Resolver.pool(def, library).sumOf { it.durationMs }
@@ -167,25 +182,25 @@ object Lineup {
         else -> Long.MAX_VALUE
     }
 
-    fun minimumContentMs(def: ChannelDef): Long {
+    fun minimumContentMs(def: ChannelDef, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT): Long {
         val override = def.minimumContentHours
         require(override == null || override in 0..168) { "Minimum content must be 0–168 hours" }
         if (override != null) return override * 3_600_000L
+        val defaultMs = minimum.hours * 3_600_000L
         val id = def.id
         return when {
             id == ADS_ID || id == RESTART_ID -> 0
-            id.startsWith("decade:tv:") -> TV_DECADE_MIN_MS
-            id.startsWith("decade:music:") -> MUSIC_DECADE_MIN_MS
-            id.startsWith("movies:") -> movieThreshold(id)
-            else -> Resolver.DORMANT_MS
+            id.startsWith("decade:tv:") -> maxOf(TV_DECADE_MIN_MS, defaultMs)
+            id.startsWith("decade:music:") -> maxOf(MUSIC_DECADE_MIN_MS, defaultMs)
+            id.startsWith("movies:") -> maxOf(movieThreshold(id), defaultMs)
+            else -> defaultMs
         }
     }
 
-    fun isDormant(def: ChannelDef, poolMs: Long, music: Boolean = true): Boolean =
-        (def.kind == ChannelKind.MUSIC && !music) || poolMs <= 0 || poolMs < minimumContentMs(def)
-
-    private fun decadeMinimum(def: ChannelDef): Long =
-        if (def.kind == ChannelKind.MUSIC) MUSIC_DECADE_MIN_MS else TV_DECADE_MIN_MS
+    fun isDormant(
+        def: ChannelDef, poolMs: Long, music: Boolean = true,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): Boolean = (def.kind == ChannelKind.MUSIC && !music) || poolMs <= 0 || poolMs < minimumContentMs(def, minimum)
 
     /** Stock decade qualification is one pass, without retaining a pool per candidate channel. */
     private fun decadeTotals(library: List<MediaItem>): Map<String, Long> {

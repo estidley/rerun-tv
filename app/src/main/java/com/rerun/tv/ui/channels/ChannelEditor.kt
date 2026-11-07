@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import java.util.UUID
 @Composable
 fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = RerunApp.instance) {
     val scope = rememberCoroutineScope()
+    val minimumLevel by controller.minimumContent.collectAsState()
     var existing by remember { mutableStateOf<ChannelRow?>(null) }
     var draft by remember { mutableStateOf<ChannelDef?>(null) }
     var facets by remember { mutableStateOf<Facets?>(null) }
@@ -100,11 +102,11 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             return@TvFrame
         }
         fun update(r: Rules) { draft = d.copy(rules = r) }
-        val minimum = Lineup.minimumContentMs(d) / 3_600_000L
+        val minimum = Lineup.minimumContentMs(d, minimumLevel) / 3_600_000L
         val poolHours = poolMs?.let { ms ->
             "%.1f hours of content".format(ms / 3_600_000.0) +
                 if (ms <= 0) "  (needs playable content)"
-                else if (ms < Lineup.minimumContentMs(d)) "  (needs $minimum to go on the air)" else ""
+                else if (ms < Lineup.minimumContentMs(d, minimumLevel)) "  (needs $minimum to go on the air)" else ""
         } ?: "Checking content..."
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
@@ -144,7 +146,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             item {
                 Section("Minimum programming") {
                     BasicText(
-                        "Default: ${Lineup.minimumContentMs(d.copy(minimumContentHours = null)) / 3_600_000L} hours. " +
+                        "Default: ${Lineup.minimumContentMs(d.copy(minimumContentHours = null), minimumLevel) / 3_600_000L} hours. " +
                             "An override allows a smaller pool to repeat more often; an empty pool stays off air.",
                         style = Retro.Caption,
                     )

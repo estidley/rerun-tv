@@ -43,6 +43,7 @@ class AdLibraryScreenTest {
         `when`(settings.subtitleColor()).thenReturn(flowOf("WHITE"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
+        `when`(settings.minimumContent()).thenReturn(flowOf(com.rerun.core.catalog.MinimumContentLevel.MEDIUM))
         `when`(settings.flag(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyBoolean()))
             .thenReturn(flowOf(false))
         return TvController(app, mock(com.rerun.tv.player.TunerEngine::class.java)).also { controller = it }

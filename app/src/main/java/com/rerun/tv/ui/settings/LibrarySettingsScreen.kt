@@ -48,7 +48,7 @@ fun LibrarySettingsScreen(controller: TvController, app: RerunApp = RerunApp.ins
     }
     TvStage("BACK settings") {
         BasicText("INCLUDED LIBRARIES", style = Retro.Title)
-        BasicText("Saving rebuilds the guide. Excluded libraries leave the lineup immediately.", style = Retro.Caption)
+        BasicText("Saving rebuilds the guide. Included music libraries sync automatically; excluded libraries leave the lineup.", style = Retro.Caption)
         val available = libraries
         if (available == null) {
             BasicText(status ?: "Loading libraries...", style = Retro.Body)
@@ -57,7 +57,7 @@ fun LibrarySettingsScreen(controller: TvController, app: RerunApp = RerunApp.ins
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 available.forEachIndexed { index, library ->
                     val included = library.key in selected
-                    val type = when (library.type) { "movie" -> "Movies"; "show" -> "TV shows"; else -> "Music (requires Music in Settings)" }
+                    val type = when (library.type) { "movie" -> "Movies"; "show" -> "TV shows"; else -> "Music" }
                     TvButton(
                         library.title,
                         { selected = if (library.key in selected) selected - library.key else selected + library.key },

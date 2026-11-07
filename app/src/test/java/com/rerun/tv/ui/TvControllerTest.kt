@@ -66,6 +66,8 @@ class TvControllerTest {
         `when`(settings.subtitleColor()).thenReturn(flowOf("WHITE"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
+        `when`(settings.minimumContent()).thenReturn(flowOf(com.rerun.core.catalog.MinimumContentLevel.MEDIUM))
+        `when`(settings.minimumContentValue()).thenReturn(com.rerun.core.catalog.MinimumContentLevel.MEDIUM)
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         controller = TvController(app, engine)
     }
@@ -435,12 +437,11 @@ class TvControllerTest {
     }
 
     @Test
-    fun musicToggleRestoresTheCleanVersionMarkerOnlyAfterSuccess() = runBlocking<Unit> {
+    fun minimumChangeRestoresTheCleanVersionMarkerOnlyAfterSuccess() = runBlocking<Unit> {
         `when`(settings.isSignedIn).thenReturn(true)
         `when`(settings.lineupAppVersion()).thenReturn("3:100")
-        `when`(settings.isOn(Settings.MUSIC, false)).thenReturn(false)
         `when`(repo.active()).thenReturn(listOf(channel("east")))
-        controller.setMusicEnabled(false)
+        controller.setMinimumContent(com.rerun.core.catalog.MinimumContentLevel.HIGH)
         repeat(50) {
             shadowOf(Looper.getMainLooper()).idle()
             if (!controller.lineupUpdate.value.busy) return@repeat
@@ -448,6 +449,7 @@ class TvControllerTest {
         }
         assertFalse(controller.lineupUpdate.value.busy)
         verify(settings).invalidateLineupAppVersion()
+        verify(settings).setMinimumContent(com.rerun.core.catalog.MinimumContentLevel.HIGH)
         verify(settings).setLineupAppVersion("3:100")
     }
 

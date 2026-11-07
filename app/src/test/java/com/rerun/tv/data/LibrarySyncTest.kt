@@ -34,7 +34,6 @@ class LibrarySyncTest {
         api = mock(PlexApi::class.java)
         `when`(settings.serverBase()).thenReturn(base)
         `when`(settings.serverToken).thenReturn(token)
-        `when`(settings.isOn(Settings.MUSIC)).thenReturn(false)
         `when`(api.get(base, "/library/sections", token)).thenReturn(
             """{"MediaContainer":{"Directory":[
               {"key":"1","type":"movie","title":"Movies"},
@@ -80,7 +79,7 @@ class LibrarySyncTest {
         assertEquals(listOf("1", "5"), sync.adLibraries().map { it.key })
         assertEquals(listOf("1", "2", "3"), sync.libraries().map { it.key })
         sync.sync().collect()
-        assertEquals(setOf("movie", "episode"), db.items().all().map { it.key }.toSet())
+        assertEquals(setOf("movie", "episode", "track"), db.items().all().map { it.key }.toSet())
         verify(api, never()).get(base, "/library/sections/5/all?type=1&includeGuids=1", token, 0, 200)
     }
 
@@ -123,27 +122,32 @@ class LibrarySyncTest {
     }
 
     @Test
-    fun legacyInstallationWithoutSelectionKeepsAllVideoLibraries() = runBlocking {
+    fun legacyInstallationWithoutSelectionKeepsAllSupportedLibraries() = runBlocking {
         sync.sync().collect()
-        assertEquals(setOf("movie", "private", "episode"), db.items().all().map { it.key }.toSet())
+        assertEquals(setOf("movie", "private", "episode", "track"), db.items().all().map { it.key }.toSet())
     }
 
     @Test
-    fun musicSwitchDoesNotBypassLibrarySelection() = runBlocking {
-        `when`(settings.isOn(Settings.MUSIC)).thenReturn(true)
+    fun musicFollowsLibrarySelectionWithoutASeparateSwitch() = runBlocking {
         `when`(settings.selectedLibraries()).thenReturn(setOf("1"))
         sync.sync().collect()
         assertEquals(listOf("movie"), db.items().all().map { it.key })
+        assertTrue(db.channels().all().none { it.def.kind == com.rerun.core.model.ChannelKind.MUSIC })
         verify(api, never()).get(base, "/library/sections/3/all?type=10", token, 0, 200)
 
         `when`(settings.selectedLibraries()).thenReturn(setOf("3"))
         sync.sync().collect()
         assertEquals(listOf("track"), db.items().all().map { it.key })
+        assertTrue(db.channels().active().any { it.def.kind == com.rerun.core.model.ChannelKind.MUSIC })
+
+        `when`(settings.selectedLibraries()).thenReturn(setOf("1"))
+        sync.sync().collect()
+        assertEquals(listOf("movie"), db.items().all().map { it.key })
+        assertTrue(db.channels().all().none { it.def.kind == com.rerun.core.model.ChannelKind.MUSIC })
     }
 
     @Test
     fun musicUsesAudioLibrariesAndInheritsGenresFromArtists() = runBlocking<Unit> {
-        `when`(settings.isOn(Settings.MUSIC)).thenReturn(true)
         `when`(settings.selectedLibraries()).thenReturn(setOf("3"))
         `when`(api.get(base, "/library/sections/3/all?type=8", token, 0, 200)).thenReturn(
             """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"a","title":"Artist","Genre":[{"tag":"Soul"}]}]}}""",
@@ -152,7 +156,7 @@ class LibrarySyncTest {
             """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"b","title":"Album","year":1975,"thumb":"/library/metadata/b/thumb"}]}}""",
         )
         `when`(api.get(base, "/library/sections/3/all?type=10", token, 0, 200)).thenReturn(
-            """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"t","title":"Song","duration":14400000,
+            """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"t","title":"Song","duration":43200000,
               "grandparentRatingKey":"a","parentRatingKey":"b","Media":[{"container":"mp3","Part":[{"key":"/library/parts/t/file.mp3"}]}]}]}}""",
         )
         sync.sync().collect()
@@ -220,7 +224,7 @@ class LibrarySyncTest {
     private suspend fun page(path: String, key: String) {
         `when`(api.get(base, path, token, 0, 200)).thenReturn(
             """{"MediaContainer":{"totalSize":1,"Metadata":[
-              {"ratingKey":"$key","title":"$key","duration":14400000,"Genre":[{"tag":"Jazz"}]}
+              {"ratingKey":"$key","title":"$key","duration":43200000,"Genre":[{"tag":"Jazz"}]}
             ]}}""",
         )
     }

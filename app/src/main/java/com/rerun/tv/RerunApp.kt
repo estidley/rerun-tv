@@ -46,7 +46,7 @@ class RerunApp : Application(), SingletonImageLoader.Factory {
         schedule = ScheduleRepo(db, Scheduler(ZoneId.systemDefault()))
         sync = LibrarySync(plex, settings, schedule)
         // An update can rename stock channels and add extras from the library already saved.
-        // Music tracks are fetched only after that switch is turned on.
+        // Music tracks are fetched for included Plex music libraries.
         lineupRefresh = appScope.async {
             if (db.items().count() > 0 || settings.adLibrary() != null) sync.refreshChannelsForAppVersion(appVersion())
         }

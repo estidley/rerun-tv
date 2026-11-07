@@ -37,7 +37,7 @@ class DbMigrationTest {
         )
         val state = StateRow(def.id, """{"seed":42}""")
         val preservedSettings = mapOf(
-            Settings.MUSIC to "true",
+            "opt_music" to "true",
             Settings.COLOR_THEME to "SEVENTIES",
             Settings.LAST_SYNC to "123456",
             Settings.SELECTED_LIBRARIES to """["tv","movies"]""",

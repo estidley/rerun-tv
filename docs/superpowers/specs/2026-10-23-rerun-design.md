@@ -78,17 +78,21 @@ The full icon set is bundled in `app/src/main/res/drawable-nodpi`; only physical
 
 This section describes shipped behavior. An approved replacement (local quarter-hour grid, saved ad breaks, gap fillers, episode runs, time-zone setting) is specified in [scheduling v2](2026-10-26-scheduling-v2-design.md) and planned in [the v2 plan](../plans/2026-10-26-scheduling-v2.md).
 
-- Ordinary active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.
-- Additional stock decade stations require 24 hours of TV episodes or 12 hours of music tracks
-  in the decade, alongside existing genre stations. Music decades honor the Music switch.
+- Ordinary active pools use the persisted Low/Medium/High minimum-content preset: 4, 12 or 24
+  hours respectively, with Medium as the default. Channels can be built-in, generated, custom, or music.
+  Changing the preset rebuilds eligibility from the saved library without a Plex scan. Special station
+  thresholds remain when higher than the selected ordinary minimum.
+- Additional stock decade stations require at least 24 hours of TV episodes or 12 hours of music tracks
+  in the decade, alongside existing genre stations. Music decades follow music-library selection.
   Decades span 1900s-2090s; unknown years and items under one minute do not qualify.
   Episode/track year uses the existing Plex show/album fallback. Movies do not count toward TV decades.
   IDs and preferred numbers are stable (`decade:tv:<year>`, 1100+; `decade:music:<year>`, 3000+).
   Ordinary collision resolution, editing and schedule preservation apply.
-  Unedited stations below their threshold are removed; edited definitions retain the existing
+  Unedited stations below their threshold are removed; edited definitions retain the selected
   default station minimum, or an explicit persisted `minimumContentHours` override (0–168).
-  Renames/rule edits do not implicitly lower the minimum. Empty pools stay dormant and Music
-  remains capability/settings gated. Save, refresh and editor previews share the same minimum policy;
+  Renames/rule edits do not implicitly lower the minimum. Empty pools stay dormant and music
+  remains gated by tracks from included Plex music libraries, without a separate enable toggle.
+  Save, refresh and editor previews share the same minimum policy;
   nullable overrides live in the existing channel JSON without a Room schema change.
 - The [complete cable dial](../../channel-lineup.md) documents all predefined names and rules.
   Laugh Track is the Comedy-genre station; the former TBS station is Ted's TV, still matching
@@ -106,7 +110,7 @@ This section describes shipped behavior. An approved replacement (local quarter-
   break position, and never extend the program deadline. Short/unfillable remainders show Up Next.
 - A nonempty enabled ad catalog also creates **Buy Me Maybe**, a generated commercials-only station.
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
-  It shuffles clips back-to-back without the ordinary minimum-duration/four-hour threshold, tail
+  It shuffles clips back-to-back without the ordinary activation minimum, tail
   skipping or padding. Items stay in the ad table, not the main library. Catalog
   changes invalidate only its schedule; disabling ads or emptying the catalog removes it.
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its

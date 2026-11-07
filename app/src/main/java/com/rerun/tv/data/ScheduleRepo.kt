@@ -329,7 +329,7 @@ class ScheduleRepo internal constructor(
 
     /** Commit library/lineup changes atomically with respect to schedule generation. */
     suspend fun refreshChannels(
-        music: Boolean, items: List<MediaItem>? = null,
+        items: List<MediaItem>? = null,
         selectedLibraries: Set<String>? = null,
     ) = mutex.withLock {
         db.withTransaction {
@@ -372,7 +372,9 @@ class ScheduleRepo internal constructor(
             }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
             val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
-            val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs)
+            val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
+            val music = contents.any { it.kind == MediaKind.TRACK }
+            val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs, minimum = minimum)
             val previousById = existing.associateBy { it.def.id }
             val nowMs = System.currentTimeMillis()
             for (row in planned.channels) {
@@ -618,9 +620,11 @@ class ScheduleRepo internal constructor(
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {
         val def = row.def
-        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, lib().items).sumOf { it.durationMs } }
-        val music = db.settings().get(Settings.MUSIC)?.toBooleanStrictOrNull() ?: false
-        val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music), poolMs)
+        val contents = lib().items
+        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, contents).sumOf { it.durationMs } }
+        val music = contents.any { it.kind == MediaKind.TRACK }
+        val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
+        val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music, minimum), poolMs)
         db.channels().upsert(checked)
     }
 

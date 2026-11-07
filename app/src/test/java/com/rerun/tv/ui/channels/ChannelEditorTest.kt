@@ -52,9 +52,13 @@ class ChannelEditorTest {
         val def = ChannelDef("test", 401, "Test channel", ChannelKind.CUSTOM, Rules(genres = setOf("Drama")))
         `when`(schedule.allChannelRows()).thenReturn(listOf(ChannelRow.of(def, builtIn = false, dormant = true)))
         `when`(schedule.libraryItems()).thenReturn(items)
-        compose.setContent { ChannelEditor(mock(TvController::class.java), "test", app) }
+        val controller = mock(TvController::class.java)
+        `when`(controller.minimumContent).thenReturn(
+            kotlinx.coroutines.flow.MutableStateFlow(com.rerun.core.catalog.MinimumContentLevel.MEDIUM),
+        )
+        compose.setContent { ChannelEditor(controller, "test", app) }
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("3.0 hours of content  (needs 4 to go on the air)")
+            compose.onAllNodesWithText("3.0 hours of content  (needs 12 to go on the air)")
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val before = scans.get()
@@ -68,7 +72,8 @@ class ChannelEditorTest {
         compose.onNodeWithText("Channel default").performClick()
         compose.onAllNodesWithText("Comedy")[0].performClick()
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("8.0 hours of content").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("8.0 hours of content  (needs 12 to go on the air)")
+                .fetchSemanticsNodes().isNotEmpty()
         }
         verify(schedule, times(1)).libraryItems()
     }

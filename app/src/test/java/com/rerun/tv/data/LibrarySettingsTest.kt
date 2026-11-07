@@ -197,6 +197,20 @@ class LibrarySettingsTest {
     }
 
     @Test
+    fun minimumContentDefaultsToMediumAndPersistsAcrossRestartAndSignOut() = runBlocking {
+        assertEquals(com.rerun.core.catalog.MinimumContentLevel.MEDIUM, settings.minimumContent().first())
+        assertEquals(com.rerun.core.catalog.MinimumContentLevel.MEDIUM, settings.minimumContentValue())
+        settings.setMinimumContent(com.rerun.core.catalog.MinimumContentLevel.LOW)
+        val reopened = Settings(RuntimeEnvironment.getApplication(), db.settings())
+        assertEquals(com.rerun.core.catalog.MinimumContentLevel.LOW, reopened.minimumContent().first())
+        assertEquals(com.rerun.core.catalog.MinimumContentLevel.LOW, reopened.minimumContentValue())
+        settings.signOut()
+        assertEquals(com.rerun.core.catalog.MinimumContentLevel.LOW, reopened.minimumContent().first())
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, "invalid"))
+        assertEquals(com.rerun.core.catalog.MinimumContentLevel.MEDIUM, reopened.minimumContentValue())
+    }
+
+    @Test
     fun hdrAndAudioPreferencesPersistAcrossSignOut() = runBlocking {
         assertEquals("AUTO", settings.hdrModeValue())
         assertEquals("auto", settings.audioLanguageValue())

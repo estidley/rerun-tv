@@ -166,12 +166,12 @@ fun OnboardingScreen(controller: TvController, app: RerunApp = RerunApp.instance
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     BasicText("Which libraries should Rerun include?", style = Retro.Title)
-                    BasicText("OK selects or deselects. Only checked libraries will be synced.", style = Retro.Caption)
+                    BasicText("OK selects or deselects. Checked movie, TV and music libraries sync automatically.", style = Retro.Caption)
                     s.list.forEachIndexed { index, library ->
                         val type = when (library.type) {
                             "movie" -> "Movies"
                             "show" -> "TV shows"
-                            else -> "Music (requires Music in Settings)"
+                            else -> "Music"
                         }
                         TvButton(
                             library.title,

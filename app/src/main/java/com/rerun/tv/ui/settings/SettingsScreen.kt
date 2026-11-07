@@ -55,6 +55,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val subtitleColor by controller.subtitleColor.collectAsState()
     val audioLanguage by controller.audioLanguage.collectAsState()
     val hdrMode by controller.hdrMode.collectAsState()
+    val minimumContent by controller.minimumContent.collectAsState()
     var server by remember { mutableStateOf("") }
     var lastSync by remember { mutableStateOf(0L) }
     var localStatus by remember { mutableStateOf<String?>(null) }
@@ -62,15 +63,13 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     val lineupBusy = update.busy
     val syncStatus = localStatus ?: update.error ?: update.message
     var signingOut by remember { mutableStateOf(false) }
-    val musicOn by remember(app.settings) { app.settings.flag(Settings.MUSIC, false) }.collectAsState(false)
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
     val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
-    val shownMusic = update.music ?: musicOn
-    val focusRows = remember { listOf(2, 4, 3, 3, 3, 4, 2, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 3, 3, 4, 1, 3, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
-            if (index == 7 && lineupBusy) buttons.drop(1) else buttons
+            if (index == 8 && lineupBusy) buttons.drop(1) else buttons
         }
         val order = availableRows.flatten()
         val index = order.indexOf(current)
@@ -129,7 +128,8 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             BasicText("THEME COLORS", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ColorTheme.entries.forEachIndexed { i, choice ->
-                    TvButton(choice.label, { controller.setColorTheme(choice) }, modifier = buttonFocus(3, i), selected = ColorTheme.from(theme) == choice)
+                    TvButton(choice.label, { controller.setColorTheme(choice) }, modifier = buttonFocus(3, i),
+                        selected = ColorTheme.from(theme) == choice, sub = choice.detail)
                 }
             }
 
@@ -184,23 +184,27 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             )
             BasicText("LINEUP", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton(
-                    "Music",
-                    {
-                        if (!lineupBusy) {
-                            localStatus = null
-                            controller.setMusicEnabled(!shownMusic)
-                        }
-                    },
-                    modifier = buttonFocus(6, 0),
-                    selected = shownMusic,
-                    sub = if (shownMusic) "on - Plex audio libraries" else "off - Plex audio libraries",
-                )
                 TvButton("Shared scheduling pilot", { controller.go(Screen.SharedPilot) },
-                    modifier = buttonFocus(6, 1), sub = "Share a schedule code")
+                    modifier = buttonFocus(6, 0), sub = "Share a schedule code")
             }
             BasicText(
-                "Music uses audio tracks from your included Plex music libraries, with a channel for each genre that has 4 hours. Include music libraries in Manage libraries. Subtitles stay off until you turn them on.",
+                "Included Plex music libraries sync automatically, with a channel for each genre that meets the minimum programming setting. Deselect them in Manage libraries to remove stock music stations. Subtitles stay off until you turn them on.",
+                style = Retro.Caption,
+            )
+            BasicText("MINIMUM PROGRAMMING", style = Retro.GuideNumber)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                com.rerun.core.catalog.MinimumContentLevel.entries.forEachIndexed { index, choice ->
+                    val label = choice.name.lowercase().replaceFirstChar { it.titlecase() }
+                    TvButton("$label (${choice.hours} hours)", {
+                        if (!lineupBusy) {
+                            localStatus = null
+                            controller.setMinimumContent(choice)
+                        }
+                    }, modifier = buttonFocus(7, index), selected = minimumContent == choice)
+                }
+            }
+            BasicText(
+                "Medium is the default. Higher station-specific thresholds still apply, and an explicit channel override takes priority.",
                 style = Retro.Caption,
             )
             BasicText(
@@ -212,14 +216,14 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             val shownLastSync = update.lastSyncMs ?: lastSync
             BasicText("Plex server: $server" + if (shownLastSync > 0) "   ·   last synced ${clockTime(shownLastSync)}" else "", style = Retro.Body)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Manage libraries", { controller.go(Screen.Libraries) }, modifier = buttonFocus(7, 0), enabled = !lineupBusy)
+                TvButton("Manage libraries", { controller.go(Screen.Libraries) }, modifier = buttonFocus(8, 0), enabled = !lineupBusy)
                 TvButton("Re-sync now", {
                     if (!lineupBusy) {
                         localStatus = null
                         controller.resyncLibrary()
                     }
-                }, modifier = buttonFocus(7, 1))
-                TvButton("Channels", { controller.go(Screen.Channels) }, modifier = buttonFocus(7, 2))
+                }, modifier = buttonFocus(8, 1))
+                TvButton("Channels", { controller.go(Screen.Channels) }, modifier = buttonFocus(8, 2))
                 TvButton("Sign out", {
                     if (!signingOut) {
                         signingOut = true
@@ -235,15 +239,15 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             }
                         }
                     }
-                }, modifier = buttonFocus(7, 3), sub = if (signingOut) "Signing out..." else null)
+                }, modifier = buttonFocus(8, 3), sub = if (signingOut) "Signing out..." else null)
             }
             syncStatus?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
-            TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(8, 0))
+            TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(9, 0))
 
             BasicText("AUDIO", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Audio language: ${languageName(audioLanguage)}", { controller.go(Screen.AudioLanguage) }, modifier = buttonFocus(9, 0))
-                TvButton("Current program audio tracks", { controller.go(Screen.AudioTracks) }, modifier = buttonFocus(9, 1))
+                TvButton("Audio language: ${languageName(audioLanguage)}", { controller.go(Screen.AudioLanguage) }, modifier = buttonFocus(10, 0))
+                TvButton("Current program audio tracks", { controller.go(Screen.AudioTracks) }, modifier = buttonFocus(10, 1))
                 TvButton("Normalize loudness", {
                     scope.launch {
                         try {
@@ -253,7 +257,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             localStatus = "Couldn't change loudness normalization: ${e.message}"
                         }
                     }
-                }, modifier = buttonFocus(9, 2), selected = normalizeLoudness)
+                }, modifier = buttonFocus(10, 2), selected = normalizeLoudness)
             }
             BasicText(
                 "Level programs and ads using Plex audio transcoding. Requires Plex Pass, a recent server, and " +
@@ -274,7 +278,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                                 localStatus = "Couldn't change HDR playback: ${e.message}"
                             }
                         }
-                    }, modifier = buttonFocus(10, index), selected = HdrMode.from(hdrMode) == mode)
+                    }, modifier = buttonFocus(11, index), selected = HdrMode.from(hdrMode) == mode)
                 }
             }
             BasicText(

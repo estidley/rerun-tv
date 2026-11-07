@@ -29,6 +29,7 @@ import com.rerun.tv.ui.theme.Retro
 @Composable
 fun ChannelManager(controller: TvController) {
     val all by RerunApp.instance.schedule.allChannels().collectAsState(initial = emptyList())
+    val minimum by controller.minimumContent.collectAsState()
     val first = remember { FocusRequester() }
     BackHandler { controller.go(Screen.Guide) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -59,11 +60,11 @@ fun ChannelManager(controller: TvController) {
             }
             item { BasicText("WAITING FOR CONTENT (${dormant.size})", style = Retro.GuideNumber) }
             items(dormant, key = { it.id }) { ch ->
-                val minimum = Lineup.minimumContentMs(ch.def) / 3_600_000L
+                val required = Lineup.minimumContentMs(ch.def, minimum) / 3_600_000L
                 TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), enabled = true,
                     leading = { ChannelIcon(ch.id, size = 40.dp) },
-                    sub = "${hours(ch.poolMs)} · minimum $minimum hours" +
-                        if (ch.def.kind == ChannelKind.MUSIC) "; enable Music in Settings" else "")
+                    sub = "${hours(ch.poolMs)} · minimum $required hours" +
+                        if (ch.def.kind == ChannelKind.MUSIC) "; include a Plex music library" else "")
             }
         }
     }

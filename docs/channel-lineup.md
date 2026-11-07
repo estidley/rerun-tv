@@ -16,27 +16,30 @@ comes from the user's included Plex libraries. A nostalgic name alone never clas
 - Only eligible items lasting at least one minute count toward ordinary station pools.
   Unknown years do not count toward decades. Music year falls back to album year;
   episode year falls back to show year.
-- All ordinary stations require **4 hours**. Second Feature requires **24 hours** and
-  Late Seating **48 hours**. TV decades require **24 hours** and music decades **12 hours**.
+- **Settings > Lineup > Minimum programming** offers Low (**4 hours**), Medium
+  (**12 hours**, the default), and High (**24 hours**) for ordinary stations. Special
+  station thresholds use whichever is higher: Second Feature starts at **24 hours**, Late
+  Seating **48 hours**, TV decades **24 hours**, and music decades **12 hours**. Changing
+  the preset rebuilds eligibility from the saved library without another Plex scan.
 - Editing a name, number or rules does not implicitly waive that station's minimum.
   **Channels > Edit > Minimum programming** offers an explicit override: no minimum,
   1, 4, 12, 24 or 48 hours, or return to the channel default. No minimum still needs
   a nonempty eligible pool. Stored overrides support whole hours from 0 through 168.
-- Music must remain enabled regardless of override. Hidden stations remain hidden.
+- Music stations require tracks from an included Plex music library regardless of override; there is no separate Music toggle. Hidden stations remain hidden.
 - Unqualified stock generated stations disappear. Edited ones retain their configuration
   but remain dormant until their effective minimum is met. Built-in network/theme entries
   remain available in Channels while waiting for content.
 - Buy Me Maybe intentionally requires only one valid synced ad, including clips under one
   minute. From the Top is a hidden single-episode start-over exception.
 
-Minimums are duration guards, not guarantees of diversity: four hours could be one long
+Minimums are duration guards, not guarantees of diversity: a small pool could be one long
 title. Normal scheduling preserves episode pointers, shuffles movies, and appends rather
 than reshuffles locked entries. No extra genre-by-decade cross-product or network requests
 are needed for this review; decade qualification retains its one-pass aggregation.
 
 ## Network and curated stations
 
-All rows below use the four-hour default. Existing custom names/rules are preserved;
+All rows below use the selected minimum-content preset (12 hours by default). Existing custom names/rules are preserved;
 only recognized old stock names are replaced automatically.
 
 | Number | Name | Cable-era nod and actual programming |
@@ -76,7 +79,7 @@ rating filters. Review Plex tags, channel rules and the ad library for household
 ## Genre and movie-era stations
 
 These names describe actual genre/year rules, rather than a network association.
-All use the four-hour default.
+All use the selected minimum-content preset (12 hours by default).
 
 | Number | Name | Programming and nostalgic cue |
 |---|---|---|
@@ -123,10 +126,10 @@ stock stations would increase schedule/storage costs without necessarily improvi
 
 | Station family | Default minimum | Configuration |
 |---|---|---|
-| The Big Picture / Second Feature / Late Seating (360–362) | 4 / 24 / 48 hours | Same movie library, independent shuffled schedules; premium-movie multiplex nod |
-| Genre music (2000+) | 4 hours | One station per qualifying music genre; cable audio-tier atmosphere |
+| The Big Picture / Second Feature / Late Seating (360–362) | Selected preset / at least 24 / at least 48 hours | Same movie library, independent shuffled schedules; premium-movie multiplex nod |
+| Genre music (2000+) | Selected preset (4 / 12 / 24 hours) | One station per qualifying music genre; cable audio-tier atmosphere |
 | Decade TV (1100+) | 24 hours | Episodes by decade, alongside genre stations |
-| Decade music (3000+) | 12 hours | Tracks by decade; hourly guide blocks rather than song cells |
+| Decade music (3000+) | 12 hours on Low/Medium; 24 on High | Tracks by decade; hourly guide blocks rather than song cells |
 | Buy Me Maybe (preferred 998) | One valid synced ad | Commercials-only novelty station; back-to-back clips, hourly guide cells |
 | From the Top (reserved 999) | One movie or episode, optionally followed by the remaining episodes of its show | Hidden device-local start-over station; movies require confirmation |
 
