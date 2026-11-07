@@ -81,7 +81,8 @@ class RerunWordmarkTest {
             output.outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             assertTrue("The hat must not hide the lettering at $size sp ($visibleInk vs $plainInk)", visibleInk >= plainInk * 0.95f)
             assertTrue("Brim should sit on the letter tops at $size sp", brimBottom >= lettersTop - 1)
-            assertTrue("Brim should not cover the letter faces at $size sp", brimBottom <= lettersTop + size * 0.08f)
+            assertTrue("Brim should visibly overlap the letters at $size sp", brimBottom >= lettersTop + size * 0.04f)
+            assertTrue("Brim should not cover the letter faces at $size sp", brimBottom <= lettersTop + size * 0.16f)
             assertTrue("Beret should cover RE at $size sp", hatRight >= pixels.width * 0.35f)
             assertTrue("Beret should stay over RE at $size sp", hatRight < pixels.width * 0.5f)
         }

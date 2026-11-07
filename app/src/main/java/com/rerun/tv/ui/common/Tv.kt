@@ -111,7 +111,7 @@ fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
     }
     val hatWidth = text.getHorizontalPosition(2, true) * 1.08f
     val hatHeight = hatWidth * 0.34f
-    val overlap = fontPx * 0.085f
+    val overlap = fontPx * 0.14f
     // Anchor to the ink's cap height, not the font's invisible top padding.
     val capTop = text.firstBaseline + capBounds.top
     val textY = ceil(maxOf(0f, hatHeight - capTop - overlap))
