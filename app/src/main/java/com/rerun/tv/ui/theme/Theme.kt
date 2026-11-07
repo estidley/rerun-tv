@@ -43,10 +43,10 @@ enum class ColorTheme(val label: String, val detail: String, val palette: RetroP
     )),
     SEVENTIES("Partridge", "1970s · harvest gold & avocado", RetroPalette(
         background = Color(0xFF4A2C17), deep = Color(0xFF261A12),
-        light = Color(0xFF875127), alternate = Color(0xFF614127),
-        accent = Color(0xFFFFC65C), secondary = Color(0xFFB7C66A),
+        light = Color(0xFF875127), alternate = Color(0xFF465323),
+        accent = Color(0xFFFFC65C), secondary = Color(0xFFC0D978),
         text = Color(0xFFFFF2D5), dim = Color(0xFFD8BD93),
-        border = Color(0xFFB07B45), osd = Color(0xFFFFC65C),
+        border = Color(0xFF9FAF60), osd = Color(0xFFFFC65C),
     )),
     EIGHTIES("Headroom", "1980s · neon & midnight", RetroPalette(
         background = Color(0xFF24164A), deep = Color(0xFF100A28),
