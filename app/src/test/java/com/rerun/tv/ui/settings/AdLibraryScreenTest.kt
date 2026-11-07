@@ -118,4 +118,29 @@ class AdLibraryScreenTest {
         compose.onNodeWithText("Ad sync failed: Save failed").assertDoesNotExist()
         verify(sync).syncAds(null)
     }
+
+    @Test
+    fun contentIsLeftAlignedWithSymmetricMargins() = runBlocking<Unit> {
+        val app = mock(RerunApp::class.java)
+        val settings = mock(Settings::class.java)
+        val sync = mock(LibrarySync::class.java)
+        `when`(app.settings).thenReturn(settings)
+        `when`(app.sync).thenReturn(sync)
+        `when`(sync.adCount()).thenReturn(0)
+        `when`(sync.adLibraries()).thenReturn(emptyList())
+        val controller = controller(app, settings)
+        compose.setContent { AdLibraryScreen(controller, app) }
+        compose.onNodeWithText("■ Off").assertExists()
+
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val panel = compose.onNodeWithTag("ad-library-panel").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithText("AD LIBRARY").fetchSemanticsNode().boundsInRoot
+        val caption = compose.onNodeWithText("Choose a Plex Other Videos or Movies library", substring = true)
+            .fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(panel.left > screen.left)
+        org.junit.Assert.assertTrue(panel.right < screen.right)
+        org.junit.Assert.assertEquals(panel.left - screen.left, screen.right - panel.right, 1f)
+        org.junit.Assert.assertTrue(heading.left > panel.left)
+        org.junit.Assert.assertEquals(heading.left, caption.left, 1f)
+    }
 }
