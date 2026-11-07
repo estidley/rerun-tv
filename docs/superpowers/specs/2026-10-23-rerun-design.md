@@ -92,7 +92,9 @@ This section describes shipped behavior. An approved replacement (local quarter-
   default station minimum, or an explicit persisted `minimumContentHours` override (0–168).
   Renames/rule edits do not implicitly lower the minimum. Empty pools stay dormant and music
   remains gated by tracks from included Plex music libraries, without a separate enable toggle.
-  Save, refresh and editor previews share the same minimum policy;
+  Clearly spoken-word/non-music genres do not create stock music or music-decade stations;
+  explicitly edited stations remain preserved. Holding OK in Channels disables/restores an
+  ordinary station without deleting its schedule. Save, refresh and editor previews share the same minimum policy;
   nullable overrides live in the existing channel JSON without a Room schema change.
 - The [complete cable dial](../../channel-lineup.md) documents all predefined names and rules.
   Laugh Track is the Comedy-genre station; the former TBS station is Ted's TV, still matching

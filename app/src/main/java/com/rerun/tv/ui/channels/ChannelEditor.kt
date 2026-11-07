@@ -137,7 +137,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                         }
                         TvButton(label, { draft = d.copy(order = o) }, selected = d.order == o)
                     }
-                    chipRow(listOf("Kids-safe", "Hidden")) { label ->
+                    chipRow(listOf("Kids-safe", "Disabled")) { label ->
                         if (label == "Kids-safe") TvButton(label, { draft = d.copy(kidsSafe = !d.kidsSafe) }, selected = d.kidsSafe)
                         else TvButton(label, { draft = d.copy(hidden = !d.hidden) }, selected = d.hidden)
                     }

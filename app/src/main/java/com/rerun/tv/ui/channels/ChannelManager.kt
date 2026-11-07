@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
 import com.rerun.core.catalog.Lineup
 import com.rerun.core.model.ChannelKind
+import com.rerun.tv.data.ChannelRow
 import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
@@ -27,9 +28,10 @@ import com.rerun.tv.ui.theme.Retro
 
 /** Every channel: active ones first, then dormant ones waiting for content. */
 @Composable
-fun ChannelManager(controller: TvController) {
-    val all by RerunApp.instance.schedule.allChannels().collectAsState(initial = emptyList())
+fun ChannelManager(controller: TvController, app: RerunApp = RerunApp.instance) {
+    val all by app.schedule.allChannels().collectAsState(initial = emptyList())
     val minimum by controller.minimumContent.collectAsState()
+    val update by controller.lineupUpdate.collectAsState()
     val first = remember { FocusRequester() }
     BackHandler { controller.go(Screen.Guide) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -38,7 +40,11 @@ fun ChannelManager(controller: TvController) {
     val hidden = all.filter { it.hidden && it.id != Lineup.RESTART_ID }
     val dormant = all.filter { it.dormant && !it.hidden }
 
-    TvFrame("Channels", "OK edit   BACK guide") {
+    fun quickAction(ch: ChannelRow): (() -> Unit)? =
+        if (ch.id == Lineup.RESTART_ID || ch.id == Lineup.ADS_ID) null
+        else ({ controller.setChannelHidden(ch.id, !ch.def.hidden) })
+
+    TvFrame("Channels", "OK edit   HOLD OK disable/restore   BACK guide") {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 TvButton("＋  New channel", onClick = { controller.go(Screen.Editor(null)) }, modifier = Modifier.focusRequester(first))
@@ -50,22 +56,26 @@ fun ChannelManager(controller: TvController) {
                         controller.go(Screen.Player)
                         controller.tuneTo(ch.id)
                     } else controller.go(Screen.Editor(ch.id))
-                }, modifier = Modifier.fillMaxWidth(), sub = if (ch.id == Lineup.RESTART_ID) "Resume saved program" else hours(ch.poolMs), leading = { ChannelIcon(ch.id, size = 40.dp) })
+                }, modifier = Modifier.fillMaxWidth(), sub = if (ch.id == Lineup.RESTART_ID) "Resume saved program" else hours(ch.poolMs),
+                    leading = { ChannelIcon(ch.id, size = 40.dp) }, onLongClick = quickAction(ch))
             }
             if (hidden.isNotEmpty()) {
-                item { BasicText("HIDDEN (${hidden.size})", style = Retro.GuideNumber) }
+                item { BasicText("DISABLED (${hidden.size})", style = Retro.GuideNumber) }
                 items(hidden, key = { it.id }) { ch ->
-                    TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), sub = "hidden · ${hours(ch.poolMs)}", leading = { ChannelIcon(ch.id, size = 40.dp) })
+                    TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) },
+                        modifier = Modifier.fillMaxWidth(), sub = "disabled · ${hours(ch.poolMs)}",
+                        leading = { ChannelIcon(ch.id, size = 40.dp) }, onLongClick = quickAction(ch))
                 }
             }
             item { BasicText("WAITING FOR CONTENT (${dormant.size})", style = Retro.GuideNumber) }
             items(dormant, key = { it.id }) { ch ->
                 val required = Lineup.minimumContentMs(ch.def, minimum) / 3_600_000L
                 TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), enabled = true,
-                    leading = { ChannelIcon(ch.id, size = 40.dp) },
+                    leading = { ChannelIcon(ch.id, size = 40.dp) }, onLongClick = quickAction(ch),
                     sub = "${hours(ch.poolMs)} · minimum $required hours" +
                         if (ch.def.kind == ChannelKind.MUSIC) "; include a Plex music library" else "")
             }
+            update.error?.let { item { BasicText(it, style = Retro.Body.copy(color = Retro.Yellow)) } }
         }
     }
 }

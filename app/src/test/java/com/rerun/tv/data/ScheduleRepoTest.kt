@@ -349,6 +349,26 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun disablingAndRestoringAChannelPreservesItsSchedule() = runBlocking {
+        repo.refreshChannels(items = listOf(movie("1")))
+        val id = "movies:1"
+        repo.ensure(id, now)
+        val before = repo.entries(id, 0, Long.MAX_VALUE)
+        assertTrue(before.isNotEmpty())
+        val station = requireNotNull(repo.channel(id))
+        val revision = repo.guideRevision.value
+        repo.saveChannel(ChannelRow.of(station.def.copy(hidden = true), station.builtIn))
+        assertTrue(requireNotNull(repo.channel(id)).hidden)
+        assertTrue(repo.active().none { it.id == id })
+        assertEquals(before, repo.entries(id, 0, Long.MAX_VALUE))
+        assertTrue(repo.guideRevision.value > revision)
+        repo.saveChannel(ChannelRow.of(requireNotNull(repo.channel(id)).def.copy(hidden = false), station.builtIn))
+        assertFalse(requireNotNull(repo.channel(id)).hidden)
+        assertTrue(repo.active().any { it.id == id })
+        assertEquals(before, repo.entries(id, 0, Long.MAX_VALUE))
+    }
+
+    @Test
     fun deletingAChannelDeletesItsScheduleAndState() = runBlocking {
         repo.refreshChannels(items = listOf(movie("1")))
         repo.ensure("movies:1", now)

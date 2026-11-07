@@ -202,11 +202,20 @@ object Lineup {
         minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
     ): Boolean = (def.kind == ChannelKind.MUSIC && !music) || poolMs <= 0 || poolMs < minimumContentMs(def, minimum)
 
+    private val nonMusicGenres = setOf(
+        "audio book", "audio books", "audiobook", "audiobooks", "book", "books", "interview", "interviews",
+        "lecture", "lectures", "news", "podcast", "podcasts", "radio drama", "speech", "spoken word", "talk", "talk radio",
+    )
+
+    private fun isStockMusicItem(item: MediaItem): Boolean =
+        item.kind == MediaKind.TRACK && item.genres.none { it.trim().lowercase() in nonMusicGenres }
+
     /** Stock decade qualification is one pass, without retaining a pool per candidate channel. */
     private fun decadeTotals(library: List<MediaItem>): Map<String, Long> {
         val totals = HashMap<String, Long>()
         for (item in library) {
             if (item.durationMs < Resolver.MIN_ITEM_MS) continue
+            if (item.kind == MediaKind.TRACK && !isStockMusicItem(item)) continue
             val year = item.year?.takeIf { it in 1900..2099 } ?: continue
             val type = when (item.kind) {
                 MediaKind.EPISODE -> "tv"
@@ -259,7 +268,7 @@ object Lineup {
     fun musicTemplates(library: List<MediaItem>): List<ChannelDef> {
         val totals = LinkedHashMap<String, Long>()
         for (item in library) {
-            if (item.kind != MediaKind.TRACK || item.durationMs < Resolver.MIN_ITEM_MS) continue
+            if (!isStockMusicItem(item) || item.durationMs < Resolver.MIN_ITEM_MS) continue
             for (genre in item.genres) {
                 if (genre.isBlank()) continue
                 totals[genre] = (totals[genre] ?: 0L) + item.durationMs

@@ -626,6 +626,7 @@ class ScheduleRepo internal constructor(
         val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
         val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music, minimum), poolMs)
         db.channels().upsert(checked)
+        _guideRevision.value++
     }
 
     suspend fun deleteChannel(id: String) = mutex.withLock {

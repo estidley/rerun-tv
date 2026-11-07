@@ -286,6 +286,31 @@ class LineupTest {
     }
 
     @Test
+    fun spokenWordGenresDoNotCreateStockMusicOrDecadeStations() {
+        val spoken = listOf(
+            track("podcast", genre = "Podcast", durationMs = 24 * HOUR).copy(year = 1995),
+            track("podcasts", genre = "podcasts", durationMs = 24 * HOUR).copy(year = 1995),
+            track("book", genre = "Audiobook", durationMs = 24 * HOUR).copy(year = 1995),
+            track("talk", genre = "Spoken Word", durationMs = 24 * HOUR).copy(year = 1995),
+        )
+        assertTrue(Lineup.musicTemplates(spoken).isEmpty())
+        assertTrue(Lineup.channels(spoken, music = true).none {
+            it.id.startsWith("music:") || it.id == "decade:music:1990"
+        })
+
+        val stock = ChannelDef(
+            "music:podcast", 2000, "Podcast", ChannelKind.MUSIC,
+            Rules(genres = setOf("Podcast"), kinds = setOf(MediaKind.TRACK)),
+        )
+        val removed = Lineup.plan(spoken, listOf(StoredChannel(stock, true)), music = true)
+        assertTrue(stock.id in removed.deleteIds)
+        val edited = stock.copy(name = "My podcasts")
+        val kept = Lineup.plan(spoken, listOf(StoredChannel(edited, true)), music = true)
+        assertEquals(edited, kept.channels.single { it.def.id == stock.id }.def)
+        assertFalse(kept.channels.single { it.def.id == stock.id }.dormant)
+    }
+
+    @Test
     fun renamedChannelKeepsItsNameAndHasOneSchedule() {
         val shows = List(24) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
         val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Castle Club"), true)

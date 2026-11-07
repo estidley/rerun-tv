@@ -184,6 +184,22 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
+    fun setChannelHidden(channelId: String, hidden: Boolean) {
+        if (signingOut) return
+        scope.launch {
+            _lineupUpdate.value = _lineupUpdate.value.copy(error = null)
+            try {
+                val row = app.schedule.channel(channelId) ?: return@launch
+                app.schedule.saveChannel(ChannelRow.of(row.def.copy(hidden = hidden), row.builtIn))
+                reconcileChannels()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _lineupUpdate.value = _lineupUpdate.value.copy(error = "Couldn't update channel: ${e.message}")
+            }
+        }
+    }
+
     fun setMinimumContent(value: com.rerun.core.catalog.MinimumContentLevel) {
         if (minimumContent.value == value) return
         updateLineup("Updating channel minimums...", "Couldn't update channel minimums") {

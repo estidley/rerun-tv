@@ -25,7 +25,8 @@ comes from the user's included Plex libraries. A nostalgic name alone never clas
   **Channels > Edit > Minimum programming** offers an explicit override: no minimum,
   1, 4, 12, 24 or 48 hours, or return to the channel default. No minimum still needs
   a nonempty eligible pool. Stored overrides support whole hours from 0 through 168.
-- Music stations require tracks from an included Plex music library regardless of override; there is no separate Music toggle. Hidden stations remain hidden.
+- Music stations require tracks from an included Plex music library regardless of override; there is no separate Music toggle. Clearly spoken-word/non-music genres, including Podcast and Audiobook, do not create stock genre or decade stations. Explicitly edited stations remain preserved.
+- In Channels, holding OK on an ordinary station disables or restores it without deleting its schedule. Disabled stations remain hidden.
 - Unqualified stock generated stations disappear. Edited ones retain their configuration
   but remain dormant until their effective minimum is met. Built-in network/theme entries
   remain available in Channels while waiting for content.

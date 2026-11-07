@@ -3,7 +3,7 @@ package com.rerun.tv.ui.common
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +56,7 @@ fun TvButton(
     selectedIndicator: String? = if (selected) "■" else null,
     textStyle: TextStyle = Retro.Body,
     leading: (@Composable () -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
@@ -69,7 +70,8 @@ fun TvButton(
             .scale(if (focused) 1.04f else 1f)
             .background(bg)
             .border(2.dp, if (focused) Retro.Yellow else if (selected) Retro.Cyan else Retro.Border.copy(alpha = 0.4f))
-            .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
+            .combinedClickable(interactionSource = source, indication = null, enabled = enabled,
+                onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 20.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
