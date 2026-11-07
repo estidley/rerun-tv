@@ -86,21 +86,51 @@ class ChannelIconTest {
         for (id in listOf(
             "pbskids", "amc", "hgtv", "action", "dc-tv", "opt-war", "opt-dramedy",
             "decade-tv-1910", "decade-tv-1950", "decade-tv-1990", "decade-tv-2030", "decade-tv-2070",
-        )) {
+        )) assertDarkMainLettering(id)
+    }
+
+    @Test fun reportedBrightBannersUseDarkMainLettering() {
+        for (id in listOf(
+            "ads", "dc-movies", "movies-3", "opt-news", "opt-sports", "opt-romance", "family",
+            "hbo", "discovery", "tnt", "boomerang", "disneyxd",
+        )) assertDarkMainLettering(id)
+    }
+
+    @Test fun shortAndReportedWordmarksAreEnlarged() {
+        for ((id, minimum) in mapOf("hbo" to 0.038f, "tnt" to 0.035f, "syfy" to 0.023f)) {
             val document = wordmark(id)
             val children = document.documentElement.childNodes
-            var textGroups = 0
-            for (index in 0 until children.length) {
-                val group = children.item(index) as? org.w3c.dom.Element ?: continue
-                if (group.tagName != "g" || "scale" !in group.getAttribute("transform")) continue
-                val paths = group.getElementsByTagName("path")
-                val fills = (0 until paths.length).map { paths.item(it).attributes.getNamedItem("fill").nodeValue }
-                assertTrue("Missing dark main lettering in $id", "#161327" in fills)
-                assertFalse("Cream lettering remains on lime in $id", "#FFF0CE" in fills)
-                textGroups++
-            }
-            assertTrue("No main text group found in $id", textGroups > 0)
+            val groups = (0 until children.length).mapNotNull { children.item(it) as? org.w3c.dom.Element }
+                .filter { it.tagName == "g" && "scale" in it.getAttribute("transform") }
+            assertEquals("Unexpected text layout in $id", 1, groups.size)
+            val verticalScale = groups.single().getAttribute("transform")
+                .substringAfterLast(' ').dropLast(1).toFloat()
+            assertTrue("Lettering is too small in $id", verticalScale < -minimum)
         }
+    }
+
+    @Test fun livingRoomIsLowercaseStandaloneVectorArt() {
+        val document = wordmark("family")
+        assertEquals("living room", document.getElementsByTagName("title").item(0).textContent)
+        assertEquals(0, document.getElementsByTagName("text").length)
+        assertTrue(document.getElementsByTagName("path").length > 0)
+        assertDarkMainLettering("family")
+    }
+
+    private fun assertDarkMainLettering(id: String) {
+        val document = wordmark(id)
+        val children = document.documentElement.childNodes
+        var textGroups = 0
+        for (index in 0 until children.length) {
+            val group = children.item(index) as? org.w3c.dom.Element ?: continue
+            if (group.tagName != "g" || "scale" !in group.getAttribute("transform")) continue
+            val paths = group.getElementsByTagName("path")
+            val fills = (0 until paths.length).map { paths.item(it).attributes.getNamedItem("fill").nodeValue }
+            assertTrue("Missing dark main lettering in $id", "#161327" in fills)
+            assertFalse("Cream lettering remains on a bright banner in $id", "#FFF0CE" in fills)
+            textGroups++
+        }
+        assertTrue("No main text group found in $id", textGroups > 0)
     }
 
     private fun wordmark(id: String) = DocumentBuilderFactory.newInstance().newDocumentBuilder()

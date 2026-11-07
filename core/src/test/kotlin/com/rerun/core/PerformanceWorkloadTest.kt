@@ -45,7 +45,7 @@ class PerformanceWorkloadTest {
             episode("e$it", "Show ${it % 100}", episode = it, genres = setOf("Comedy", "Drama"), network = "Netflix")
         } + (0 until 500).map { movie("m$it", genres = setOf("Action", "Drama"), studio = "Walt Disney Pictures") }
         // Updated for stock names, minimum content, removed delayed feeds, comic channels and franchise rules.
-        measure("lineup-2500", "ff355c1bac712bfa6ce2845498595a864346b7451d7cc57b7adbd241d01a38c1") {
+        measure("lineup-2500", "c9e6d87697d4f014475016777d6ffdaa4b70a6bea1ba34de7a587c8494f25aff") {
             val plan = Lineup.plan(library, emptyList(), music = false)
             // Keep decade additions outside this original workload.
             plan.copy(channels = plan.channels.filterNot { it.def.id.startsWith("decade:") })

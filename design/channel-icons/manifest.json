@@ -344,12 +344,12 @@
     },
     {
       "id": "family",
-      "name": "The Living Room",
+      "name": "living room",
       "number": 305,
       "section": "Themes & movies",
       "slug": "family",
       "accent": "#E88A44",
-      "concept": "The Living Room pictogram",
+      "concept": "living room pictogram",
       "icon": "icons/family.svg",
       "wordmark": "wordmarks/family.svg"
     },

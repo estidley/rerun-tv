@@ -159,7 +159,7 @@ object Catalog {
             ChannelDef("comedy", 303, "Laugh Track", ChannelKind.THEME, Rules(genres = setOf("Comedy"))),
             ChannelDef("action", 304, "Adrenaline", ChannelKind.THEME, Rules(genres = setOf("Action", "Adventure"))),
             ChannelDef(
-                "family", 305, "The Living Room", ChannelKind.THEME,
+                "family", 305, "living room", ChannelKind.THEME,
                 Rules(genres = setOf("Family", "Animation"), ratings = kidRatings), kidsSafe = true,
             ),
             ChannelDef("80s", 306, "Neon Decade", ChannelKind.THEME, Rules(decades = setOf(1980), kinds = setOf(MediaKind.MOVIE))),
@@ -224,7 +224,7 @@ object Catalog {
         "opt:docs" to setOf("The Reel"),
         "opt:news" to setOf("The Bulletin"),
         "action" to setOf("Action"),
-        "family" to setOf("Family"),
+        "family" to setOf("Family", "The Living Room"),
         "80s" to setOf("80s Movies"),
         "90s" to setOf("90s Movies"),
         "saturday" to setOf("Saturday Morning"),

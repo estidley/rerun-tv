@@ -156,6 +156,8 @@ class LineupTest {
         assertEquals("Laugh Track", Catalog.chooseName("comedy", "Laughing Stock", "Laugh Track"))
         assertEquals("Remote Control", Catalog.chooseName("mtv", "The Video Channel", "Remote Control"))
         assertEquals("My Superstation", Catalog.chooseName("tbs", "My Superstation", "Ted's TV"))
+        assertEquals("living room", Catalog.chooseName("family", "The Living Room", "living room"))
+        assertEquals("My Den", Catalog.chooseName("family", "My Den", "living room"))
     }
 
     @Test

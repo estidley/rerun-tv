@@ -88,7 +88,7 @@ All use the selected minimum-content preset (12 hours by default).
 | 302 | The Void | Science Fiction or Sci-Fi & Fantasy; speculative cable marathons |
 | 303 | Laugh Track | **Comedy genre only**, across networks/studios; sitcom/comedy cable atmosphere |
 | 304 | Adrenaline | Action or Adventure; weekend action blocks |
-| 305 | The Living Room | Family or Animation, with G/PG and TV-Y through TV-PG family ratings |
+| 305 | living room | Family or Animation, with G/PG and TV-Y through TV-PG family ratings |
 | 306 | Neon Decade | 1980s movies; neon/VHS-era film nights |
 | 307 | Dial-Up Cinema | 1990s movies; modem-era movie nights |
 | 308 | Cereal Hour | Animated episodes rated TV-Y, TV-Y7, TV-Y7-FV or TV-G; Saturday-morning nostalgia |
