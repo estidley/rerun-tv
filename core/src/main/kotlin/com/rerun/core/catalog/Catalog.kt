@@ -132,6 +132,12 @@ object Catalog {
             listOf("Tokyo Broadcasting System", "Tokyo Broadcasting Station", "Tokyo Broadcasting", "TBS Japan", "TBS Television"), false,
             realName = "Tokyo Broadcasting System",
         ),
+        NetworkDef("tlc", "The Learning Lounge", 134, listOf("TLC"), false,
+            realName = "TLC",
+        ),
+        NetworkDef("bravo", "The Salon", 135, listOf("Bravo", "Bravo TV"), false,
+            realName = "Bravo",
+        ),
     )
 
     private val aliasIndex: Map<String, String> = buildMap {

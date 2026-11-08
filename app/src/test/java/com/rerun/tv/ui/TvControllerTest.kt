@@ -524,6 +524,29 @@ class TvControllerTest {
     }
 
     @Test
+    fun signingOutCancelsAndJoinsQuickChannelChanges() = runBlocking<Unit> {
+        var cancelled = false
+        `when`(repo.channel("east")).thenReturn(channel("east"))
+        doAnswer {
+            @Suppress("UNCHECKED_CAST")
+            val continuation = it.rawArguments.last() as Continuation<Unit>
+            (suspend {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancelled = true
+                }
+            }).startCoroutineUninterceptedOrReturn(continuation)
+        }.`when`(repo).saveChannel(ChannelRow.of(channel("east").def.copy(hidden = true), false))
+        controller.setChannelHidden("east", true)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.lineupUpdate.value.busy)
+        controller.signOut()
+        assertTrue(cancelled)
+        verify(sync).signOut()
+    }
+
+    @Test
     fun signingOutClearsPlaybackAndNavigationHistory() = runBlocking<Unit> {
         controller.tuneTo("east", sound = false)
         controller.tuneTo("other", sound = false)

@@ -45,7 +45,7 @@ class PerformanceWorkloadTest {
             episode("e$it", "Show ${it % 100}", episode = it, genres = setOf("Comedy", "Drama"), network = "Netflix")
         } + (0 until 500).map { movie("m$it", genres = setOf("Action", "Drama"), studio = "Walt Disney Pictures") }
         // Updated for stock names, minimum content, removed delayed feeds, comic channels and franchise rules.
-        measure("lineup-2500", "21e80793c9fe25fc3a8ef4ee39eb3c8bb2b5597e9c95ff48e5733b00afcb86f6") {
+        measure("lineup-2500", "2b9a3c1a0984201cbd36d241cca7eb924ac74d371c8c4975f3a6b7f9bf50a6b8") {
             val plan = Lineup.plan(library, emptyList(), music = false)
             // Keep decade additions outside this original workload.
             plan.copy(channels = plan.channels.filterNot { it.def.id.startsWith("decade:") })
@@ -81,11 +81,11 @@ class PerformanceWorkloadTest {
         assertEquals(reads, withDecades, "Qualifying decades must not add per-channel library scans")
         assertEquals(40, plan.channels.count { it.def.id.startsWith("decade:") })
         reads = 0
-        val renamed = plan.channels.filter { it.def.id.startsWith("decade:") }.map {
-            com.rerun.core.catalog.StoredChannel(it.def.copy(name = "My ${it.def.name}"), true)
+        val stock = plan.channels.filter { it.def.id.startsWith("decade:") }.map {
+            com.rerun.core.catalog.StoredChannel(it.def, true)
         }
-        Lineup.plan(counted, renamed, music = true)
-        assertEquals(withDecades, reads, "Renames must reuse decade totals rather than scan each pool")
+        Lineup.plan(counted, stock, music = true)
+        assertEquals(withDecades, reads, "Unedited stock stations must reuse decade totals rather than scan each pool")
         val expected = fingerprint(plan)
         val elapsed = measureNanoTime {
             plan = Lineup.plan(items, emptyList(), music = true)
@@ -93,6 +93,22 @@ class PerformanceWorkloadTest {
         assertEquals(expected, fingerprint(plan))
         assertTrue(plan.channels.map { it.def.number }.distinct().size == plan.channels.size)
         println("PERF decade-lineup-40000 elapsedMs=${elapsed / 1_000_000.0} fingerprint=$expected")
+    }
+
+    @Test
+    fun largeInternationalLineupHasStableOutputAcrossRepeatedPlans() {
+        val languages = listOf("spa", "kor", "jpn", "hin", "deu", "fra", null)
+        val items = (0 until 5_000).map {
+            episode("e$it", "Show ${it % 100}", episode = it, genres = if (it % 3 == 0) setOf("Comedy") else emptySet())
+                .copy(language = languages[it % languages.size])
+        }
+        var elapsed = 0L
+        val first = Lineup.plan(items, emptyList(), music = false)
+        elapsed += measureNanoTime { Lineup.plan(items, emptyList(), music = false) }
+        val second = Lineup.plan(items, emptyList(), music = false)
+        assertEquals(fingerprint(first), fingerprint(second))
+        assertTrue(first.channels.count { it.def.id.startsWith("language:") } >= 6)
+        println("PERF international-lineup-5000 elapsedMs=${elapsed / 1_000_000.0} fingerprint=${fingerprint(first)}")
     }
 
     private fun measure(name: String, expected: String, operation: () -> Any) {

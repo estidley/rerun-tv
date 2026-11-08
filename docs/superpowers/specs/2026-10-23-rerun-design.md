@@ -63,6 +63,19 @@ Matching combines reference memberships with the network Plex reports, then fall
 routing only if neither matches. Missing or malformed bundled lists retain Plex-based routing. Invalid, missing or inconsistent TMDB discovery pages abort refresh before replacing the previous lists. Tests disable local lists.
 Live refresh coverage and installed-TV behavior still need validation.
 
+## Language and unmatched stations
+
+The Learning Lounge/TLC (134) and The Salon/Bravo (135) extend the network dial without changing genre rules.
+Plex original-language/primary-audio fields are normalized, with show-level inheritance for episodes. Language
+stations are generated from a single duration aggregation, use stable `language:<code>` IDs from 4000, and follow
+the selected minimum. Mundo, Seoul, Tokyo, Bombay and Berlin cover Spanish, Korean, Japanese, Hindi and German;
+other known languages use localized station names.
+
+The Rest (3999) uses `unmatchedOnly` to exclude video covered by existing stock/generated pools, including
+qualifying language stations. Language and catchall channel JSON fields default to empty/false for old data.
+Room migration 3→4 adds nullable item language without replacing saved content. Performance coverage includes
+repeated 5,000-item international plans and unedited decade-total reuse; edited decade pools remain user-owned.
+
 ## Comic franchise channels
 
 `ComicCatalog` provides Marvelous TV/Movies/Timeline and Detective Club TV/Detective Pictures.

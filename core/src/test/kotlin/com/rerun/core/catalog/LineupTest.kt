@@ -313,6 +313,71 @@ class LineupTest {
     }
 
     @Test
+    fun stockMusicExcludesSpokenWordFromPlaybackAndLegacyRulesUpgrade() {
+        val items = listOf(
+            track("jazz", durationMs = HOUR),
+            track("podcast", durationMs = 11 * HOUR).copy(genres = setOf("Jazz", "Podcast")),
+        )
+        val station = Lineup.musicTemplates(items).single()
+        assertTrue(station.rules.excludeGenres.any { it.equals("Podcast", ignoreCase = true) })
+        assertEquals(HOUR, com.rerun.core.resolve.Resolver.pool(station, items).sumOf { it.durationMs })
+        val legacy = station.copy(rules = station.rules.copy(excludeGenres = emptySet()))
+        val refreshed = Lineup.plan(items, listOf(StoredChannel(legacy, true)), music = true)
+            .channels.single { it.def.id == station.id }
+        assertEquals(station.rules, refreshed.def.rules)
+        assertEquals(HOUR, refreshed.poolMs)
+    }
+
+    @Test
+    fun editedDecadeStationsResolveTheirOwnPoolInsteadOfFilteredStockTotals() {
+        val qualifying = listOf(track("music", durationMs = 24 * HOUR).copy(year = 1995))
+        val stock = Lineup.channels(qualifying, music = true).single { it.id == "decade:music:1990" }
+        val edited = stock.copy(
+            name = "My spoken nineties", minimumContentHours = 0,
+            rules = stock.rules.copy(excludeGenres = emptySet()),
+        )
+        val podcasts = listOf(track("podcast", genre = "Podcast", durationMs = 24 * HOUR).copy(year = 1995))
+        val row = Lineup.plan(podcasts, listOf(StoredChannel(edited, true)), music = true)
+            .channels.single { it.def.id == stock.id }
+        assertEquals(24 * HOUR, row.poolMs)
+        assertFalse(row.dormant)
+    }
+
+    @Test
+    fun languageStationsUseActualMetadataAndKeepTheirOwnPools() {
+        val items = listOf(
+            movie("spanish", durationMs = 12 * HOUR).copy(language = "spa"),
+            movie("korean", durationMs = 12 * HOUR).copy(language = "kor"),
+            movie("german", durationMs = 11 * HOUR).copy(language = "deu"),
+            movie("french", durationMs = 12 * HOUR).copy(language = "fra"),
+        )
+        val channels = Lineup.languageTemplates(items)
+        assertEquals(listOf("French Station", "Mundo", "Seoul"), channels.map { it.name })
+        assertEquals(listOf("language:fra", "language:spa", "language:kor"), channels.map { it.id })
+        assertEquals(listOf(4000, 4001, 4002), channels.map { it.number })
+        val spanish = channels.single { it.id == "language:spa" }
+        assertEquals(listOf("spanish"), com.rerun.core.resolve.Resolver.pool(spanish, items).map { it.key })
+        assertTrue(Lineup.languageTemplates(items, MinimumContentLevel.HIGH).isEmpty())
+    }
+
+    @Test
+    fun catchallExcludesContentCoveredByStockAndLanguageChannels() {
+        val claimed = movie("claimed", genres = setOf("Comedy"), durationMs = 12 * HOUR)
+        val spanish = movie("spanish", durationMs = 12 * HOUR).copy(language = "spa")
+        val unmatched = episode("unmatched", "Unmatched", year = null, durationMs = 12 * HOUR)
+        val short = movie("short", durationMs = MIN - 1)
+        val music = track("music", durationMs = 12 * HOUR)
+        val items = listOf(claimed, spanish, unmatched, short, music)
+        assertEquals(
+            listOf("unmatched"),
+            com.rerun.core.resolve.Resolver.pool(Lineup.catchAllChannel, items).map { it.key },
+        )
+        val plan = Lineup.plan(items, emptyList(), music = false)
+        assertTrue(plan.channels.single { it.def.id == Lineup.CATCHALL_ID }.let { !it.dormant && it.poolMs == 12 * HOUR })
+        assertTrue(plan.channels.any { it.def.id == "language:spa" && !it.dormant })
+    }
+
+    @Test
     fun renamedChannelKeepsItsNameAndHasOneSchedule() {
         val shows = List(24) { episode("e$it", "Duck", episode = it + 1, durationMs = 30 * MIN, network = "Disney Channel") }
         val stored = StoredChannel(Catalog.builtInChannels().first { it.id == "disney" }.copy(name = "Castle Club"), true)

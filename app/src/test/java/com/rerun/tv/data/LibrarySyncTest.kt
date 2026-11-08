@@ -194,7 +194,9 @@ class LibrarySyncTest {
         sync.sync(setOf("2")).collect()
         assertEquals(listOf("episode"), db.items().all().map { it.key })
         assertEquals(setOf("2"), com.rerun.core.codec.SetCodec.decode(db.settings().get(Settings.SELECTED_LIBRARIES)!!))
-        assertTrue(db.entries().rangeAll(0, Long.MAX_VALUE).isEmpty())
+        val rebuilt = db.entries().rangeAll(0, Long.MAX_VALUE)
+        assertTrue(rebuilt.isNotEmpty())
+        assertTrue(rebuilt.all { it.itemKey == null || it.itemKey == "episode" })
         try {
             sync.sync(setOf("gone")).collect()
             fail("Unavailable selection must fail")

@@ -365,6 +365,28 @@
       "wordmark": "wordmarks/tbsjapan.svg"
     },
     {
+      "id": "bravo",
+      "name": "The Salon",
+      "number": 135,
+      "section": "Networks",
+      "slug": "bravo",
+      "accent": "#E66CB6",
+      "concept": "Salon conversation bubbles",
+      "icon": "icons/bravo.svg",
+      "wordmark": "wordmarks/bravo.svg"
+    },
+    {
+      "id": "tlc",
+      "name": "The Learning Lounge",
+      "number": 134,
+      "section": "Networks",
+      "slug": "tlc",
+      "accent": "#9A63ED",
+      "concept": "Open learning book",
+      "icon": "icons/tlc.svg",
+      "wordmark": "wordmarks/tlc.svg"
+    },
+    {
       "id": "horror",
       "name": "Fright Night",
       "number": 301,

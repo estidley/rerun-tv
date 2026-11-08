@@ -80,6 +80,8 @@ precedence still applies.
 | 131 | The Hearth | Comfort movies and family drama; Hallmark Channel metadata |
 | 132 | The Game Room | Game-show reruns; Game Show Network metadata |
 | 133 | Tokyo Tower | Japanese broadcast programming; explicit Tokyo Broadcasting System/TBS Japan metadata |
+| 134 | The Learning Lounge | Learning/lifestyle programming; TLC metadata |
+| 135 | The Salon | Style, reality and conversation programming; Bravo metadata |
 
 Raw **TBS** remains assigned to Ted's TV for compatibility with the existing U.S. reference and Plex libraries.
 Tokyo Tower deliberately does not claim that ambiguous acronym; use Tokyo Broadcasting System, TBS Japan or
@@ -135,6 +137,18 @@ stock stations would increase schedule/storage costs without necessarily improvi
 | 333 | Canned Laughter | Sitcom or Situation Comedy episodes; rerun sitcom strips |
 | 334 | Sob Story | Dramedy, Comedy-drama or Comedy Drama; comedy/drama crossover |
 | 335 | Cold Read | Psychic or Paranormal; supernatural-reality cable |
+
+## Language and unmatched stations
+
+Plex original-language/primary-audio metadata is normalized to language codes and inherited from shows
+when an episode has no value. Qualifying libraries can generate Mundo (Spanish), Seoul (Korean), Tokyo
+(Japanese), Bombay (Hindi), Berlin (German), and localized stations for other languages. Language stations
+start at 4000, use stable `language:<code>` IDs, and follow the selected content minimum.
+
+**The Rest** (3999, stable ID `catchall`) is the unmatched-video catchall. Its persisted `unmatchedOnly` rule
+excludes items covered by stock/generated channels, including qualifying language stations. Short or empty
+pools never activate. Language/catchall fields decode to empty/false on old channel JSON; the explicit Room
+3→4 migration preserves existing items with null language until the next Plex sync.
 
 ## Other generated stations
 

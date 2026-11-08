@@ -26,9 +26,11 @@ data class MediaItem(
     val videoCodec: String?,
     val audioCodec: String?,
     val thumb: String?,
+    /** Normalized original or primary-audio language, when Plex exposes one. */
+    val language: String? = null,
 )
 
-/** Show-level metadata that episodes inherit (network, genres, rating). */
+/** Show-level metadata that episodes inherit (network, genres, rating, language). */
 data class ShowMeta(
     val key: String,
     val title: String,
@@ -39,4 +41,5 @@ data class ShowMeta(
     val tmdbId: String?,
     val labels: Set<String>,
     val collections: Set<String>,
+    val language: String? = null,
 )

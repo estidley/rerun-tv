@@ -60,6 +60,8 @@ class CatalogTest {
             "hallmark" to ("The Hearth" to 131),
             "gsn" to ("The Game Room" to 132),
             "tbsjapan" to ("Tokyo Tower" to 133),
+            "tlc" to ("The Learning Lounge" to 134),
+            "bravo" to ("The Salon" to 135),
         )
         val definitions = Catalog.builtInChannels().associateBy { it.id }
         for ((id, presentation) in expected) {
@@ -80,6 +82,7 @@ class CatalogTest {
             "BBC America" to "bbcamerica", "Nat Geo" to "natgeo", "Animal Planet" to "animalplanet",
             "Hallmark" to "hallmark", "GSN" to "gsn", "Tokyo Broadcasting System" to "tbsjapan",
             "TBS Japan" to "tbsjapan", "Turner Broadcasting System" to "tbs", "TBS" to "tbs",
+            "TLC" to "tlc", "Bravo" to "bravo",
         )) assertEquals(id, Catalog.canonicalNetwork(alias))
         val aliases = Catalog.networks.flatMap { network -> network.aliases.map { it.trim().lowercase() to network.id } }
         val duplicateAliases = aliases.groupBy { it.first }.filterValues { entries -> entries.map { it.second }.distinct().size > 1 }

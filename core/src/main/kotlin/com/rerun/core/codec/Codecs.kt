@@ -88,6 +88,7 @@ object ChannelCodec {
         put("ratings", strings(r.ratings)); put("kinds", strings(r.kinds.map { it.name }))
         put("bucket", r.bucket); put("bucketCount", r.bucketCount)
         put("franchises", strings(r.franchises))
+        put("languages", strings(r.languages)); put("unmatchedOnly", r.unmatchedOnly)
     }
 
     private fun rules(o: JsonObject): Rules = Rules(
@@ -101,6 +102,8 @@ object ChannelCodec {
         bucket = o["bucket"]?.jsonPrimitive?.int ?: 0,
         bucketCount = o["bucketCount"]?.jsonPrimitive?.int ?: 1,
         franchises = o["franchises"].stringSet(),
+        languages = o["languages"].stringSet(),
+        unmatchedOnly = o["unmatchedOnly"]?.jsonPrimitive?.boolean ?: false,
     )
 }
 
