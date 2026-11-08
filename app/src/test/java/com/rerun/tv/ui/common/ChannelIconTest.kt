@@ -137,6 +137,7 @@ class ChannelIconTest {
         val expected = mapOf(
             "filmvault" to "The Film Vault", "bbcamerica" to "The Beeb", "natgeo" to "The Atlas",
             "animalplanet" to "The Wild", "hallmark" to "The Hearth", "gsn" to "The Game Room",
+            "tbsjapan" to "Tokyo Tower",
         )
         for ((id, name) in expected) {
             for (directory in listOf("icons", "wordmarks")) {

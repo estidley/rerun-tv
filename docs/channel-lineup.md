@@ -41,42 +41,49 @@ are needed for this review; decade qualification retains its one-pass aggregatio
 ## Network and curated stations
 
 All rows below use the selected minimum-content preset (12 hours by default). Existing custom names/rules are preserved;
-only recognized old stock names are replaced automatically.
+only recognized old stock names are replaced automatically. The network editor shows both the parody name and the
+real Plex/TMDB network name. Alias matching ignores case and surrounding whitespace; normal TMDB/Plex/reference
+precedence still applies.
 
 | Number | Name | Cable-era nod and actual programming |
 |---|---|---|
-| 101 | Wonderland | Family cable/fantasy; Disney Channel and Toon Disney metadata plus owner-family routing |
-| 102 | Kid Castle | Kids' cable clubhouse; Nickelodeon-family metadata and routing |
-| 103 | Toon Tower | All-cartoon cable; Cartoon Network metadata plus the weekday curated action block |
-| 104 | The Attic | Rerun cartoon vault; Boomerang metadata or the curated classic-series list |
+| 101 | Dinky Channel | Family cable/fantasy; Disney Channel and Toon Disney metadata plus owner-family routing |
+| 102 | Slimelodeon | Kids' cable clubhouse; Nickelodeon-family metadata and routing |
+| 103 | Cartoon Notwork | All-cartoon cable; Cartoon Network metadata plus the weekday curated action block |
+| 104 | Kaboomerang | Rerun cartoon vault; Boomerang metadata or the curated classic-series list |
 | 105 | Toonuki | Anime-tagged movies and episodes from included libraries, regardless of network, title or rating; animation alone does not qualify |
-| 106 | Public Square | Public broadcasting on the cable dial; PBS metadata |
-| 107 | Story Yard | Children's public broadcasting; PBS Kids metadata and preschool routing |
-| 108 | Action Club | Action-oriented children's cable; Disney XD/Jetix metadata and routing |
+| 106 | PBJ | Public broadcasting on the cable dial; PBS metadata |
+| 107 | PBJ Kids | Children's public broadcasting; PBS Kids metadata and preschool routing |
+| 108 | Dinky XD | Action-oriented children's cable; Disney XD/Jetix metadata and routing |
 | 109 | The Backlot | Studio-library cable; mature Disney-family and live-action franchise routing |
-| 110 | Warp Nine | Space-age cable; Syfy metadata and science-fiction routing |
-| 111 | Coast to Coast | General entertainment cable; USA metadata and general streamer/NBCU routing |
-| 112 | Boomstick | TNT wordplay/action-movie atmosphere; TNT metadata, not an Action-genre restriction |
-| 113 | Ted's TV | Ted Turner's superstation heritage; TBS metadata, including non-comedy programming |
-| 114 | The Edge | Edgier basic cable; FX/FXX metadata and Hulu routing |
-| 115 | The Marquee | Movie-house cable heritage; AMC metadata, including later original series |
+| 110 | Sigh-Fi Channel | Space-age cable; Syfy metadata and science-fiction routing |
+| 111 | USB Network | General entertainment cable; USA Network metadata and general streamer/NBCU routing |
+| 112 | DNT | TNT wordplay/action-movie atmosphere; TNT metadata, not an Action-genre restriction |
+| 113 | Ted's TV | Ted Turner's superstation heritage; TBS/Turner Broadcasting System metadata, including non-comedy programming |
+| 114 | SFX | Edgier basic cable; FX/FXX metadata and Hulu routing |
+| 115 | PMC | Movie-house cable heritage; AMC metadata, including later original series |
 | 116 | Remote Control | MTV-era remote/quiz-show nostalgia; MTV metadata, including reality and scripted shows, not an invented music-video source |
-| 117 | Punchline | Comedy cable inspiration; Comedy Central metadata/routing, distinct from genre matching |
-| 118 | Family Hour | Family-branded cable evolution; ABC Family/Freeform/Fox Family metadata |
-| 119 | The Mountain | Studio-peak imagery; Paramount Network/Spike metadata and Paramount-family routing |
-| 120 | The Expedition | Documentary/discovery cable atmosphere; Discovery metadata and documentary routing |
-| 121 | Yesteryear | History-channel heritage; History metadata and historical-documentary routing |
-| 122 | The Kitchen | Cable cooking shows; Food Network metadata |
-| 123 | Home Base | Home-and-garden cable; HGTV metadata |
-| 124 | After Hours | Late-night animation blocks; Adult Swim metadata and adult-animation routing |
-| 125 | Tiny Town | Preschool cable; Nick Jr. metadata/routing |
-| 126 | Little Castle | Preschool fantasy cable; Disney Junior/Playhouse Disney metadata/routing |
+| 117 | Tragedy Central | Comedy cable inspiration; Comedy Central metadata/routing, distinct from genre matching |
+| 118 | XYZ Family | Family-branded cable evolution; ABC Family/Freeform/Fox Family metadata |
+| 119 | Spork TV | Studio-peak imagery; Paramount Network/Spike metadata and Paramount-family routing |
+| 120 | Recovery Channel | Documentary/discovery cable atmosphere; Discovery metadata and documentary routing |
+| 121 | Hysteria Channel | History-channel heritage; History metadata and historical-documentary routing |
+| 122 | Feud Network | Cable cooking shows; Food Network metadata |
+| 123 | GGTV | Home-and-garden cable; HGTV metadata |
+| 124 | Adult Whim | Late-night animation blocks; Adult Swim metadata and adult-animation routing |
+| 125 | Slime Jr. | Preschool cable; Nick Jr. metadata/routing |
+| 126 | Playhouse Dinky | Preschool fantasy cable; Disney Junior/Playhouse Disney metadata/routing |
 | 127 | The Beeb | British television on the expanded dial; BBC America metadata |
 | 128 | The Atlas | Exploration and documentary programming; National Geographic metadata |
 | 129 | The Wild | Animal and nature programming; Animal Planet metadata |
-| 130 | The Premium | Subscription movie-channel atmosphere; HBO/Cinemax metadata and Warner adult routing |
+| 130 | HMO | Subscription movie-channel atmosphere; HBO/Cinemax metadata and Warner adult routing |
 | 131 | The Hearth | Comfort movies and family drama; Hallmark Channel metadata |
 | 132 | The Game Room | Game-show reruns; Game Show Network metadata |
+| 133 | Tokyo Tower | Japanese broadcast programming; explicit Tokyo Broadcasting System/TBS Japan metadata |
+
+Raw **TBS** remains assigned to Ted's TV for compatibility with the existing U.S. reference and Plex libraries.
+Tokyo Tower deliberately does not claim that ambiguous acronym; use Tokyo Broadcasting System, TBS Japan or
+TBS Television metadata for Japanese content. The two definitions have separate stable IDs and schedules.
 
 Network metadata is not a content-rating guarantee. Existing kids-safe markers do not
 automatically screen every title or ad; the family/kids theme rules below have explicit

@@ -11,8 +11,8 @@ import java.time.LocalTime
 /**
  * One built-in network channel.
  *
- * [name] is the parody shown on screen. [realName] is the real network it stands for and
- * never appears on screen. [aliases] are the real network names as Plex and TMDB spell them;
+ * [name] is the parody shown on the dial. [realName] is the real network it stands for and
+ * appears beside the parody in the network editor. [aliases] are the real network names as Plex and TMDB spell them;
  * they match Plex metadata and pick the TMDB networks whose show lists feed the channel.
  * [tmdbCompanies] are TMDB production companies whose movies (made-for-TV films, mostly)
  * belong on the channel.
@@ -66,7 +66,8 @@ object Catalog {
         NetworkDef("tnt", "DNT", 112, listOf("TNT"), false,
             realName = "TNT",
         ),
-        NetworkDef("tbs", "Ted's TV", 113, listOf("TBS"), false,
+        NetworkDef("tbs", "Ted's TV", 113,
+            listOf("TBS", "TBS TV", "TBS Network", "Turner Broadcasting System", "Turner Broadcasting"), false,
             realName = "TBS",
         ),
         NetworkDef("fx", "SFX", 114, listOf("FX", "FXX", "FX Networks"), false,
@@ -126,6 +127,10 @@ object Catalog {
         ),
         NetworkDef("gsn", "The Game Room", 132, listOf("Game Show Network", "GSN"), false,
             realName = "Game Show Network",
+        ),
+        NetworkDef("tbsjapan", "Tokyo Tower", 133,
+            listOf("Tokyo Broadcasting System", "Tokyo Broadcasting Station", "Tokyo Broadcasting", "TBS Japan", "TBS Television"), false,
+            realName = "Tokyo Broadcasting System",
         ),
     )
 

@@ -163,8 +163,9 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             item {
                 Section("Networks") {
                     chipRow(f.networks) { id ->
-                        val name = Catalog.networks.firstOrNull { it.id == id }?.name ?: id
-                        TvButton(name, { update(d.rules.copy(networks = d.rules.networks.toggle(id))) }, selected = id in d.rules.networks)
+                        val network = Catalog.networks.firstOrNull { it.id == id }
+                        TvButton(network?.name ?: id, { update(d.rules.copy(networks = d.rules.networks.toggle(id))) },
+                            selected = id in d.rules.networks, sub = network?.realName)
                     }
                 }
             }

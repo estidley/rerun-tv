@@ -59,6 +59,7 @@ class CatalogTest {
             "animalplanet" to ("The Wild" to 129),
             "hallmark" to ("The Hearth" to 131),
             "gsn" to ("The Game Room" to 132),
+            "tbsjapan" to ("Tokyo Tower" to 133),
         )
         val definitions = Catalog.builtInChannels().associateBy { it.id }
         for ((id, presentation) in expected) {
@@ -77,8 +78,12 @@ class CatalogTest {
         assertEquals(setOf("Western"), Lineup.optionalThemes().single { it.id == "opt:western" }.rules.genres)
         for ((alias, id) in mapOf(
             "BBC America" to "bbcamerica", "Nat Geo" to "natgeo", "Animal Planet" to "animalplanet",
-            "Hallmark" to "hallmark", "GSN" to "gsn",
+            "Hallmark" to "hallmark", "GSN" to "gsn", "Tokyo Broadcasting System" to "tbsjapan",
+            "TBS Japan" to "tbsjapan", "Turner Broadcasting System" to "tbs", "TBS" to "tbs",
         )) assertEquals(id, Catalog.canonicalNetwork(alias))
+        val aliases = Catalog.networks.flatMap { network -> network.aliases.map { it.trim().lowercase() to network.id } }
+        val duplicateAliases = aliases.groupBy { it.first }.filterValues { entries -> entries.map { it.second }.distinct().size > 1 }
+        assertEquals(emptySet(), duplicateAliases.keys)
     }
 
     @Test

@@ -354,6 +354,17 @@
       "wordmark": "wordmarks/gsn.svg"
     },
     {
+      "id": "tbsjapan",
+      "name": "Tokyo Tower",
+      "number": 133,
+      "section": "Networks",
+      "slug": "tbsjapan",
+      "accent": "#EC4A3E",
+      "concept": "Tokyo broadcast tower",
+      "icon": "icons/tbsjapan.svg",
+      "wordmark": "wordmarks/tbsjapan.svg"
+    },
+    {
       "id": "horror",
       "name": "Fright Night",
       "number": 301,

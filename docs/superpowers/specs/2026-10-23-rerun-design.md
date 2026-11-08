@@ -50,8 +50,11 @@ ordinary refreshes preserve valid locked schedules.
 Built-in network channels use parody display names while retaining real network aliases and stable IDs.
 The expanded dial adds The Beeb/BBC America (127), The Atlas/National Geographic (128),
 The Wild/Animal Planet (129), The Hearth/Hallmark (131), and The Game Room/Game Show Network (132).
-The Film Vault (363) is a theme station for pre-1990 movies rather than a network claim; High Noon
-remains the existing Western station. Refresh replaces retired built-in names and preserves names edited by the user.
+Tokyo Tower (133) matches explicit Tokyo Broadcasting System/TBS Japan metadata; raw TBS stays on Ted's TV,
+which also accepts Turner Broadcasting System. Network editor choices show parody and real names, and aliases
+must remain unique after case/whitespace normalization. The Film Vault (363) is a theme station for pre-1990
+movies rather than a network claim; High Noon remains the existing Western station. Refresh replaces retired
+built-in names and preserves names edited by the user.
 The optional `:tmdb:run` build-time tool downloads network/company references using `TMDB_TOKEN`.
 It writes gitignored `local/tmdb/rerun/tmdb-networks.json`; subsequent builds bundle that resource.
 The app receives the lists, never the token, and makes no TMDB requests.
