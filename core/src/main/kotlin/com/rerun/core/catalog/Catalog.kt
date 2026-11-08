@@ -108,8 +108,24 @@ object Catalog {
         NetworkDef("disneyjr", "Playhouse Dinky", 126, listOf("Disney Junior", "Disney Jr.", "Playhouse Disney"), true,
             realName = "Playhouse Disney",
         ),
+        NetworkDef("bbcamerica", "The Beeb", 127, listOf("BBC America", "BBC America HD"), false,
+            realName = "BBC America",
+        ),
+        NetworkDef("natgeo", "The Atlas", 128,
+            listOf("National Geographic", "National Geographic Channel", "Nat Geo", "NatGeo", "NGC"), false,
+            realName = "National Geographic",
+        ),
+        NetworkDef("animalplanet", "The Wild", 129, listOf("Animal Planet"), false,
+            realName = "Animal Planet",
+        ),
         NetworkDef("hbo", "HMO", 130, listOf("HBO", "Cinemax"), false,
             realName = "HBO", tmdbCompanies = listOf("HBO Films"),
+        ),
+        NetworkDef("hallmark", "The Hearth", 131, listOf("Hallmark Channel", "Hallmark"), false,
+            realName = "Hallmark Channel",
+        ),
+        NetworkDef("gsn", "The Game Room", 132, listOf("Game Show Network", "GSN"), false,
+            realName = "Game Show Network",
         ),
     )
 
@@ -168,6 +184,10 @@ object Catalog {
                 "saturday", 308, "Cereal Hour", ChannelKind.THEME,
                 Rules(genres = setOf("Animation"), ratings = setOf("TV-Y", "TV-Y7", "TV-Y7-FV", "TV-G"), kinds = setOf(MediaKind.EPISODE)),
                 kidsSafe = true,
+            ),
+            ChannelDef(
+                "filmvault", 363, "The Film Vault", ChannelKind.THEME,
+                Rules(decades = (1900..1980 step 10).toSet(), kinds = setOf(MediaKind.MOVIE)),
             ),
         )
         return net + themes + ComicCatalog.channels

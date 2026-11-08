@@ -71,7 +71,12 @@ only recognized old stock names are replaced automatically.
 | 124 | After Hours | Late-night animation blocks; Adult Swim metadata and adult-animation routing |
 | 125 | Tiny Town | Preschool cable; Nick Jr. metadata/routing |
 | 126 | Little Castle | Preschool fantasy cable; Disney Junior/Playhouse Disney metadata/routing |
+| 127 | The Beeb | British television on the expanded dial; BBC America metadata |
+| 128 | The Atlas | Exploration and documentary programming; National Geographic metadata |
+| 129 | The Wild | Animal and nature programming; Animal Planet metadata |
 | 130 | The Premium | Subscription movie-channel atmosphere; HBO/Cinemax metadata and Warner adult routing |
+| 131 | The Hearth | Comfort movies and family drama; Hallmark Channel metadata |
+| 132 | The Game Room | Game-show reruns; Game Show Network metadata |
 
 Network metadata is not a content-rating guarantee. Existing kids-safe markers do not
 automatically screen every title or ad; the family/kids theme rules below have explicit
@@ -92,6 +97,7 @@ All use the selected minimum-content preset (12 hours by default).
 | 306 | Neon Decade | 1980s movies; neon/VHS-era film nights |
 | 307 | Dial-Up Cinema | 1990s movies; modem-era movie nights |
 | 308 | Cereal Hour | Animated episodes rated TV-Y, TV-Y7, TV-Y7-FV or TV-G; Saturday-morning nostalgia |
+| 363 | The Film Vault | Movies released before 1990; classic-film vault and Turner Classic Movies-style atmosphere |
 
 The former TBS name **Laugh Track** moves to the existing Comedy station, formerly
 **Laughing Stock**. TBS keeps ID `tbs`/number 113 and its existing schedule as **Ted's TV**.

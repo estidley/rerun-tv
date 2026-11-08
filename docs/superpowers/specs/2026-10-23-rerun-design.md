@@ -48,7 +48,10 @@ ordinary refreshes preserve valid locked schedules.
 ## Network reference lists
 
 Built-in network channels use parody display names while retaining real network aliases and stable IDs.
-Refresh replaces retired built-in names and preserves names edited by the user.
+The expanded dial adds The Beeb/BBC America (127), The Atlas/National Geographic (128),
+The Wild/Animal Planet (129), The Hearth/Hallmark (131), and The Game Room/Game Show Network (132).
+The Film Vault (363) is a theme station for pre-1990 movies rather than a network claim; High Noon
+remains the existing Western station. Refresh replaces retired built-in names and preserves names edited by the user.
 The optional `:tmdb:run` build-time tool downloads network/company references using `TMDB_TOKEN`.
 It writes gitignored `local/tmdb/rerun/tmdb-networks.json`; subsequent builds bundle that resource.
 The app receives the lists, never the token, and makes no TMDB requests.

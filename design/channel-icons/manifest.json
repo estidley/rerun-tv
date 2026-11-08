@@ -299,6 +299,61 @@
       "wordmark": "wordmarks/hbo.svg"
     },
     {
+      "id": "bbcamerica",
+      "name": "The Beeb",
+      "number": 127,
+      "section": "Networks",
+      "slug": "bbcamerica",
+      "accent": "#5185EF",
+      "concept": "British globe and antenna",
+      "icon": "icons/bbcamerica.svg",
+      "wordmark": "wordmarks/bbcamerica.svg"
+    },
+    {
+      "id": "natgeo",
+      "name": "The Atlas",
+      "number": 128,
+      "section": "Networks",
+      "slug": "natgeo",
+      "accent": "#9A63ED",
+      "concept": "Folded expedition map",
+      "icon": "icons/natgeo.svg",
+      "wordmark": "wordmarks/natgeo.svg"
+    },
+    {
+      "id": "animalplanet",
+      "name": "The Wild",
+      "number": 129,
+      "section": "Networks",
+      "slug": "animalplanet",
+      "accent": "#36D3BD",
+      "concept": "Animal paw print",
+      "icon": "icons/animalplanet.svg",
+      "wordmark": "wordmarks/animalplanet.svg"
+    },
+    {
+      "id": "hallmark",
+      "name": "The Hearth",
+      "number": 131,
+      "section": "Networks",
+      "slug": "hallmark",
+      "accent": "#E66CB6",
+      "concept": "Home with a warm heart",
+      "icon": "icons/hallmark.svg",
+      "wordmark": "wordmarks/hallmark.svg"
+    },
+    {
+      "id": "gsn",
+      "name": "The Game Room",
+      "number": 132,
+      "section": "Networks",
+      "slug": "gsn",
+      "accent": "#E88A44",
+      "concept": "Game-show buzzer",
+      "icon": "icons/gsn.svg",
+      "wordmark": "wordmarks/gsn.svg"
+    },
+    {
       "id": "horror",
       "name": "Fright Night",
       "number": 301,
@@ -649,6 +704,17 @@
       "concept": "Late Seating pictogram",
       "icon": "icons/movies-3.svg",
       "wordmark": "wordmarks/movies-3.svg"
+    },
+    {
+      "id": "filmvault",
+      "name": "The Film Vault",
+      "number": 363,
+      "section": "Movies",
+      "slug": "filmvault",
+      "accent": "#FFBE43",
+      "concept": "Classic film reel vault",
+      "icon": "icons/filmvault.svg",
+      "wordmark": "wordmarks/filmvault.svg"
     },
     {
       "id": "ads:only",

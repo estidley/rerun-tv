@@ -133,6 +133,26 @@ class ChannelIconTest {
         assertTrue("No main text group found in $id", textGroups > 0)
     }
 
-    private fun wordmark(id: String) = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-        .parse(File("../design/channel-icons/wordmarks", "$id.svg"))
+    @Test fun expandedCableArtworkHasCurrentNamesAndStandaloneVectors() {
+        val expected = mapOf(
+            "filmvault" to "The Film Vault", "bbcamerica" to "The Beeb", "natgeo" to "The Atlas",
+            "animalplanet" to "The Wild", "hallmark" to "The Hearth", "gsn" to "The Game Room",
+        )
+        for ((id, name) in expected) {
+            for (directory in listOf("icons", "wordmarks")) {
+                val document = artwork("$directory/$id")
+                assertEquals(name, document.getElementsByTagName("title").item(0).textContent)
+                assertEquals(0, document.getElementsByTagName("text").length)
+                val vectorElements = listOf("path", "circle", "ellipse", "rect").sumOf {
+                    document.getElementsByTagName(it).length
+                }
+                assertTrue("Missing vector artwork for $id", vectorElements > 0)
+            }
+        }
+    }
+
+    private fun wordmark(id: String) = artwork("wordmarks/$id")
+
+    private fun artwork(path: String) = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        .parse(File("../design/channel-icons", "$path.svg"))
 }

@@ -52,6 +52,36 @@ class CatalogTest {
     }
 
     @Test
+    fun expandedCableChannelsHaveStableRulesNumbersAndAliases() {
+        val expected = mapOf(
+            "bbcamerica" to ("The Beeb" to 127),
+            "natgeo" to ("The Atlas" to 128),
+            "animalplanet" to ("The Wild" to 129),
+            "hallmark" to ("The Hearth" to 131),
+            "gsn" to ("The Game Room" to 132),
+        )
+        val definitions = Catalog.builtInChannels().associateBy { it.id }
+        for ((id, presentation) in expected) {
+            val def = definitions.getValue(id)
+            assertEquals(presentation.first, def.name)
+            assertEquals(presentation.second, def.number)
+            assertEquals(ChannelKind.NETWORK, def.kind)
+            assertEquals(setOf(id), def.rules.networks)
+        }
+        val film = definitions.getValue("filmvault")
+        assertEquals("The Film Vault", film.name)
+        assertEquals(363, film.number)
+        assertEquals(ChannelKind.THEME, film.kind)
+        assertEquals(setOf(com.rerun.core.model.MediaKind.MOVIE), film.rules.kinds)
+        assertEquals((1900..1980 step 10).toSet(), film.rules.decades)
+        assertEquals(setOf("Western"), Lineup.optionalThemes().single { it.id == "opt:western" }.rules.genres)
+        for ((alias, id) in mapOf(
+            "BBC America" to "bbcamerica", "Nat Geo" to "natgeo", "Animal Planet" to "animalplanet",
+            "Hallmark" to "hallmark", "GSN" to "gsn",
+        )) assertEquals(id, Catalog.canonicalNetwork(alias))
+    }
+
+    @Test
     fun kidsSafeNetworksAreMarked() {
         val byId = Catalog.builtInChannels().associateBy { it.id }
         for (id in listOf("disney", "disneyxd", "disneyjr", "nick", "nickjr", "cn", "boomerang", "pbskids")) {
