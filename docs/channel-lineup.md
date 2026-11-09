@@ -12,7 +12,7 @@ comes from the user's included Plex libraries. A nostalgic name alone never clas
 - Genre stations match Plex genre tags. Include sources (network, show, genre, collection,
   label or metadata ID) are alternatives; exclusions, years, ratings and media kinds
   narrow that match. Selecting a network and a genre in the editor does not mean AND.
-- Curated stations add named series; Toon Tower also has a weekday 4–7 PM action-cartoon block.
+- Curated stations add named series; Cartoon Notwork also has a weekday 4–7 PM action-cartoon block.
 - Only eligible items lasting at least one minute count toward ordinary station pools.
   Unknown years do not count toward decades. Music year falls back to album year;
   episode year falls back to show year.
@@ -45,43 +45,56 @@ only recognized old stock names are replaced automatically. The network editor s
 real Plex/TMDB network name. Alias matching ignores case and surrounding whitespace; normal TMDB/Plex/reference
 precedence still applies.
 
+The Channels list and **Edit > What plays** derive plain-language summaries from the same rules used for playback. New broadcaster aliases work immediately with Plex metadata; their initially empty TMDB reference lists are populated only by a later validated, credential-backed refresh.
+
+Preferred stock numbers group broadcast (101–112), entertainment (120–134), factual/lifestyle (140–146), and kids/animation (160–169). Untouched stock entries migrate into these groups without changing stable IDs or schedules. Renamed, rule-edited, manually renumbered and custom stations retain their configuration; collisions move to the next free number.
+
 | Number | Name | Cable-era nod and actual programming |
 |---|---|---|
-| 101 | Dinky Channel | Family cable/fantasy; Disney Channel and Toon Disney metadata plus owner-family routing |
-| 102 | Slimelodeon | Kids' cable clubhouse; Nickelodeon-family metadata and routing |
-| 103 | Cartoon Notwork | All-cartoon cable; Cartoon Network metadata plus the weekday curated action block |
-| 104 | Kaboomerang | Rerun cartoon vault; Boomerang metadata or the curated classic-series list |
-| 105 | Toonuki | Anime-tagged movies and episodes from included libraries, regardless of network, title or rating; animation alone does not qualify |
-| 106 | PBJ | Public broadcasting on the cable dial; PBS metadata |
-| 107 | PBJ Kids | Children's public broadcasting; PBS Kids metadata and preschool routing |
-| 108 | Dinky XD | Action-oriented children's cable; Disney XD/Jetix metadata and routing |
-| 109 | The Backlot | Studio-library cable; mature Disney-family and live-action franchise routing |
-| 110 | Sigh-Fi Channel | Space-age cable; Syfy metadata and science-fiction routing |
-| 111 | USB Network | General entertainment cable; USA Network metadata and general streamer/NBCU routing |
-| 112 | DNT | TNT wordplay/action-movie atmosphere; TNT metadata, not an Action-genre restriction |
-| 113 | Ted's TV | Ted Turner's superstation heritage; TBS/Turner Broadcasting System metadata, including non-comedy programming |
-| 114 | SFX | Edgier basic cable; FX/FXX metadata and Hulu routing |
-| 115 | PMC | Movie-house cable heritage; AMC metadata, including later original series |
-| 116 | Remote Control | MTV-era remote/quiz-show nostalgia; MTV metadata, including reality and scripted shows, not an invented music-video source |
-| 117 | Tragedy Central | Comedy cable inspiration; Comedy Central metadata/routing, distinct from genre matching |
-| 118 | XYZ Family | Family-branded cable evolution; ABC Family/Freeform/Fox Family metadata |
-| 119 | Spork TV | Studio-peak imagery; Paramount Network/Spike metadata and Paramount-family routing |
-| 120 | Recovery Channel | Documentary/discovery cable atmosphere; Discovery metadata and documentary routing |
-| 121 | Hysteria Channel | History-channel heritage; History metadata and historical-documentary routing |
-| 122 | Feud Network | Cable cooking shows; Food Network metadata |
-| 123 | GGTV | Home-and-garden cable; HGTV metadata |
-| 124 | Adult Whim | Late-night animation blocks; Adult Swim metadata and adult-animation routing |
-| 125 | Slime Jr. | Preschool cable; Nick Jr. metadata/routing |
-| 126 | Playhouse Dinky | Preschool fantasy cable; Disney Junior/Playhouse Disney metadata/routing |
-| 127 | The Beeb | British television on the expanded dial; BBC America metadata |
-| 128 | The Atlas | Exploration and documentary programming; National Geographic metadata |
-| 129 | The Wild | Animal and nature programming; Animal Planet metadata |
-| 130 | HMO | Subscription movie-channel atmosphere; HBO/Cinemax metadata and Warner adult routing |
-| 131 | The Hearth | Comfort movies and family drama; Hallmark Channel metadata |
-| 132 | The Game Room | Game-show reruns; Game Show Network metadata |
-| 133 | Tokyo Tower | Japanese broadcast programming; explicit Tokyo Broadcasting System/TBS Japan metadata |
-| 134 | The Learning Lounge | Learning/lifestyle programming; TLC metadata |
-| 135 | The Salon | Style, reality and conversation programming; Bravo metadata |
+| 101 | Alphabet | ABC / American Broadcasting Company / ABC Network / ABC-TV; all genres |
+| 102 | The Eye | CBS / Columbia Broadcasting System / CBS Network / CBS-TV; all genres |
+| 103 | Peacock Place | NBC / National Broadcasting Company / NBC Network / NBC-TV; all genres |
+| 104 | The Den | FOX / Fox Broadcasting Company / Fox Network / FOX-TV; all genres |
+| 105 | True North | CBC / Canadian Broadcasting Corporation / CBC Television / CBC TV / CBC News Network; all genres |
+| 106 | PBJ | PBS; public broadcasting across genres |
+| 107 | Auntie | BBC, BBC Television, BBC Two/Three/Four, CBBC and CBeebies; all genres |
+| 108 | The One | BBC One / BBC1 and their HD variants; all genres |
+| 109 | The Beeb | BBC America / BBC America HD; British programming on U.S. cable, all genres |
+| 110 | The Dish | Sky, Sky TV, Sky One, Sky Atlantic, Sky Max, Sky Witness, Sky Showcase, Sky Comedy, Sky Sci-Fi, Sky Documentaries, Sky News and Sky Sports; all genres |
+| 111 | Four Sure | Channel 4 / Channel4 / Channel Four / C4, plus E4, More4 and Film4; all genres |
+| 112 | Tokyo Tower | Tokyo Broadcasting System / Tokyo Broadcasting Station / Tokyo Broadcasting / TBS Japan / TBS Television; all genres |
+| 120 | USB Network | USA Network / USA; general entertainment plus existing streamer/NBCU fallback routing |
+| 121 | DNT | TNT; all genres, not an Action-only filter |
+| 122 | Ted's TV | TBS / TBS TV / TBS Network / Turner Broadcasting System / Turner Broadcasting; all genres |
+| 123 | SFX | FX / FXX / FX Networks and existing Hulu fallback routing; all genres |
+| 124 | PMC | AMC; all genres, including later original series |
+| 125 | Remote Control | MTV; reality, scripted and other programming, not an invented music-video source |
+| 126 | Tragedy Central | Comedy Central network metadata; distinct from the Comedy genre station |
+| 127 | XYZ Family | ABC Family / Freeform / Fox Family; all genres |
+| 128 | Spork TV | Paramount Network / Spike / Spike TV and existing Paramount-family fallback routing |
+| 129 | Sigh-Fi Channel | Syfy / Sci Fi Channel / SciFi / Sci-Fi Channel and existing science-fiction fallback routing |
+| 130 | The Backlot | Existing mature Disney-family/live-action fallback routing; no invented network aliases |
+| 131 | The Game Room | Game Show Network / GSN; all genres |
+| 132 | The Salon | Bravo / Bravo TV; style, reality, conversation and other programming |
+| 133 | The Hearth | Hallmark Channel / Hallmark; all genres |
+| 134 | HMO | HBO / Cinemax and existing Warner adult fallback routing; all genres |
+| 140 | Recovery Channel | Discovery / Discovery Channel and existing documentary fallback routing |
+| 141 | Hysteria Channel | History / History Channel / The History Channel and existing historical-documentary fallback routing |
+| 142 | The Atlas | National Geographic / National Geographic Channel / Nat Geo / NatGeo / NGC; exploration and other programming |
+| 143 | The Wild | Animal Planet; animal, nature and other programming |
+| 144 | The Learning Lounge | TLC; learning, lifestyle and other programming |
+| 145 | Feud Network | Food Network; cooking and other programming |
+| 146 | GGTV | HGTV; home, garden and other programming |
+| 160 | Dinky Channel | Disney Channel / Toon Disney and existing Disney-family fallback routing |
+| 161 | Slimelodeon | Nickelodeon / Nicktoons / Nick / TeenNick and existing family fallback routing |
+| 162 | Cartoon Notwork | Cartoon Network / CN, plus the weekday 4–7 PM curated action-cartoon block |
+| 163 | Kaboomerang | Boomerang network metadata or the curated classic-series list |
+| 164 | Toonuki | Anime-tagged movies and episodes, regardless of network, title or rating; animation alone does not qualify |
+| 165 | PBJ Kids | PBS Kids and existing preschool fallback routing |
+| 166 | Dinky XD | Disney XD / Jetix and existing family/action fallback routing |
+| 167 | Playhouse Dinky | Disney Junior / Disney Jr. / Playhouse Disney and existing preschool fallback routing |
+| 168 | Slime Jr. | Nick Jr. / Nick Jr and existing preschool fallback routing |
+| 169 | Adult Whim | Adult Swim / [adult swim] and existing adult-animation fallback routing |
 
 Raw **TBS** remains assigned to Ted's TV for compatibility with the existing U.S. reference and Plex libraries.
 Tokyo Tower deliberately does not claim that ambiguous acronym; use Tokyo Broadcasting System, TBS Japan or
@@ -109,14 +122,14 @@ All use the selected minimum-content preset (12 hours by default).
 | 363 | The Film Vault | Movies released before 1990; classic-film vault and Turner Classic Movies-style atmosphere |
 
 The former TBS name **Laugh Track** moves to the existing Comedy station, formerly
-**Laughing Stock**. TBS keeps ID `tbs`/number 113 and its existing schedule as **Ted's TV**.
+**Laughing Stock**. TBS keeps ID `tbs`/number 122 and its existing schedule as **Ted's TV**.
 Comedy keeps ID `comedy`/number 303 and its genre rules. The documentary *A Brief History
 of Time* may therefore remain on Ted's TV when its studio is TBS; it cannot qualify for
 the default Laugh Track unless Plex also tags it Comedy.
 
 ## Content-qualified extra themes
 
-Each appears at four hours of eligible video, unless explicitly overridden on a saved
+Each appears at the selected minimum of eligible video, unless explicitly overridden on a saved
 definition. These retain their current names and targeted rules; adding more overlapping
 stock stations would increase schedule/storage costs without necessarily improving variety.
 
@@ -145,7 +158,7 @@ when an episode has no value. Qualifying libraries can generate Mundo (Spanish),
 (Japanese), Bombay (Hindi), Berlin (German), and localized stations for other languages. Language stations
 start at 4000, use stable `language:<code>` IDs, and follow the selected content minimum.
 
-**The Rest** (3999, stable ID `catchall`) is the unmatched-video catchall. Its persisted `unmatchedOnly` rule
+**The Rest** (1999, before genre music at 2000+, stable ID `catchall`) is the unmatched-video catchall. Its persisted `unmatchedOnly` rule
 excludes items covered by stock/generated channels, including decade and language stations qualifying at the selected content minimum. Short or empty
 pools never activate. Language/catchall fields decode to empty/false on old channel JSON; the explicit Room
 3→4 migration preserves existing items with null language until the next Plex sync.

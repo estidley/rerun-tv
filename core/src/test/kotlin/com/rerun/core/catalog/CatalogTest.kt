@@ -37,8 +37,8 @@ class CatalogTest {
         val defs = Catalog.builtInChannels()
         assertEquals(emptyList(), Catalog.validateNumbers(defs))
         assertEquals(defs.size, defs.map { it.id }.toSet().size)
-        assertTrue(defs.any { it.name == "The Backlot" && it.number == 109 })
-        assertTrue(defs.any { it.name == "Dinky XD" && it.number == 108 })
+        assertTrue(defs.any { it.name == "The Backlot" && it.number == 130 })
+        assertTrue(defs.any { it.name == "Dinky XD" && it.number == 166 })
     }
 
     @Test
@@ -54,14 +54,14 @@ class CatalogTest {
     @Test
     fun expandedCableChannelsHaveStableRulesNumbersAndAliases() {
         val expected = mapOf(
-            "bbcamerica" to ("The Beeb" to 127),
-            "natgeo" to ("The Atlas" to 128),
-            "animalplanet" to ("The Wild" to 129),
-            "hallmark" to ("The Hearth" to 131),
-            "gsn" to ("The Game Room" to 132),
-            "tbsjapan" to ("Tokyo Tower" to 133),
-            "tlc" to ("The Learning Lounge" to 134),
-            "bravo" to ("The Salon" to 135),
+            "abc" to ("Alphabet" to 101), "cbs" to ("The Eye" to 102), "nbc" to ("Peacock Place" to 103),
+            "fox" to ("The Den" to 104), "cbc" to ("True North" to 105), "bbc" to ("Auntie" to 107),
+            "bbcone" to ("The One" to 108), "bbcamerica" to ("The Beeb" to 109),
+            "sky" to ("The Dish" to 110), "channel4" to ("Four Sure" to 111),
+            "natgeo" to ("The Atlas" to 142), "animalplanet" to ("The Wild" to 143),
+            "hallmark" to ("The Hearth" to 133), "gsn" to ("The Game Room" to 131),
+            "tbsjapan" to ("Tokyo Tower" to 112), "tlc" to ("The Learning Lounge" to 144),
+            "bravo" to ("The Salon" to 132),
         )
         val definitions = Catalog.builtInChannels().associateBy { it.id }
         for ((id, presentation) in expected) {
@@ -83,6 +83,9 @@ class CatalogTest {
             "Hallmark" to "hallmark", "GSN" to "gsn", "Tokyo Broadcasting System" to "tbsjapan",
             "TBS Japan" to "tbsjapan", "Turner Broadcasting System" to "tbs", "TBS" to "tbs",
             "TLC" to "tlc", "Bravo" to "bravo",
+            "ABC" to "abc", "CBS" to "cbs", "NBC" to "nbc", "FOX" to "fox",
+            "CBC Television" to "cbc", "BBC Two" to "bbc", "BBC1" to "bbcone",
+            "Sky Atlantic" to "sky", "E4" to "channel4",
         )) assertEquals(id, Catalog.canonicalNetwork(alias))
         val aliases = Catalog.networks.flatMap { network -> network.aliases.map { it.trim().lowercase() to network.id } }
         val duplicateAliases = aliases.groupBy { it.first }.filterValues { entries -> entries.map { it.second }.distinct().size > 1 }

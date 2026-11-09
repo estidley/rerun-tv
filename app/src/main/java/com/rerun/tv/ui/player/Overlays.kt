@@ -131,7 +131,7 @@ fun InfoBanner(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(130.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (channel != null) ChannelIcon(channel.id, size = 96.dp)
+                if (channel != null) ChannelIcon(channel.id, channel.name, size = 96.dp)
                 BasicText(channel?.number?.toString() ?: "", style = Retro.ChannelNumber)
                 BasicText(channel?.name ?: "", style = Retro.Caption.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

@@ -63,6 +63,7 @@ class ChannelEditorTest {
             compose.onAllNodesWithText("3.0 hours of content  (needs 12 to go on the air)")
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        compose.onNodeWithText("Genres: Drama · movies and episodes.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Ted's TV").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("TBS").performScrollTo().assertIsDisplayed()
         val before = scans.get()

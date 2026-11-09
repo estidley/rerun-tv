@@ -2,9 +2,108 @@
   "style": "1990s cable / flat ink / warm cream outlines",
   "channels": [
     {
+      "id": "abc",
+      "name": "Alphabet",
+      "number": 101,
+      "section": "Broadcast",
+      "slug": "abc",
+      "accent": "#EC4A3E",
+      "concept": "Alphabet broadcast pictogram",
+      "icon": "icons/abc.svg",
+      "wordmark": "wordmarks/abc.svg"
+    },
+    {
+      "id": "cbs",
+      "name": "The Eye",
+      "number": 102,
+      "section": "Broadcast",
+      "slug": "cbs",
+      "accent": "#5185EF",
+      "concept": "The Eye broadcast pictogram",
+      "icon": "icons/cbs.svg",
+      "wordmark": "wordmarks/cbs.svg"
+    },
+    {
+      "id": "nbc",
+      "name": "Peacock Place",
+      "number": 103,
+      "section": "Broadcast",
+      "slug": "nbc",
+      "accent": "#FFBE43",
+      "concept": "Peacock Place broadcast pictogram",
+      "icon": "icons/nbc.svg",
+      "wordmark": "wordmarks/nbc.svg"
+    },
+    {
+      "id": "fox",
+      "name": "The Den",
+      "number": 104,
+      "section": "Broadcast",
+      "slug": "fox",
+      "accent": "#36D3BD",
+      "concept": "The Den broadcast pictogram",
+      "icon": "icons/fox.svg",
+      "wordmark": "wordmarks/fox.svg"
+    },
+    {
+      "id": "cbc",
+      "name": "True North",
+      "number": 105,
+      "section": "Broadcast",
+      "slug": "cbc",
+      "accent": "#E66CB6",
+      "concept": "True North broadcast pictogram",
+      "icon": "icons/cbc.svg",
+      "wordmark": "wordmarks/cbc.svg"
+    },
+    {
+      "id": "bbc",
+      "name": "Auntie",
+      "number": 107,
+      "section": "Broadcast",
+      "slug": "bbc",
+      "accent": "#9A63ED",
+      "concept": "Auntie broadcast pictogram",
+      "icon": "icons/bbc.svg",
+      "wordmark": "wordmarks/bbc.svg"
+    },
+    {
+      "id": "bbcone",
+      "name": "The One",
+      "number": 108,
+      "section": "Broadcast",
+      "slug": "bbcone",
+      "accent": "#D8FA3E",
+      "concept": "The One broadcast pictogram",
+      "icon": "icons/bbcone.svg",
+      "wordmark": "wordmarks/bbcone.svg"
+    },
+    {
+      "id": "sky",
+      "name": "The Dish",
+      "number": 110,
+      "section": "Broadcast",
+      "slug": "sky",
+      "accent": "#5185EF",
+      "concept": "The Dish broadcast pictogram",
+      "icon": "icons/sky.svg",
+      "wordmark": "wordmarks/sky.svg"
+    },
+    {
+      "id": "channel4",
+      "name": "Four Sure",
+      "number": 111,
+      "section": "Broadcast",
+      "slug": "channel4",
+      "accent": "#E88A44",
+      "concept": "Four Sure broadcast pictogram",
+      "icon": "icons/channel4.svg",
+      "wordmark": "wordmarks/channel4.svg"
+    },
+    {
       "id": "disney",
       "name": "Dinky Channel",
-      "number": 101,
+      "number": 160,
       "section": "Networks",
       "slug": "disney",
       "accent": "#9A63ED",
@@ -15,7 +114,7 @@
     {
       "id": "nick",
       "name": "Slimelodeon",
-      "number": 102,
+      "number": 161,
       "section": "Networks",
       "slug": "nick",
       "accent": "#EC4A3E",
@@ -26,7 +125,7 @@
     {
       "id": "cn",
       "name": "Cartoon Notwork",
-      "number": 103,
+      "number": 162,
       "section": "Networks",
       "slug": "cn",
       "accent": "#36D3BD",
@@ -37,7 +136,7 @@
     {
       "id": "boomerang",
       "name": "Kaboomerang",
-      "number": 104,
+      "number": 163,
       "section": "Networks",
       "slug": "boomerang",
       "accent": "#FFBE43",
@@ -48,7 +147,7 @@
     {
       "id": "toonami",
       "name": "Toonuki",
-      "number": 105,
+      "number": 164,
       "section": "Networks",
       "slug": "toonami",
       "accent": "#5185EF",
@@ -70,7 +169,7 @@
     {
       "id": "pbskids",
       "name": "PBJ Kids",
-      "number": 107,
+      "number": 165,
       "section": "Networks",
       "slug": "pbskids",
       "accent": "#D8FA3E",
@@ -81,7 +180,7 @@
     {
       "id": "disneyxd",
       "name": "Dinky XD",
-      "number": 108,
+      "number": 166,
       "section": "Networks",
       "slug": "disneyxd",
       "accent": "#E88A44",
@@ -92,7 +191,7 @@
     {
       "id": "touchstone",
       "name": "The Backlot",
-      "number": 109,
+      "number": 130,
       "section": "Networks",
       "slug": "touchstone",
       "accent": "#9A63ED",
@@ -103,7 +202,7 @@
     {
       "id": "syfy",
       "name": "Sigh-Fi Channel",
-      "number": 110,
+      "number": 129,
       "section": "Networks",
       "slug": "syfy",
       "accent": "#EC4A3E",
@@ -114,7 +213,7 @@
     {
       "id": "usa",
       "name": "USB Network",
-      "number": 111,
+      "number": 120,
       "section": "Networks",
       "slug": "usa",
       "accent": "#36D3BD",
@@ -125,7 +224,7 @@
     {
       "id": "tnt",
       "name": "DNT",
-      "number": 112,
+      "number": 121,
       "section": "Networks",
       "slug": "tnt",
       "accent": "#FFBE43",
@@ -136,7 +235,7 @@
     {
       "id": "tbs",
       "name": "TBSP",
-      "number": 113,
+      "number": 122,
       "section": "Networks",
       "slug": "tbs",
       "accent": "#5185EF",
@@ -147,7 +246,7 @@
     {
       "id": "fx",
       "name": "SFX",
-      "number": 114,
+      "number": 123,
       "section": "Networks",
       "slug": "fx",
       "accent": "#E66CB6",
@@ -158,7 +257,7 @@
     {
       "id": "amc",
       "name": "PMC",
-      "number": 115,
+      "number": 124,
       "section": "Networks",
       "slug": "amc",
       "accent": "#D8FA3E",
@@ -169,7 +268,7 @@
     {
       "id": "mtv",
       "name": "Music TV",
-      "number": 116,
+      "number": 125,
       "section": "Networks",
       "slug": "mtv",
       "accent": "#E88A44",
@@ -180,7 +279,7 @@
     {
       "id": "comedycentral",
       "name": "Tragedy Central",
-      "number": 117,
+      "number": 126,
       "section": "Networks",
       "slug": "comedycentral",
       "accent": "#9A63ED",
@@ -191,7 +290,7 @@
     {
       "id": "freeform",
       "name": "XYZ Family",
-      "number": 118,
+      "number": 127,
       "section": "Networks",
       "slug": "freeform",
       "accent": "#EC4A3E",
@@ -202,7 +301,7 @@
     {
       "id": "paramountnet",
       "name": "Spork TV",
-      "number": 119,
+      "number": 128,
       "section": "Networks",
       "slug": "paramountnet",
       "accent": "#36D3BD",
@@ -213,7 +312,7 @@
     {
       "id": "discovery",
       "name": "Recovery Channel",
-      "number": 120,
+      "number": 140,
       "section": "Networks",
       "slug": "discovery",
       "accent": "#FFBE43",
@@ -224,7 +323,7 @@
     {
       "id": "history",
       "name": "Hysteria Channel",
-      "number": 121,
+      "number": 141,
       "section": "Networks",
       "slug": "history",
       "accent": "#5185EF",
@@ -235,7 +334,7 @@
     {
       "id": "food",
       "name": "Feud Network",
-      "number": 122,
+      "number": 145,
       "section": "Networks",
       "slug": "food",
       "accent": "#E66CB6",
@@ -246,7 +345,7 @@
     {
       "id": "hgtv",
       "name": "GGTV",
-      "number": 123,
+      "number": 146,
       "section": "Networks",
       "slug": "hgtv",
       "accent": "#D8FA3E",
@@ -257,7 +356,7 @@
     {
       "id": "adultswim",
       "name": "Adult Whim",
-      "number": 124,
+      "number": 169,
       "section": "Networks",
       "slug": "adultswim",
       "accent": "#E88A44",
@@ -268,7 +367,7 @@
     {
       "id": "nickjr",
       "name": "Slime Jr.",
-      "number": 125,
+      "number": 168,
       "section": "Networks",
       "slug": "nickjr",
       "accent": "#9A63ED",
@@ -279,7 +378,7 @@
     {
       "id": "disneyjr",
       "name": "Playhouse Dinky",
-      "number": 126,
+      "number": 167,
       "section": "Networks",
       "slug": "disneyjr",
       "accent": "#EC4A3E",
@@ -290,7 +389,7 @@
     {
       "id": "hbo",
       "name": "HMO",
-      "number": 130,
+      "number": 134,
       "section": "Networks",
       "slug": "hbo",
       "accent": "#36D3BD",
@@ -301,7 +400,7 @@
     {
       "id": "bbcamerica",
       "name": "The Beeb",
-      "number": 127,
+      "number": 109,
       "section": "Networks",
       "slug": "bbcamerica",
       "accent": "#5185EF",
@@ -312,7 +411,7 @@
     {
       "id": "natgeo",
       "name": "The Atlas",
-      "number": 128,
+      "number": 142,
       "section": "Networks",
       "slug": "natgeo",
       "accent": "#9A63ED",
@@ -323,7 +422,7 @@
     {
       "id": "animalplanet",
       "name": "The Wild",
-      "number": 129,
+      "number": 143,
       "section": "Networks",
       "slug": "animalplanet",
       "accent": "#36D3BD",
@@ -334,7 +433,7 @@
     {
       "id": "hallmark",
       "name": "The Hearth",
-      "number": 131,
+      "number": 133,
       "section": "Networks",
       "slug": "hallmark",
       "accent": "#E66CB6",
@@ -345,7 +444,7 @@
     {
       "id": "gsn",
       "name": "The Game Room",
-      "number": 132,
+      "number": 131,
       "section": "Networks",
       "slug": "gsn",
       "accent": "#E88A44",
@@ -356,7 +455,7 @@
     {
       "id": "tbsjapan",
       "name": "Tokyo Tower",
-      "number": 133,
+      "number": 112,
       "section": "Networks",
       "slug": "tbsjapan",
       "accent": "#EC4A3E",
@@ -367,7 +466,7 @@
     {
       "id": "bravo",
       "name": "The Salon",
-      "number": 135,
+      "number": 132,
       "section": "Networks",
       "slug": "bravo",
       "accent": "#E66CB6",
@@ -378,7 +477,7 @@
     {
       "id": "tlc",
       "name": "The Learning Lounge",
-      "number": 134,
+      "number": 144,
       "section": "Networks",
       "slug": "tlc",
       "accent": "#9A63ED",
@@ -759,6 +858,17 @@
       "concept": "Buy Me Maybe pictogram",
       "icon": "icons/ads.svg",
       "wordmark": "wordmarks/ads.svg"
+    },
+    {
+      "id": "catchall",
+      "name": "The Rest",
+      "number": 1999,
+      "section": "Decades & dynamic",
+      "slug": "catchall",
+      "accent": "#36D3BD",
+      "concept": "The last tapes on the video shelf",
+      "icon": "icons/catchall.svg",
+      "wordmark": "wordmarks/catchall.svg"
     },
     {
       "id": "decade:tv:1900",
@@ -1224,13 +1334,13 @@
     }
   ],
   "coverage": {
-    "named": 60,
+    "named": 79,
     "decadeTemplates": 40,
     "dynamicFallbacks": 2
   },
   "routing": {
     "west": "Reuse the East icon after removing the managed :w suffix.",
-    "music": "Unknown music:* IDs use music-generic.",
+    "music": "MusicGenreArt.kt generates name-specific icons and wordmarks from stable music:* IDs; the bundled generic mark remains an asset-library fallback.",
     "custom": "Unknown custom IDs use custom-generic."
   }
 }

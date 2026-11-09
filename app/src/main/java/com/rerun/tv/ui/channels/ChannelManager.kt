@@ -56,29 +56,32 @@ fun ChannelManager(controller: TvController, app: RerunApp = RerunApp.instance) 
                         controller.go(Screen.Player)
                         controller.tuneTo(ch.id)
                     } else controller.go(Screen.Editor(ch.id))
-                }, modifier = Modifier.fillMaxWidth(), sub = if (ch.id == Lineup.RESTART_ID) "Resume saved program" else hours(ch.poolMs),
-                    leading = { ChannelIcon(ch.id, size = 40.dp) }, onLongClick = quickAction(ch))
+                }, modifier = Modifier.fillMaxWidth(), sub = if (ch.id == Lineup.RESTART_ID) "Resume saved program" else details(ch),
+                    leading = { ChannelIcon(ch.id, ch.name, size = 40.dp) }, onLongClick = quickAction(ch))
             }
             if (hidden.isNotEmpty()) {
                 item { BasicText("DISABLED (${hidden.size})", style = Retro.GuideNumber) }
                 items(hidden, key = { it.id }) { ch ->
                     TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) },
-                        modifier = Modifier.fillMaxWidth(), sub = "disabled · ${hours(ch.poolMs)}",
-                        leading = { ChannelIcon(ch.id, size = 40.dp) }, onLongClick = quickAction(ch))
+                        modifier = Modifier.fillMaxWidth(), sub = "disabled · ${details(ch)}",
+                        leading = { ChannelIcon(ch.id, ch.name, size = 40.dp) }, onLongClick = quickAction(ch))
                 }
             }
             item { BasicText("WAITING FOR CONTENT (${dormant.size})", style = Retro.GuideNumber) }
             items(dormant, key = { it.id }) { ch ->
                 val required = Lineup.minimumContentMs(ch.def, minimum) / 3_600_000L
                 TvButton("${ch.number}   ${ch.name}", onClick = { controller.go(Screen.Editor(ch.id)) }, modifier = Modifier.fillMaxWidth(), enabled = true,
-                    leading = { ChannelIcon(ch.id, size = 40.dp) }, onLongClick = quickAction(ch),
-                    sub = "${hours(ch.poolMs)} · minimum $required hours" +
+                    leading = { ChannelIcon(ch.id, ch.name, size = 40.dp) }, onLongClick = quickAction(ch),
+                    sub = "${details(ch)} · minimum $required hours" +
                         if (ch.def.kind == ChannelKind.MUSIC) "; include a Plex music library" else "")
             }
             update.error?.let { item { BasicText(it, style = Retro.Body.copy(color = Retro.Yellow)) } }
         }
     }
 }
+
+private fun details(ch: ChannelRow): String =
+    "${hours(ch.poolMs)} · ${com.rerun.core.catalog.ChannelDescriptions.of(ch.def)}"
 
 private fun hours(ms: Long): String {
     val h = ms / 3_600_000.0

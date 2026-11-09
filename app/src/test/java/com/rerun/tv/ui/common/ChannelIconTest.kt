@@ -23,7 +23,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ChannelIconTest {
     @Test fun everyStockNetworkComicThemeAndDecadeHasDedicatedArtwork() {
-        for (channel in Catalog.builtInChannels() + Lineup.adsChannel) {
+        for (channel in Catalog.builtInChannels() + Lineup.adsChannel + Lineup.catchAllChannel) {
             assertNotNull("Missing ${channel.id}", channelIconResources[channel.id])
         }
         for (decade in 1900..2090 step 10) for (kind in listOf("tv", "music")) {
@@ -138,6 +138,9 @@ class ChannelIconTest {
             "filmvault" to "The Film Vault", "bbcamerica" to "The Beeb", "natgeo" to "The Atlas",
             "animalplanet" to "The Wild", "hallmark" to "The Hearth", "gsn" to "The Game Room",
             "tbsjapan" to "Tokyo Tower", "tlc" to "The Learning Lounge", "bravo" to "The Salon",
+            "abc" to "Alphabet", "cbs" to "The Eye", "nbc" to "Peacock Place", "fox" to "The Den",
+            "cbc" to "True North", "bbc" to "Auntie", "bbcone" to "The One", "sky" to "The Dish",
+            "channel4" to "Four Sure", "catchall" to "The Rest",
         )
         for ((id, name) in expected) {
             for (directory in listOf("icons", "wordmarks")) {
@@ -149,6 +152,7 @@ class ChannelIconTest {
                 }
                 assertTrue("Missing vector artwork for $id", vectorElements > 0)
             }
+            assertDarkMainLettering(id)
         }
     }
 

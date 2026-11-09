@@ -503,14 +503,14 @@ class LineupTest {
     @Test
     fun newBuiltInsAvoidSavedCustomNumbersAndRefreshKeepsUserAssignments() {
         val customs = listOf(
-            StoredChannel(ChannelDef("custom:beeb", 127, "Mine", ChannelKind.CUSTOM, Rules()), false),
+            StoredChannel(ChannelDef("custom:beeb", 109, "Mine", ChannelKind.CUSTOM, Rules()), false),
             StoredChannel(ChannelDef("custom:vault", 363, "Also mine", ChannelKind.CUSTOM, Rules()), false),
         )
         val plan = Lineup.plan(emptyList(), customs, music = false)
         val byId = plan.channels.associate { it.def.id to it.def }
-        assertEquals(127, byId.getValue("custom:beeb").number)
+        assertEquals(109, byId.getValue("custom:beeb").number)
         assertEquals(363, byId.getValue("custom:vault").number)
-        assertTrue(byId.getValue("bbcamerica").number != 127)
+        assertTrue(byId.getValue("bbcamerica").number != 109)
         assertTrue(byId.getValue("filmvault").number != 363)
         assertEquals(plan.channels.size, byId.values.map { it.number }.toSet().size)
 
@@ -520,6 +520,54 @@ class LineupTest {
         val refreshed = Lineup.plan(emptyList(), reassigned.map { StoredChannel(it.def, it.builtIn) }, music = false)
         assertEquals(731, refreshed.channels.single { it.def.id == "bbcamerica" }.def.number)
         assertEquals(refreshed.channels.size, refreshed.channels.map { it.def.number }.toSet().size)
+    }
+
+    @Test
+    fun stockNetworksMoveIntoGroupsWithoutOverridingEditsOrCustomNumbers() {
+        val old = Catalog.builtInChannels().filter { def ->
+            Catalog.networks.none { it.id == def.id } || Catalog.previousNetworkNumber(def.id) != null
+        }.map { def ->
+            StoredChannel(def.copy(number = Catalog.previousNetworkNumber(def.id) ?: def.number), true)
+        }
+        val migrated = Lineup.plan(emptyList(), old, music = false)
+        val preferred = migrated.channels.associate { it.def.id to it.def }
+        assertEquals(101, preferred.getValue("abc").number)
+        assertEquals(106, preferred.getValue("pbs").number)
+        assertEquals(142, preferred.getValue("natgeo").number)
+        assertEquals(160, preferred.getValue("disney").number)
+        assertEquals(migrated.channels.size, migrated.channels.map { it.def.number }.toSet().size)
+
+        val custom = StoredChannel(ChannelDef("custom:abc", 101, "My ABC", ChannelKind.CUSTOM, Rules()), false)
+        val collision = Lineup.plan(emptyList(), old + custom, music = false)
+        val byId = collision.channels.associate { it.def.id to it.def }
+        assertEquals(101, byId.getValue("custom:abc").number)
+        assertTrue(byId.getValue("abc").number != 101)
+        assertEquals(collision.channels.size, collision.channels.map { it.def.number }.toSet().size)
+
+        val renamed = old.first { it.def.id == "natgeo" }.def.copy(name = "My Explorer")
+        val edited = Lineup.plan(emptyList(), listOf(StoredChannel(renamed, true)), music = false)
+        val kept = edited.channels.single { it.def.id == "natgeo" }.def
+        assertEquals(128, kept.number)
+        assertEquals("My Explorer", kept.name)
+    }
+
+    @Test
+    fun stockCatchallMovesBeforeMusicWithoutChangingItsIdOrUserEdits() {
+        val library = listOf(
+            episode("other", "Other", durationMs = 12 * HOUR, year = null),
+            track("jazz", genre = "Jazz", durationMs = 12 * HOUR),
+        )
+        val legacy = StoredChannel(Lineup.catchAllChannel.copy(number = 3999), true)
+        val plan = Lineup.plan(library, listOf(legacy), music = true)
+        val rest = plan.channels.single { it.def.id == Lineup.CATCHALL_ID }
+        val jazz = plan.channels.single { it.def.id == "music:jazz" }
+        assertEquals(1999, rest.def.number)
+        assertTrue(rest.def.number < jazz.def.number)
+        assertEquals(Lineup.catchAllChannel.copy(number = 3999), legacy.def)
+        val refreshed = Lineup.plan(library, plan.channels.map { StoredChannel(it.def, it.builtIn) }, music = true)
+        assertEquals(rest, refreshed.channels.single { it.def.id == Lineup.CATCHALL_ID })
+        val edited = Lineup.plan(library, listOf(StoredChannel(legacy.def.copy(name = "Elsewhere"), true)), true)
+        assertEquals(3999, edited.channels.single { it.def.id == Lineup.CATCHALL_ID }.def.number)
     }
 
     @Test

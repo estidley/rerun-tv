@@ -1,8 +1,8 @@
 # Rerun channel identities / 1990s
 
-111 icons and 111 outlined wordmarks: 69 named channels, 40 supported TV/music decade templates, and music/custom fallbacks. The approved Marvelous family and centered Toonuki artwork are preserved. All SVGs contain standalone vector paths with no external fonts or images.
+121 icons and 121 outlined wordmarks: 79 named channels, 40 supported TV/music decade templates, and music/custom fallbacks. The approved Marvelous family and centered Toonuki artwork are preserved. All SVGs contain standalone vector paths with no external fonts or images.
 
-`manifest.json` maps stable channel IDs to the files. Arbitrary Plex music genres use `music-generic`; unknown/custom channels use `custom-generic`. Guide wordmarks retain their designed names; the selected channel's current name appears in the program panel, so custom names and user renames stay readable.
+`manifest.json` maps stable channel IDs to the static files. Arbitrary Plex music genres use `MusicGenreArt.kt` to generate name-specific icons and wordmarks with deterministic colors and initials; the bundled `music-generic` remains the static asset-library fallback. Unknown/custom channels use `custom-generic`. Static guide wordmarks retain their designed names; the selected channel's current name appears in the program panel, so custom names and user renames stay readable.
 
 The guide displays lossless 400 x 270 WebP renders of the wordmark SVGs, fitted without stretching or cropping. Decade wordmarks use a lowercase "s," and bright banners use dark main lettering to preserve contrast at guide size. Channel management and playback overlays retain 256 px square icons. SVG masters stay here for editing; they are not decoded during TV playback. Regenerate both sets of committed Android drawables and the Kotlin resource lookups with:
 

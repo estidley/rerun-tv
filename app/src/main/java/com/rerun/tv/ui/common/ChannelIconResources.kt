@@ -4,6 +4,15 @@ package com.rerun.tv.ui.common
 import com.rerun.tv.R
 
 internal val channelIconResources: Map<String, Int> = mapOf(
+    "abc" to R.drawable.channel_abc,
+    "cbs" to R.drawable.channel_cbs,
+    "nbc" to R.drawable.channel_nbc,
+    "fox" to R.drawable.channel_fox,
+    "cbc" to R.drawable.channel_cbc,
+    "bbc" to R.drawable.channel_bbc,
+    "bbcone" to R.drawable.channel_bbcone,
+    "sky" to R.drawable.channel_sky,
+    "channel4" to R.drawable.channel_channel4,
     "disney" to R.drawable.channel_disney,
     "nick" to R.drawable.channel_nick,
     "cn" to R.drawable.channel_cn,
@@ -73,6 +82,7 @@ internal val channelIconResources: Map<String, Int> = mapOf(
     "movies:3" to R.drawable.channel_movies_3,
     "filmvault" to R.drawable.channel_filmvault,
     "ads:only" to R.drawable.channel_ads,
+    "catchall" to R.drawable.channel_catchall,
     "decade:tv:1900" to R.drawable.channel_decade_tv_1900,
     "decade:music:1900" to R.drawable.channel_decade_music_1900,
     "decade:tv:1910" to R.drawable.channel_decade_tv_1910,
@@ -126,6 +136,15 @@ internal fun channelIconResource(channelId: String): Int {
 }
 
 internal val channelWordmarkResources: Map<String, Int> = mapOf(
+    "abc" to R.drawable.channel_wordmark_abc,
+    "cbs" to R.drawable.channel_wordmark_cbs,
+    "nbc" to R.drawable.channel_wordmark_nbc,
+    "fox" to R.drawable.channel_wordmark_fox,
+    "cbc" to R.drawable.channel_wordmark_cbc,
+    "bbc" to R.drawable.channel_wordmark_bbc,
+    "bbcone" to R.drawable.channel_wordmark_bbcone,
+    "sky" to R.drawable.channel_wordmark_sky,
+    "channel4" to R.drawable.channel_wordmark_channel4,
     "disney" to R.drawable.channel_wordmark_disney,
     "nick" to R.drawable.channel_wordmark_nick,
     "cn" to R.drawable.channel_wordmark_cn,
@@ -195,6 +214,7 @@ internal val channelWordmarkResources: Map<String, Int> = mapOf(
     "movies:3" to R.drawable.channel_wordmark_movies_3,
     "filmvault" to R.drawable.channel_wordmark_filmvault,
     "ads:only" to R.drawable.channel_wordmark_ads,
+    "catchall" to R.drawable.channel_wordmark_catchall,
     "decade:tv:1900" to R.drawable.channel_wordmark_decade_tv_1900,
     "decade:music:1900" to R.drawable.channel_wordmark_decade_music_1900,
     "decade:tv:1910" to R.drawable.channel_wordmark_decade_tv_1910,

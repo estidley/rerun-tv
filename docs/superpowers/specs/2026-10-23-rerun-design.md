@@ -65,16 +65,32 @@ Live refresh coverage and installed-TV behavior still need validation.
 
 ## Language and unmatched stations
 
-The Learning Lounge/TLC (134) and The Salon/Bravo (135) extend the network dial without changing genre rules.
+The Learning Lounge/TLC (144) and The Salon/Bravo (132) extend the network dial without changing genre rules.
 Plex original-language/primary-audio fields are normalized, with show-level inheritance for episodes. Language
 stations are generated from a single duration aggregation, use stable `language:<code>` IDs from 4000, and follow
 the selected minimum. Mundo, Seoul, Tokyo, Bombay and Berlin cover Spanish, Korean, Japanese, Hindi and German;
 other known languages use localized station names.
 
-The Rest (3999) uses `unmatchedOnly` to exclude video covered by existing stock/generated pools, including
+The Rest (1999, before genre music) uses `unmatchedOnly` to exclude video covered by existing stock/generated pools, including
 decade and language stations qualifying at the selected minimum. Language and catchall channel JSON fields default to empty/false for old data.
 Room migration 3→4 adds nullable item language without replacing saved content. Performance coverage includes
 repeated 5,000-item international plans and unedited decade-total reuse; edited decade pools remain user-owned.
+
+## Broadcast additions, grouping and criteria
+
+Alphabet/ABC (101), The Eye/CBS (102), Peacock Place/NBC (103), The Den/FOX (104), True North/CBC (105),
+Auntie/BBC (107), The One/BBC One (108), The Dish/Sky (110), and Four Sure/Channel 4 (111) join the existing
+PBJ and international stations. Exact Plex aliases accept all movie/episode genres; BBC Two/Three/Four and
+children's BBC services use Auntie, BBC One stays separate, and Sky/Channel 4 include their named channel families.
+Their snapshot entries begin with empty reference lists, so Plex aliases apply until a validated TMDB refresh.
+No token or show list is invented for these additions.
+
+Preferred stock numbers group broadcast (101–112), entertainment (120–134), factual/lifestyle (140–146), and
+kids/animation (160–169). Only untouched legacy stock definitions move; stable IDs and schedules remain.
+User renames, rule edits, manually assigned numbers and custom stations are preserved, with collision allocation
+around fixed rows. `ChannelDescriptions` derives in-app criteria text from the actual rules. New broadcaster and
+The Rest artwork is standalone vector art. Arbitrary Plex music genres generate name-specific icons/wordmarks
+from stable IDs and current names; the existing icon library is not regenerated.
 
 ## Comic franchise channels
 

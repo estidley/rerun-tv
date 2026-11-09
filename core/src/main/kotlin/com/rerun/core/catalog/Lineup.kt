@@ -47,7 +47,7 @@ object Lineup {
     const val LANGUAGE_BASE = 4000
     const val ADS_ID = "ads:only"
     const val CATCHALL_ID = "catchall"
-    const val CATCHALL_NUMBER = 3999
+    const val CATCHALL_NUMBER = 1999
     const val TV_DECADE_MIN_MS = 24 * 3_600_000L
     const val MUSIC_DECADE_MIN_MS = 12 * 3_600_000L
     val adsChannel = ChannelDef(ADS_ID, 998, "Buy Me Maybe", ChannelKind.CUSTOM, Rules(kinds = setOf(MediaKind.MOVIE)))
@@ -134,7 +134,7 @@ object Lineup {
             val legacyStockMusic = stored != null && prev?.builtIn == true &&
                 (template.id.startsWith("music:") || template.id.startsWith("decade:music:")) &&
                 looksStock(stored, template.copy(rules = template.rules.copy(excludeGenres = emptySet())))
-            // Upgrade the old stock Toonami pool, retaining names, numbers and play order.
+            // Upgrade the old stock Toonami pool, retaining names and play order.
             // Explicitly edited rules or time blocks remain owned by the user.
             val base = when {
                 template.id == "toonami" && prev?.builtIn == true &&
@@ -143,13 +143,18 @@ object Lineup {
                 legacyStockMusic -> stored?.copy(rules = template.rules) ?: template
                 else -> stored ?: template
             }
+            val previousNumber = if (template.id == CATCHALL_ID) 3999 else Catalog.previousNetworkNumber(template.id)
+            val assigned = if (stored != null && prev?.builtIn == true && previousNumber != null &&
+                base.number == previousNumber && looksStock(base, template.copy(number = previousNumber))) {
+                base.copy(number = template.number)
+            } else base
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
-            val stockDecade = template.id.startsWith("decade:") && (prev == null || looksStock(base, template))
-            val stockLanguage = template.id.startsWith("language:") && (prev == null || looksStock(base, template))
-            val pool = duration(base, useDecadeTotal = stockDecade, useLanguageTotal = stockLanguage)
-            val dormant = isDormant(base, pool, music, minimum)
+            val stockDecade = template.id.startsWith("decade:") && (prev == null || looksStock(assigned, template))
+            val stockLanguage = template.id.startsWith("language:") && (prev == null || looksStock(assigned, template))
+            val pool = duration(assigned, useDecadeTotal = stockDecade, useLanguageTotal = stockLanguage)
+            val dormant = isDormant(assigned, pool, music, minimum)
             if (isGenerated(template.id) && dormant && (prev == null || looksStock(prev.def, template))) continue
-            upserts += PlannedChannel(base.copy(name = baseName), prev?.builtIn ?: true, dormant, pool)
+            upserts += PlannedChannel(assigned.copy(name = baseName), prev?.builtIn ?: true, dormant, pool)
             seen += template.id
         }
 
@@ -177,22 +182,23 @@ object Lineup {
         val deleteIds = existing.map { it.def.id }
             .filter { it !in keep && it != RESTART_ID && isGenerated(it) }
             .sorted()
-        return LineupPlan(uniqueNumbers(upserts, existingById.keys), deleteIds)
+        return LineupPlan(uniqueNumbers(upserts, existingById.mapValues { it.value.def.number }), deleteIds)
     }
 
     /**
-     * Keeps existing custom and built-in numbers where the user left them. Generated rows and
-     * newly introduced built-ins take the next free number when their preferred number is taken.
+     * Keeps existing custom and built-in numbers where the user left them. Generated rows, newly
+     * introduced built-ins, and stock rows moving to a new grouped number take the next free number.
      */
-    private fun uniqueNumbers(channels: List<PlannedChannel>, existingIds: Set<String>): List<PlannedChannel> {
+    private fun uniqueNumbers(channels: List<PlannedChannel>, existingNumbers: Map<String, Int>): List<PlannedChannel> {
+        fun movable(row: PlannedChannel): Boolean {
+            val previous = existingNumbers[row.def.id]
+            return isGenerated(row.def.id) || (row.builtIn && (previous == null || row.def.number != previous))
+        }
         val used = HashSet<Int>()
         used += RESTART_NUMBER
-        for (row in channels) {
-            if (!isGenerated(row.def.id) && row.def.id in existingIds) used += row.def.number
-        }
+        for (row in channels) if (!movable(row)) used += row.def.number
         return channels.map { row ->
-            val movable = isGenerated(row.def.id) || (row.builtIn && row.def.id !in existingIds)
-            if (!movable) row
+            if (!movable(row)) row
             else {
                 var number = row.def.number
                 while (number in used) number++

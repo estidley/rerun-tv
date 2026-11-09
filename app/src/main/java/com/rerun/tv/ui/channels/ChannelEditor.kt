@@ -120,6 +120,15 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                 }
             }
             item {
+                Section("What plays") {
+                    BasicText(com.rerun.core.catalog.ChannelDescriptions.of(d), style = Retro.Body)
+                    BasicText(
+                        "Network, genre, show, collection, label and metadata-ID matches are alternatives; other filters narrow the pool.",
+                        style = Retro.Caption,
+                    )
+                }
+            }
+            item {
                 Section("Plays") {
                     chipRow(listOf("Movies + shows", "Movies only", "Shows only")) { label ->
                         val kinds = when (label) {
