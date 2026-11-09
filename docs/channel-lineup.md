@@ -154,13 +154,15 @@ stock stations would increase schedule/storage costs without necessarily improvi
 ## Language and unmatched stations
 
 Plex original-language/primary-audio metadata is normalized to language codes and inherited from shows
-when an episode has no value. Qualifying libraries can generate Mundo (Spanish), Seoul (Korean), Tokyo
-(Japanese), Bombay (Hindi), Berlin (German), and localized stations for other languages. Language stations
-start at 4000, use stable `language:<code>` IDs, and follow the selected content minimum.
+when an episode has no value. Missing-language markers such as `und`, `zxx`, `Unknown`, and `N/A` fall through
+to valid audio or show metadata instead of creating stations. Qualifying libraries can generate Mundo (Spanish),
+Seoul (Korean), Tokyo (Japanese), Bombay (Hindi), Berlin (German), and localized stations for other languages.
+Language stations start at 4000, use stable `language:<code>` IDs, and follow the selected content minimum.
 
 **The Rest** (1999, before genre music at 2000+, stable ID `catchall`) is the unmatched-video catchall. Its persisted `unmatchedOnly` rule
-excludes items covered by stock/generated channels, including decade and language stations qualifying at the selected content minimum. Short or empty
-pools never activate. Language/catchall fields decode to empty/false on old channel JSON; the explicit Room
+excludes items covered by stock/generated channels, including decade and language stations qualifying at the selected content minimum. Refresh
+revalidates its future bookings against that pool, rebuilding after any invalid entry while preserving the currently airing entry; unchanged bookings
+remain locked. Short or empty pools never activate. Language/catchall fields decode to empty/false on old channel JSON; the explicit Room
 3→4 migration preserves existing items with null language until the next Plex sync.
 
 ## Other generated stations

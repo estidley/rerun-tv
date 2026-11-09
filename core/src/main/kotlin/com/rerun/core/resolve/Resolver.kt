@@ -52,9 +52,11 @@ object Resolver {
 
     private fun matchesAnywhere(def: ChannelDef, item: MediaItem): Boolean {
         val needsNetwork = def.rules.networks.isNotEmpty() || def.blocks.any { it.rules.networks.isNotEmpty() }
-        val nids = if (needsNetwork) networksOf(item) else emptySet()
-        return def.rules.matches(item, nids) || def.blocks.any { it.rules.matches(item, nids) }
+        return matchesAnywhere(def, item, if (needsNetwork) networksOf(item) else emptySet())
     }
+
+    private fun matchesAnywhere(def: ChannelDef, item: MediaItem, nids: Set<String>): Boolean =
+        def.rules.matches(item, nids) || def.blocks.any { it.rules.matches(item, nids) }
 
     private fun unmatchedPool(
         def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel,
@@ -62,9 +64,13 @@ object Resolver {
         val otherChannels = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels() +
             Lineup.decadeChannels(library, music = true, minimum = minimum) +
             Lineup.languageTemplates(library, minimum)
+        val needsNetworks = otherChannels.any { channel ->
+            channel.rules.networks.isNotEmpty() || channel.blocks.any { it.rules.networks.isNotEmpty() }
+        }
         return library.filter { item ->
-            item.durationMs >= MIN_ITEM_MS && def.rules.matches(item, emptySet()) &&
-                otherChannels.none { matchesAnywhere(it, item) }
+            if (item.durationMs < MIN_ITEM_MS || !def.rules.matches(item, emptySet())) return@filter false
+            val nids = if (needsNetworks) networksOf(item) else emptySet()
+            otherChannels.none { matchesAnywhere(it, item, nids) }
         }
     }
 

@@ -61,7 +61,9 @@ object PlexParse {
 
     private fun languageCode(value: String): String? {
         val raw = value.trim().takeIf { it.isNotEmpty() } ?: return null
-        return if (raw.length <= 3) subtitleLanguageCode(raw) else languageNames[raw.lowercase()] ?: subtitleLanguageCode(raw)
+        val normalized = raw.lowercase()
+        if (normalized in setOf("und", "zxx", "unknown", "n/a", "none", "null")) return null
+        return if (raw.length <= 3) subtitleLanguageCode(raw) else languageNames[normalized] ?: subtitleLanguageCode(raw)
     }
 
     private fun contentLanguage(metadata: JsonObject, media: JsonObject?): String? {

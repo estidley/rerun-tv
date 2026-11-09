@@ -161,6 +161,40 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun loweringMinimumRebuildsInvalidCatchallFutureAndKeepsTheCurrentProgram() = runBlocking {
+        val spanish = movie("spanish").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 6 * 3_600_000L, year = null, language = "spa")
+        val unmatched = movie("unmatched").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 6 * 3_600_000L, year = null)
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT,
+            com.rerun.core.catalog.MinimumContentLevel.MEDIUM.name))
+        repo.refreshChannels(items = listOf(spanish, unmatched))
+        val station = requireNotNull(repo.channel(Lineup.CATCHALL_ID))
+        assertFalse(station.dormant)
+        assertNull(repo.channel("language:spa"))
+        assertEquals(12 * 3_600_000L, station.poolMs)
+        val at = System.currentTimeMillis()
+        val current = ScheduleEntry(station.id, at - 3_600_000L, at + 3_600_000L, EntryKind.PROGRAM, spanish.key)
+        val future = ScheduleEntry(station.id, current.endMs, current.endMs + 3_600_000L, EntryKind.PROGRAM, spanish.key)
+        db.entries().insertAll(listOf(current, future).map(EntryRow::of))
+
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT,
+            com.rerun.core.catalog.MinimumContentLevel.LOW.name))
+        repo.refreshChannels()
+        assertFalse(requireNotNull(repo.channel("language:spa")).dormant)
+        assertEquals(6 * 3_600_000L, repo.channel(station.id)?.poolMs)
+        assertEquals(listOf(current), repo.entries(station.id, at, at + DAY))
+        repo.ensure(station.id, at)
+        val rebuilt = repo.entries(station.id, at, at + DAY)
+        assertEquals(current, rebuilt.first())
+        val futurePrograms = rebuilt.drop(1).filter { it.kind == EntryKind.PROGRAM }
+        assertTrue(futurePrograms.isNotEmpty())
+        assertTrue(futurePrograms.all { it.itemKey == unmatched.key })
+        repo.refreshChannels()
+        assertEquals(rebuilt, repo.entries(station.id, at, at + DAY))
+    }
+
+    @Test
     fun decadeStationsPersistScheduleAndDisappearWhenTheirPoolNoLongerQualifies() = runBlocking {
         val library = PlexParse.episodes(
             """{"MediaContainer":{"Metadata":[${

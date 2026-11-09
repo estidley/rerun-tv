@@ -66,15 +66,17 @@ Live refresh coverage and installed-TV behavior still need validation.
 ## Language and unmatched stations
 
 The Learning Lounge/TLC (144) and The Salon/Bravo (132) extend the network dial without changing genre rules.
-Plex original-language/primary-audio fields are normalized, with show-level inheritance for episodes. Language
+Plex original-language/primary-audio fields are normalized, with show-level inheritance for episodes. Missing markers
+such as `und`, `zxx`, `Unknown` and `N/A` remain null so later audio/show fallbacks can supply a real language. Language
 stations are generated from a single duration aggregation, use stable `language:<code>` IDs from 4000, and follow
 the selected minimum. Mundo, Seoul, Tokyo, Bombay and Berlin cover Spanish, Korean, Japanese, Hindi and German;
 other known languages use localized station names.
 
 The Rest (1999, before genre music) uses `unmatchedOnly` to exclude video covered by existing stock/generated pools, including
-decade and language stations qualifying at the selected minimum. Language and catchall channel JSON fields default to empty/false for old data.
-Room migration 3→4 adds nullable item language without replacing saved content. Performance coverage includes
-repeated 5,000-item international plans and unedited decade-total reuse; edited decade pools remain user-owned.
+decade and language stations qualifying at the selected minimum. A refresh drops future bookings no longer in the resolved pool
+while keeping the currently airing entry and unchanged future schedules. Language and catchall channel JSON fields default to empty/false for old data.
+Room migration 3→4 adds nullable item language without replacing saved content. Catchall coverage resolves network IDs once per eligible item;
+performance coverage includes repeated 5,000-item international plans and unedited decade-total reuse, while edited decade pools remain user-owned.
 
 ## Broadcast additions, grouping and criteria
 

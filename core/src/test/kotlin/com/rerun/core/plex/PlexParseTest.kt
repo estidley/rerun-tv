@@ -184,6 +184,33 @@ class PlexParseTest {
     }
 
     @Test
+    fun missingLanguageMarkersFallBackToAudioOrShowLanguage() {
+        for (placeholder in listOf("und", "Unknown", " UNKNOWN ", "N/A", "zxx")) {
+            val movie = PlexParse.movies(
+                """{"MediaContainer":{"Metadata":[{"ratingKey":"1","originalLanguage":"$placeholder",
+                  "language":"$placeholder","Media":[{"Part":[{"Stream":[
+                  {"streamType":2,"languageCode":"es"}
+                ]}]}]}]}}""",
+            ).single()
+            assertEquals("spa", movie.language, placeholder)
+        }
+        val shows = PlexParse.shows(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"s","title":"Show","language":"Japanese"}]}}""",
+        ).associateBy { it.key }
+        val episode = PlexParse.episodes(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"e","grandparentRatingKey":"s",
+              "originalLanguage":"und","Media":[{"Part":[{"Stream":[
+              {"streamType":2,"languageCode":"Unknown","language":"Unknown"}
+            ]}]}]}]}}""", shows,
+        ).single()
+        assertEquals("jpn", episode.language)
+        val unknown = PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"2","originalLanguage":"und","language":"Unknown"}]}}""",
+        ).single()
+        assertNull(unknown.language)
+    }
+
+    @Test
     fun totalSizeReadsContainer() {
         assertEquals(412, PlexParse.totalSize(fixture("movies.json")))
         assertEquals(3, PlexParse.totalSize(fixture("sections.json")))

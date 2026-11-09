@@ -387,7 +387,16 @@ class ScheduleRepo internal constructor(
                         it.startMs > nowMs && it.kind == EntryKind.PROGRAM.name && it.itemKey !in allowed
                     }
                 } else false
-                if (rulesChanged || staleAnimeQueue) {
+                val staleCatchallQueue = if (row.def.id == Lineup.CATCHALL_ID && !rulesChanged) {
+                    val futurePrograms = db.entries().range(row.def.id, nowMs, Long.MAX_VALUE).filter {
+                        it.startMs > nowMs && it.kind == EntryKind.PROGRAM.name
+                    }
+                    if (futurePrograms.isEmpty()) false else {
+                        val allowed = Resolver.pool(row.def, contents, minimum).mapTo(HashSet()) { it.key }
+                        futurePrograms.any { it.itemKey !in allowed }
+                    }
+                } else false
+                if (rulesChanged || staleAnimeQueue || staleCatchallQueue) {
                     val current = db.entries().range(row.def.id, nowMs, nowMs + 1).firstOrNull()
                     db.entries().deleteFrom(row.def.id, current?.endMs ?: nowMs)
                 }
