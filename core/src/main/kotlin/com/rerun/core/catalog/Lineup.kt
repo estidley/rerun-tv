@@ -22,20 +22,38 @@ data class PlannedChannel(
 /** Channels to write, and generated rows whose schedule should be deleted. */
 data class LineupPlan(val channels: List<PlannedChannel>, val deleteIds: List<String>)
 
+enum class MinimumContentLevel(val hours: Int) {
+    LOW(4),
+    MEDIUM(12),
+    HIGH(24),
+    ;
+
+    companion object {
+        val DEFAULT = MEDIUM
+        fun from(value: String?): MinimumContentLevel = entries.firstOrNull { it.name == value } ?: DEFAULT
+    }
+}
+
 /**
  * What goes on the dial.
  *
- * Built-in channels always exist (dormant until they have 4 hours). Extra themes, movie
+ * Built-in channels always exist (dormant until they have enough content). Extra themes, movie
  * overflow, and music stations are created only once their pool is long enough.
  */
 object Lineup {
     const val RESTART_ID = "from-the-top"
     const val RESTART_NUMBER = 999
     const val MUSIC_BASE = 2000
+    const val LANGUAGE_BASE = 4000
     const val ADS_ID = "ads:only"
+    const val CATCHALL_ID = "catchall"
+    const val CATCHALL_NUMBER = 1999
     const val TV_DECADE_MIN_MS = 24 * 3_600_000L
     const val MUSIC_DECADE_MIN_MS = 12 * 3_600_000L
     val adsChannel = ChannelDef(ADS_ID, 998, "Buy Me Maybe", ChannelKind.CUSTOM, Rules(kinds = setOf(MediaKind.MOVIE)))
+    val catchAllChannel = ChannelDef(
+        CATCHALL_ID, CATCHALL_NUMBER, "The Rest", ChannelKind.CUSTOM, Rules(unmatchedOnly = true),
+    )
 
     /** Toonuki now owns the Anime genre; only a user-edited former Import Toons station is retained. */
     private fun isEditedRetiredAnime(def: ChannelDef): Boolean =
@@ -45,24 +63,47 @@ object Lineup {
 
     /** Rows this app invented. A refresh may drop them. Custom channels are not generated. */
     fun isGenerated(id: String): Boolean =
-        id == ADS_ID || id.startsWith("decade:") || id.startsWith("opt:") || id.startsWith("movies:") ||
-            id.startsWith("music:") || id.startsWith("marvel:") || id.startsWith("dc:")
+        id == ADS_ID || id == CATCHALL_ID || id.startsWith("decade:") || id.startsWith("opt:") ||
+            id.startsWith("movies:") || id.startsWith("music:") || id.startsWith("marvel:") ||
+            id.startsWith("dc:") || id.startsWith("language:")
 
     /** Built-ins plus every extra that currently has enough content. */
-    fun channels(library: List<MediaItem>, music: Boolean): List<ChannelDef> {
-        val movieMs = moviePoolMs(library)
-        val extras = optionalThemes().filter { qualified(it, library) }
-        val features = movieChannels().filter { movieMs >= movieThreshold(it.id) }
-        val stations = if (music) musicTemplates(library).filter { qualified(it, library) } else emptyList()
+    fun channels(
+        library: List<MediaItem>, music: Boolean,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
+        val extras = optionalThemes(library, minimum)
+        val features = movieChannels(library, minimum)
+        val stations = if (music) musicTemplates(library).filter { qualified(it, library, minimum) } else emptyList()
+        val decades = decadeChannels(library, music, minimum)
+        val languages = languageTemplates(library, minimum)
+        val catchall = if (qualified(catchAllChannel, library, minimum)) listOf(catchAllChannel) else emptyList()
+        return Catalog.builtInChannels() + extras + features + stations + decades + languages + catchall
+    }
+
+    fun decadeChannels(
+        library: List<MediaItem>, music: Boolean,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
         val totals = decadeTotals(library)
-        val decades = decadeTemplates.filter {
-            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= decadeMinimum(it)
+        return decadeTemplates.filter {
+            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= minimumContentMs(it, minimum)
         }
-        return Catalog.builtInChannels() + extras + features + stations + decades
     }
 
     fun optionalThemes(): List<ChannelDef> = optional
     fun movieChannels(): List<ChannelDef> = movies
+
+    fun optionalThemes(
+        library: List<MediaItem>, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> = optional.filter { qualified(it, library, minimum) }
+
+    fun movieChannels(
+        library: List<MediaItem>, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
+        val movieMs = moviePoolMs(library)
+        return movies.filter { movieMs >= minimumContentMs(it, minimum) }
+    }
 
     /**
      * Merges the catalog with channels already stored.
@@ -72,36 +113,58 @@ object Lineup {
      */
     fun plan(
         library: List<MediaItem>, existing: List<StoredChannel>, music: Boolean,
-        adsPoolMs: Long = 0,
+        adsPoolMs: Long = 0, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
     ): LineupPlan {
         val existingById = existing.associateBy { it.def.id }
         val durations = HashMap<ChannelDef, Long>()
         val decadeTotals = decadeTotals(library)
         val decadeDurations = decadeTemplates.associate { it.rules to decadeTotals.getOrDefault(it.id, 0L) }
-        fun duration(def: ChannelDef): Long = durations.getOrPut(def) {
-            if (def.blocks.isEmpty()) decadeDurations[def.rules] ?: poolMs(def, library)
-            else poolMs(def, library)
+        val languageTotals = languageTotals(library)
+        val languages = languageTemplates(library, minimum)
+        val languageDurations = languages.associate {
+            it.rules to languageTotals.getOrDefault(it.rules.languages.single(), 0L)
         }
+        fun duration(def: ChannelDef, useDecadeTotal: Boolean = false, useLanguageTotal: Boolean = false): Long =
+            durations.getOrPut(def) {
+                when {
+                    useDecadeTotal && def.blocks.isEmpty() -> decadeDurations[def.rules] ?: poolMs(def, library, minimum)
+                    useLanguageTotal && def.blocks.isEmpty() -> languageDurations[def.rules] ?: poolMs(def, library, minimum)
+                    else -> poolMs(def, library, minimum)
+                }
+            }
         val builtIn = Catalog.builtInChannels()
         val stations = musicTemplates(library)
-        val templates = builtIn + optional + movies + stations + decadeTemplates
+        val templates = builtIn + optional + movies + stations + decadeTemplates + languages + catchAllChannel
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
         for (template in templates) {
             val prev = existingById[template.id]
             val stored = prev?.def
-            // Upgrade the old stock Toonami pool, retaining names, numbers and play order.
+            val legacyStockMusic = stored != null && prev?.builtIn == true &&
+                (template.id.startsWith("music:") || template.id.startsWith("decade:music:")) &&
+                looksStock(stored, template.copy(rules = template.rules.copy(excludeGenres = emptySet())))
+            // Upgrade the old stock Toonami pool, retaining names and play order.
             // Explicitly edited rules or time blocks remain owned by the user.
-            val base = if (template.id == "toonami" && prev?.builtIn == true &&
-                stored?.rules == Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()) &&
-                stored.blocks.isEmpty()
-            ) stored.copy(rules = template.rules, kidsSafe = template.kidsSafe) else stored ?: template
+            val base = when {
+                template.id == "toonami" && prev?.builtIn == true &&
+                    stored?.rules == Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()) &&
+                    stored.blocks.isEmpty() -> stored.copy(rules = template.rules, kidsSafe = template.kidsSafe)
+                legacyStockMusic -> stored?.copy(rules = template.rules) ?: template
+                else -> stored ?: template
+            }
+            val previousNumber = if (template.id == CATCHALL_ID) 3999 else Catalog.previousNetworkNumber(template.id)
+            val assigned = if (stored != null && prev?.builtIn == true && previousNumber != null &&
+                base.number == previousNumber && looksStock(base, template.copy(number = previousNumber))) {
+                base.copy(number = template.number)
+            } else base
             val baseName = Catalog.chooseName(template.id, prev?.def?.name, template.name)
-            val pool = duration(base)
-            val dormant = isDormant(base, pool, music)
+            val stockDecade = template.id.startsWith("decade:") && (prev == null || looksStock(assigned, template))
+            val stockLanguage = template.id.startsWith("language:") && (prev == null || looksStock(assigned, template))
+            val pool = duration(assigned, useDecadeTotal = stockDecade, useLanguageTotal = stockLanguage)
+            val dormant = isDormant(assigned, pool, music, minimum)
             if (isGenerated(template.id) && dormant && (prev == null || looksStock(prev.def, template))) continue
-            upserts += PlannedChannel(base.copy(name = baseName), prev?.builtIn ?: true, dormant, pool)
+            upserts += PlannedChannel(assigned.copy(name = baseName), prev?.builtIn ?: true, dormant, pool)
             seen += template.id
         }
 
@@ -112,12 +175,12 @@ object Lineup {
                 // A genre can disappear completely; retain edits even without a live template.
                 if ((id.startsWith("music:") && !looksStockMusic(prev.def)) || isEditedRetiredAnime(prev.def)) {
                     val pool = duration(prev.def)
-                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = isDormant(prev.def, pool, music), poolMs = pool)
+                    upserts += PlannedChannel(prev.def, prev.builtIn, dormant = isDormant(prev.def, pool, music, minimum), poolMs = pool)
                 }
                 continue
             }
             val pool = duration(prev.def)
-            val dormant = isDormant(prev.def, pool, music)
+            val dormant = isDormant(prev.def, pool, music, minimum)
             upserts += PlannedChannel(prev.def, prev.builtIn, dormant, pool)
         }
 
@@ -129,19 +192,23 @@ object Lineup {
         val deleteIds = existing.map { it.def.id }
             .filter { it !in keep && it != RESTART_ID && isGenerated(it) }
             .sorted()
-        return LineupPlan(uniqueNumbers(upserts), deleteIds)
+        return LineupPlan(uniqueNumbers(upserts, existingById.mapValues { it.value.def.number }), deleteIds)
     }
 
     /**
-     * Keeps a custom or built-in number where the user left it.
-     * Generated rows (extras and music) take the next free number when theirs is taken.
+     * Keeps existing custom and built-in numbers where the user left them. Generated rows, newly
+     * introduced built-ins, and stock rows moving to a new grouped number take the next free number.
      */
-    private fun uniqueNumbers(channels: List<PlannedChannel>): List<PlannedChannel> {
+    private fun uniqueNumbers(channels: List<PlannedChannel>, existingNumbers: Map<String, Int>): List<PlannedChannel> {
+        fun movable(row: PlannedChannel): Boolean {
+            val previous = existingNumbers[row.def.id]
+            return isGenerated(row.def.id) || (row.builtIn && (previous == null || row.def.number != previous))
+        }
         val used = HashSet<Int>()
         used += RESTART_NUMBER
-        for (row in channels) if (!isGenerated(row.def.id)) used += row.def.number
+        for (row in channels) if (!movable(row)) used += row.def.number
         return channels.map { row ->
-            if (!isGenerated(row.def.id)) row
+            if (!movable(row)) row
             else {
                 var number = row.def.number
                 while (number in used) number++
@@ -151,11 +218,13 @@ object Lineup {
         }
     }
 
-    private fun qualified(def: ChannelDef, library: List<MediaItem>): Boolean =
-        !Resolver.isDormant(Resolver.pool(def, library))
+    private fun qualified(def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel): Boolean =
+        !isDormant(def, poolMs(def, library, minimum), minimum = minimum)
 
-    private fun poolMs(def: ChannelDef, library: List<MediaItem>): Long =
-        Resolver.pool(def, library).sumOf { it.durationMs }
+    private fun poolMs(
+        def: ChannelDef, library: List<MediaItem>,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): Long = Resolver.pool(def, library, minimum).sumOf { it.durationMs }
 
     private fun moviePoolMs(library: List<MediaItem>): Long =
         library.filter { it.kind == MediaKind.MOVIE && it.durationMs >= Resolver.MIN_ITEM_MS }.sumOf { it.durationMs }
@@ -167,31 +236,40 @@ object Lineup {
         else -> Long.MAX_VALUE
     }
 
-    fun minimumContentMs(def: ChannelDef): Long {
+    fun minimumContentMs(def: ChannelDef, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT): Long {
         val override = def.minimumContentHours
         require(override == null || override in 0..168) { "Minimum content must be 0–168 hours" }
         if (override != null) return override * 3_600_000L
+        val defaultMs = minimum.hours * 3_600_000L
         val id = def.id
         return when {
             id == ADS_ID || id == RESTART_ID -> 0
-            id.startsWith("decade:tv:") -> TV_DECADE_MIN_MS
-            id.startsWith("decade:music:") -> MUSIC_DECADE_MIN_MS
-            id.startsWith("movies:") -> movieThreshold(id)
-            else -> Resolver.DORMANT_MS
+            id.startsWith("decade:tv:") -> maxOf(TV_DECADE_MIN_MS, defaultMs)
+            id.startsWith("decade:music:") -> maxOf(MUSIC_DECADE_MIN_MS, defaultMs)
+            id.startsWith("movies:") -> maxOf(movieThreshold(id), defaultMs)
+            else -> defaultMs
         }
     }
 
-    fun isDormant(def: ChannelDef, poolMs: Long, music: Boolean = true): Boolean =
-        (def.kind == ChannelKind.MUSIC && !music) || poolMs <= 0 || poolMs < minimumContentMs(def)
+    fun isDormant(
+        def: ChannelDef, poolMs: Long, music: Boolean = true,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): Boolean = (def.kind == ChannelKind.MUSIC && !music) || poolMs <= 0 || poolMs < minimumContentMs(def, minimum)
 
-    private fun decadeMinimum(def: ChannelDef): Long =
-        if (def.kind == ChannelKind.MUSIC) MUSIC_DECADE_MIN_MS else TV_DECADE_MIN_MS
+    private val nonMusicGenres = setOf(
+        "audio book", "audio books", "audiobook", "audiobooks", "book", "books", "interview", "interviews",
+        "lecture", "lectures", "news", "podcast", "podcasts", "radio drama", "speech", "spoken word", "talk", "talk radio",
+    )
+
+    private fun isStockMusicItem(item: MediaItem): Boolean =
+        item.kind == MediaKind.TRACK && item.genres.none { it.trim().lowercase() in nonMusicGenres }
 
     /** Stock decade qualification is one pass, without retaining a pool per candidate channel. */
     private fun decadeTotals(library: List<MediaItem>): Map<String, Long> {
         val totals = HashMap<String, Long>()
         for (item in library) {
             if (item.durationMs < Resolver.MIN_ITEM_MS) continue
+            if (item.kind == MediaKind.TRACK && !isStockMusicItem(item)) continue
             val year = item.year?.takeIf { it in 1900..2099 } ?: continue
             val type = when (item.kind) {
                 MediaKind.EPISODE -> "tv"
@@ -213,7 +291,7 @@ object Lineup {
             ),
             ChannelDef(
                 "decade:music:$decade", 3000 + index, "${decade}s Music", ChannelKind.MUSIC,
-                Rules(decades = setOf(decade), kinds = setOf(MediaKind.TRACK)),
+                Rules(decades = setOf(decade), kinds = setOf(MediaKind.TRACK), excludeGenres = nonMusicGenres),
             ),
         )
     }
@@ -235,16 +313,17 @@ object Lineup {
 
     private fun looksStockMusic(stored: ChannelDef): Boolean {
         val genre = stored.rules.genres.singleOrNull() ?: return false
-        return stored == ChannelDef(
+        val stock = ChannelDef(
             stored.id, stored.number, genre, ChannelKind.MUSIC,
-            Rules(genres = setOf(genre), kinds = setOf(MediaKind.TRACK)),
+            Rules(genres = setOf(genre), kinds = setOf(MediaKind.TRACK), excludeGenres = nonMusicGenres),
         )
+        return stored == stock || stored == stock.copy(rules = stock.rules.copy(excludeGenres = emptySet()))
     }
 
     fun musicTemplates(library: List<MediaItem>): List<ChannelDef> {
         val totals = LinkedHashMap<String, Long>()
         for (item in library) {
-            if (item.kind != MediaKind.TRACK || item.durationMs < Resolver.MIN_ITEM_MS) continue
+            if (!isStockMusicItem(item) || item.durationMs < Resolver.MIN_ITEM_MS) continue
             for (genre in item.genres) {
                 if (genre.isBlank()) continue
                 totals[genre] = (totals[genre] ?: 0L) + item.durationMs
@@ -260,9 +339,49 @@ object Lineup {
                 number = number,
                 name = genre,
                 kind = ChannelKind.MUSIC,
-                rules = Rules(genres = setOf(genre), kinds = setOf(MediaKind.TRACK)),
+                rules = Rules(genres = setOf(genre), kinds = setOf(MediaKind.TRACK), excludeGenres = nonMusicGenres),
             )
         }
+    }
+
+    private fun languageTotals(library: List<MediaItem>): Map<String, Long> {
+        val totals = HashMap<String, Long>()
+        for (item in library) {
+            if (item.kind !in video || item.durationMs < Resolver.MIN_ITEM_MS) continue
+            val language = item.language?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: continue
+            totals[language] = totals.getOrDefault(language, 0L) + item.durationMs
+        }
+        return totals
+    }
+
+    /** Language stations are generated from actual metadata, never from assumed broadcaster ownership. */
+    fun languageTemplates(
+        library: List<MediaItem>, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
+        return languageTotals(library).entries.filter { it.value >= minimum.hours * 3_600_000L }
+            .sortedBy { languageName(it.key) }.mapIndexed { index, entry ->
+                val code = entry.key
+                ChannelDef(
+                    id = "language:$code", number = LANGUAGE_BASE + index, name = languageName(code),
+                    kind = ChannelKind.THEME, rules = Rules(languages = setOf(code)),
+                )
+            }
+    }
+
+    private val localizedLanguageNames by lazy {
+        java.util.Locale.getAvailableLocales().mapNotNull { locale ->
+            locale.isO3Language?.takeIf { it.isNotBlank() }
+                ?.let { it to locale.getDisplayLanguage(java.util.Locale.ENGLISH) }
+        }.toMap()
+    }
+
+    private fun languageName(code: String): String = when (code) {
+        "spa" -> "Mundo"
+        "kor" -> "Seoul"
+        "jpn" -> "Tokyo"
+        "hin" -> "Bombay"
+        "deu", "ger" -> "Berlin"
+        else -> localizedLanguageNames[code]?.let { "$it Station" } ?: code.uppercase()
     }
 
     private fun musicId(genre: String): String {

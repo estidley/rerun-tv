@@ -46,6 +46,10 @@ data class Rules(
     val bucket: Int = 0,
     val bucketCount: Int = 1,
     val franchises: Set<String> = emptySet(),
+    /** Normalized language codes are an AND filter, not another OR inclusion source. */
+    val languages: Set<String> = emptySet(),
+    /** Resolver applies this only to the generated unmatched-content catchall. */
+    val unmatchedOnly: Boolean = false,
 ) {
     private val nNetworks by lazy { networks.normed() }
     private val nTitles by lazy { titles.mapTo(HashSet()) { titleKey(it) } }
@@ -55,6 +59,7 @@ data class Rules(
     private val nGenres by lazy { genres.normed() }
     private val nExclude by lazy { excludeGenres.normed() }
     private val nRatings by lazy { ratings.normed() }
+    private val nLanguages by lazy { languages.normed() }
 
     private val hasIncludeSource: Boolean
         get() = networks.isNotEmpty() || titles.isNotEmpty() || tmdbIds.isNotEmpty() ||
@@ -71,6 +76,7 @@ data class Rules(
         if (item.kind !in kinds) return false
         if (bucketCount > 1 && bucketOf(item, bucketCount) != bucket) return false
         if (nExclude.isNotEmpty() && item.genres.any { norm(it) in nExclude }) return false
+        if (nLanguages.isNotEmpty() && item.language?.let(::norm) !in nLanguages) return false
         if (decades.isNotEmpty()) {
             val y = item.year ?: return false
             if (y / 10 * 10 !in decades) return false

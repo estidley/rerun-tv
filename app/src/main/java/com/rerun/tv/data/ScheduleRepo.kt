@@ -329,7 +329,7 @@ class ScheduleRepo internal constructor(
 
     /** Commit library/lineup changes atomically with respect to schedule generation. */
     suspend fun refreshChannels(
-        music: Boolean, items: List<MediaItem>? = null,
+        items: List<MediaItem>? = null,
         selectedLibraries: Set<String>? = null,
     ) = mutex.withLock {
         db.withTransaction {
@@ -372,7 +372,9 @@ class ScheduleRepo internal constructor(
             }
             val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
             val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
-            val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs)
+            val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
+            val music = contents.any { it.kind == MediaKind.TRACK }
+            val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs, minimum = minimum)
             val previousById = existing.associateBy { it.def.id }
             val nowMs = System.currentTimeMillis()
             for (row in planned.channels) {
@@ -385,7 +387,16 @@ class ScheduleRepo internal constructor(
                         it.startMs > nowMs && it.kind == EntryKind.PROGRAM.name && it.itemKey !in allowed
                     }
                 } else false
-                if (rulesChanged || staleAnimeQueue) {
+                val staleCatchallQueue = if (row.def.id == Lineup.CATCHALL_ID && !rulesChanged) {
+                    val futurePrograms = db.entries().range(row.def.id, nowMs, Long.MAX_VALUE).filter {
+                        it.startMs > nowMs && it.kind == EntryKind.PROGRAM.name
+                    }
+                    if (futurePrograms.isEmpty()) false else {
+                        val allowed = Resolver.pool(row.def, contents, minimum).mapTo(HashSet()) { it.key }
+                        futurePrograms.any { it.itemKey !in allowed }
+                    }
+                } else false
+                if (rulesChanged || staleAnimeQueue || staleCatchallQueue) {
                     val current = db.entries().range(row.def.id, nowMs, nowMs + 1).firstOrNull()
                     db.entries().deleteFrom(row.def.id, current?.endMs ?: nowMs)
                 }
@@ -520,8 +531,9 @@ class ScheduleRepo internal constructor(
         val last = db.entries().lastEnd(row.id)
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
+        val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
         val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
-            else Resolver.pool(def, lib().items)
+            else Resolver.pool(def, lib().items, minimum)
         val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = kotlin.random.Random.nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs,
             backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
@@ -618,10 +630,13 @@ class ScheduleRepo internal constructor(
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {
         val def = row.def
-        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, lib().items).sumOf { it.durationMs } }
-        val music = db.settings().get(Settings.MUSIC)?.toBooleanStrictOrNull() ?: false
-        val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music), poolMs)
+        val contents = lib().items
+        val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
+        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, contents, minimum).sumOf { it.durationMs } }
+        val music = contents.any { it.kind == MediaKind.TRACK }
+        val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music, minimum), poolMs)
         db.channels().upsert(checked)
+        _guideRevision.value++
     }
 
     suspend fun deleteChannel(id: String) = mutex.withLock {

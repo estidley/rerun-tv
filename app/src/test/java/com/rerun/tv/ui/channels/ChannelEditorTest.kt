@@ -1,10 +1,12 @@
 package com.rerun.tv.ui.channels
 
 import android.app.Application
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
@@ -42,7 +44,7 @@ class ChannelEditorTest {
                 {"ratingKey":"comedy","title":"Comedy movie","duration":18000000,"Genre":[{"tag":"Comedy"}]}
             ]}}""",
         ).map { item ->
-            item.copy(genres = object : Set<String> by item.genres {
+            item.copy(network = if (item.key == "drama") "TBS" else item.network, genres = object : Set<String> by item.genres {
                 override fun iterator(): Iterator<String> {
                     scans.incrementAndGet()
                     return item.genres.iterator()
@@ -52,11 +54,18 @@ class ChannelEditorTest {
         val def = ChannelDef("test", 401, "Test channel", ChannelKind.CUSTOM, Rules(genres = setOf("Drama")))
         `when`(schedule.allChannelRows()).thenReturn(listOf(ChannelRow.of(def, builtIn = false, dormant = true)))
         `when`(schedule.libraryItems()).thenReturn(items)
-        compose.setContent { ChannelEditor(mock(TvController::class.java), "test", app) }
+        val controller = mock(TvController::class.java)
+        `when`(controller.minimumContent).thenReturn(
+            kotlinx.coroutines.flow.MutableStateFlow(com.rerun.core.catalog.MinimumContentLevel.MEDIUM),
+        )
+        compose.setContent { ChannelEditor(controller, "test", app) }
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("3.0 hours of content  (needs 4 to go on the air)")
+            compose.onAllNodesWithText("3.0 hours of content  (needs 12 to go on the air)")
                 .fetchSemanticsNodes().isNotEmpty()
         }
+        compose.onNodeWithText("Genres: Drama · movies and episodes.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Ted's TV").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("TBS").performScrollTo().assertIsDisplayed()
         val before = scans.get()
         compose.onNodeWithText("Test channel").performTextReplacement("Renamed")
         compose.onNodeWithText("401").performTextReplacement("402")
@@ -68,7 +77,8 @@ class ChannelEditorTest {
         compose.onNodeWithText("Channel default").performClick()
         compose.onAllNodesWithText("Comedy")[0].performClick()
         compose.waitUntil(10_000) {
-            compose.onAllNodesWithText("8.0 hours of content").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("8.0 hours of content  (needs 12 to go on the air)")
+                .fetchSemanticsNodes().isNotEmpty()
         }
         verify(schedule, times(1)).libraryItems()
     }

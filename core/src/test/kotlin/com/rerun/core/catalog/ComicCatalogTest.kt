@@ -46,10 +46,10 @@ class ComicCatalogTest {
 
     @Test
     fun fiveChannelsSeparateMoviesAndShowsAndPreserveExistingNetworkRouting() {
-        val film = movie("film", "Avengers: Endgame", year = 2019, durationMs = 4 * HOUR, studio = "Marvel Studios")
-        val show = episode("show", "Marvel's Daredevil", durationMs = 4 * HOUR)
-        val dcFilm = movie("batman", "Batman Begins", year = 2005, durationMs = 4 * HOUR)
-        val dcShow = episode("arrow", "Arrow", durationMs = 4 * HOUR)
+        val film = movie("film", "Avengers: Endgame", year = 2019, durationMs = 12 * HOUR, studio = "Marvel Studios")
+        val show = episode("show", "Marvel's Daredevil", durationMs = 12 * HOUR)
+        val dcFilm = movie("batman", "Batman Begins", year = 2005, durationMs = 12 * HOUR)
+        val dcShow = episode("arrow", "Arrow", durationMs = 12 * HOUR)
         val library = listOf(film, show, dcFilm, dcShow)
         assertEquals(listOf(film), Resolver.pool(channel("marvel:movies"), library))
         assertEquals(listOf(show), Resolver.pool(channel("marvel:tv"), library))

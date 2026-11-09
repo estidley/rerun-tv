@@ -1,6 +1,8 @@
 package com.rerun.core.resolve
 
 import com.rerun.core.catalog.Catalog
+import com.rerun.core.catalog.Lineup
+import com.rerun.core.catalog.MinimumContentLevel
 import com.rerun.core.catalog.Router
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.MediaItem
@@ -40,12 +42,36 @@ object Resolver {
      * Everything the channel may ever play: its base rules plus anything its time blocks pull in
      * (e.g. Toonami shows during Cartoon Network's afternoon block).
      */
-    fun pool(def: ChannelDef, library: List<MediaItem>): List<MediaItem> {
+    fun pool(
+        def: ChannelDef, library: List<MediaItem>,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<MediaItem> {
+        if (def.rules.unmatchedOnly) return unmatchedPool(def, library, minimum)
+        return library.filter { item -> item.durationMs >= MIN_ITEM_MS && matchesAnywhere(def, item) }
+    }
+
+    private fun matchesAnywhere(def: ChannelDef, item: MediaItem): Boolean {
         val needsNetwork = def.rules.networks.isNotEmpty() || def.blocks.any { it.rules.networks.isNotEmpty() }
+        return matchesAnywhere(def, item, if (needsNetwork) networksOf(item) else emptySet())
+    }
+
+    private fun matchesAnywhere(def: ChannelDef, item: MediaItem, nids: Set<String>): Boolean =
+        def.rules.matches(item, nids) || def.blocks.any { it.rules.matches(item, nids) }
+
+    private fun unmatchedPool(
+        def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel,
+    ): List<MediaItem> {
+        val otherChannels = Catalog.builtInChannels() + Lineup.optionalThemes(library, minimum) +
+            Lineup.movieChannels(library, minimum) +
+            Lineup.decadeChannels(library, music = true, minimum = minimum) +
+            Lineup.languageTemplates(library, minimum)
+        val needsNetworks = otherChannels.any { channel ->
+            channel.rules.networks.isNotEmpty() || channel.blocks.any { it.rules.networks.isNotEmpty() }
+        }
         return library.filter { item ->
-            if (item.durationMs < MIN_ITEM_MS) return@filter false
-            val nids = if (needsNetwork) networksOf(item) else emptySet()
-            def.rules.matches(item, nids) || def.blocks.any { it.rules.matches(item, nids) }
+            if (item.durationMs < MIN_ITEM_MS || !def.rules.matches(item, emptySet())) return@filter false
+            val nids = if (needsNetworks) networksOf(item) else emptySet()
+            otherChannels.none { matchesAnywhere(it, item, nids) }
         }
     }
 

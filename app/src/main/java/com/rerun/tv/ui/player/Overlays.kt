@@ -115,9 +115,12 @@ fun ChannelOsd(channel: ChannelRow?, modifier: Modifier = Modifier) {
     }
 }
 
-/** Bottom info bar: what's on, how long is left, what's next. */
+/** Bottom info bar: what's on, a bounded description, how long is left, and what's next. */
 @Composable
-fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: MediaItem?, nextStartMs: Long? = endsMs, modifier: Modifier = Modifier) {
+fun InfoBanner(
+    channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: MediaItem?, nextStartMs: Long? = endsMs,
+    modifier: Modifier = Modifier, summary: String? = null,
+) {
     Box(
         modifier
             .fillMaxWidth()
@@ -128,7 +131,7 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(130.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (channel != null) ChannelIcon(channel.id, size = 96.dp)
+                if (channel != null) ChannelIcon(channel.id, channel.name, size = 96.dp)
                 BasicText(channel?.number?.toString() ?: "", style = Retro.ChannelNumber)
                 BasicText(channel?.name ?: "", style = Retro.Caption.copy(fontSize = 16.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -142,6 +145,9 @@ fun InfoBanner(channel: ChannelRow?, item: MediaItem?, endsMs: Long?, next: Medi
                     endsMs?.let { "ends ${clockTime(it)}" },
                 )
                 BasicText(bits.joinToString("  ·  "), style = Retro.Body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!summary.isNullOrBlank()) {
+                    BasicText(summary, style = Retro.Caption, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
             }
             if (next != null) {
                 var now by remember { mutableLongStateOf(System.currentTimeMillis()) }

@@ -39,6 +39,9 @@ class ScheduleRepoTest {
         db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(), RerunDb::class.java)
             .allowMainThreadQueries().build()
         repo = ScheduleRepo(db, Scheduler(ZoneId.of("UTC")))
+        runBlocking {
+            db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, com.rerun.core.catalog.MinimumContentLevel.LOW.name))
+        }
     }
 
     @After
@@ -60,13 +63,13 @@ class ScheduleRepoTest {
                 com.rerun.core.schedule.EntryKind.PROGRAM, oldShow.key)
             val future = current.copy(startMs = current.endMs, endMs = at + DAY)
             db.entries().insertAll(listOf(current, future).map(EntryRow::of))
-            repo.refreshChannels(false)
+            repo.refreshChannels()
             assertEquals(listOf(current), repo.entries("toonami", at, at + DAY))
             repo.ensure("toonami", at)
             val rebuilt = repo.entries("toonami", at, at + DAY)
             assertEquals(current, rebuilt.first())
             assertTrue(rebuilt.drop(1).filter { it.itemKey != null }.all { it.itemKey == anime.key })
-            repo.refreshChannels(false)
+            repo.refreshChannels()
             assertEquals(rebuilt, repo.entries("toonami", at, at + DAY))
         }
     }
@@ -74,17 +77,17 @@ class ScheduleRepoTest {
     @Test
     fun cableStockNamesUpdateWithoutChangingTheLockedScheduleOrPersonalRenames() = runBlocking {
         val documentary = movie("history").copy(studio = "TBS", durationMs = 4 * 3_600_000L)
-        repo.refreshChannels(false, listOf(documentary))
+        repo.refreshChannels(items = listOf(documentary))
         val tbs = requireNotNull(repo.channel("tbs"))
         db.channels().upsert(ChannelRow.of(tbs.def.copy(name = "Laugh Track"), true, false, tbs.poolMs))
         repo.ensure("tbs", now)
         val before = repo.entries("tbs", now, now + DAY)
         assertTrue(before.isNotEmpty())
-        repo.refreshChannels(false)
+        repo.refreshChannels()
         assertEquals("Ted's TV", repo.channel("tbs")?.name)
         assertEquals(before, repo.entries("tbs", now, now + DAY))
         repo.saveChannel(ChannelRow.of(tbs.def.copy(name = "My Superstation", minimumContentHours = 1), true))
-        repo.refreshChannels(false)
+        repo.refreshChannels()
         assertEquals("My Superstation", repo.channel("tbs")?.name)
         assertEquals(1, repo.channel("tbs")?.def?.minimumContentHours)
         assertEquals(before, repo.entries("tbs", now, now + DAY))
@@ -93,22 +96,102 @@ class ScheduleRepoTest {
     @Test
     fun minimumOverridesPersistAndCannotAccidentallyActivateAnEmptyOrSmallStockPool() = runBlocking {
         val item = movie("one").copy(durationMs = 3_600_000)
-        repo.refreshChannels(false, listOf(item))
+        repo.refreshChannels(items = listOf(item))
         val stock = Lineup.movieChannels()[1]
         repo.saveChannel(ChannelRow.of(stock.copy(name = "Renamed"), true, false, 99 * 3_600_000L))
         assertTrue(requireNotNull(repo.channel(stock.id)).dormant)
         val override = stock.copy(name = "Small movie night", minimumContentHours = 1)
         repo.saveChannel(ChannelRow.of(override, true))
         assertFalse(requireNotNull(repo.channel(stock.id)).dormant)
-        repo.refreshChannels(false)
+        repo.refreshChannels()
         assertEquals(1, repo.channel(stock.id)?.def?.minimumContentHours)
         repo.ensure(stock.id, now)
         assertTrue(repo.entries(stock.id, now, now + DAY).isNotEmpty())
         repo.saveChannel(ChannelRow.of(override.copy(minimumContentHours = null), true, false))
         assertTrue(requireNotNull(repo.channel(stock.id)).dormant)
-        repo.refreshChannels(false, emptyList())
+        repo.refreshChannels(items = emptyList())
         repo.saveChannel(ChannelRow.of(override.copy(minimumContentHours = 0), true, false))
         assertTrue(requireNotNull(repo.channel(stock.id)).dormant)
+    }
+
+    @Test
+    fun minimumPresetAppliesToSaveAndRefreshWithoutChangingOverrides() = runBlocking {
+        val item = movie("one").copy(genres = setOf("Drama"), durationMs = 4 * 3_600_000L)
+        repo.refreshChannels(items = listOf(item))
+        val def = com.rerun.core.model.ChannelDef(
+            "custom:minimum", 450, "Minimum test", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(genres = setOf("Drama")),
+        )
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, com.rerun.core.catalog.MinimumContentLevel.MEDIUM.name))
+        repo.saveChannel(ChannelRow.of(def, false))
+        assertTrue(requireNotNull(repo.channel(def.id)).dormant)
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, com.rerun.core.catalog.MinimumContentLevel.LOW.name))
+        repo.saveChannel(ChannelRow.of(def, false))
+        assertFalse(requireNotNull(repo.channel(def.id)).dormant)
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, com.rerun.core.catalog.MinimumContentLevel.HIGH.name))
+        repo.refreshChannels()
+        assertTrue(requireNotNull(repo.channel(def.id)).dormant)
+        repo.saveChannel(ChannelRow.of(def.copy(minimumContentHours = 1), false))
+        assertFalse(requireNotNull(repo.channel(def.id)).dormant)
+        repo.refreshChannels()
+        assertFalse(requireNotNull(repo.channel(def.id)).dormant)
+        assertEquals(1, repo.channel(def.id)?.def?.minimumContentHours)
+    }
+
+    @Test
+    fun catchallSaveUsesThePersistedMinimumAndItsLowPoolSchedules() = runBlocking {
+        val spanish = movie("spanish").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 18 * 3_600_000L, year = null, language = "spa")
+        val unmatched = movie("unmatched").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 5 * 3_600_000L, year = null)
+        repo.refreshChannels(items = listOf(spanish, unmatched))
+        val station = requireNotNull(repo.channel(Lineup.CATCHALL_ID))
+        assertFalse(station.dormant)
+        assertEquals(5 * 3_600_000L, station.poolMs)
+        repo.ensure(station.id, now)
+        val keys = repo.entries(station.id, now, now + DAY).filter { it.kind == EntryKind.PROGRAM }.map { it.itemKey }
+        assertTrue(keys.isNotEmpty())
+        assertTrue(keys.all { it == "unmatched" })
+
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, com.rerun.core.catalog.MinimumContentLevel.HIGH.name))
+        repo.saveChannel(ChannelRow.of(station.def, station.builtIn))
+        val high = requireNotNull(repo.channel(station.id))
+        assertTrue(high.dormant)
+        assertEquals(23 * 3_600_000L, high.poolMs)
+    }
+
+    @Test
+    fun loweringMinimumRebuildsInvalidCatchallFutureAndKeepsTheCurrentProgram() = runBlocking {
+        val spanish = movie("spanish").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 6 * 3_600_000L, year = null, language = "spa")
+        val unmatched = movie("unmatched").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 6 * 3_600_000L, year = null)
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT,
+            com.rerun.core.catalog.MinimumContentLevel.MEDIUM.name))
+        repo.refreshChannels(items = listOf(spanish, unmatched))
+        val station = requireNotNull(repo.channel(Lineup.CATCHALL_ID))
+        assertFalse(station.dormant)
+        assertNull(repo.channel("language:spa"))
+        assertEquals(12 * 3_600_000L, station.poolMs)
+        val at = System.currentTimeMillis()
+        val current = ScheduleEntry(station.id, at - 3_600_000L, at + 3_600_000L, EntryKind.PROGRAM, spanish.key)
+        val future = ScheduleEntry(station.id, current.endMs, current.endMs + 3_600_000L, EntryKind.PROGRAM, spanish.key)
+        db.entries().insertAll(listOf(current, future).map(EntryRow::of))
+
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT,
+            com.rerun.core.catalog.MinimumContentLevel.LOW.name))
+        repo.refreshChannels()
+        assertFalse(requireNotNull(repo.channel("language:spa")).dormant)
+        assertEquals(6 * 3_600_000L, repo.channel(station.id)?.poolMs)
+        assertEquals(listOf(current), repo.entries(station.id, at, at + DAY))
+        repo.ensure(station.id, at)
+        val rebuilt = repo.entries(station.id, at, at + DAY)
+        assertEquals(current, rebuilt.first())
+        val futurePrograms = rebuilt.drop(1).filter { it.kind == EntryKind.PROGRAM }
+        assertTrue(futurePrograms.isNotEmpty())
+        assertTrue(futurePrograms.all { it.itemKey == unmatched.key })
+        repo.refreshChannels()
+        assertEquals(rebuilt, repo.entries(station.id, at, at + DAY))
     }
 
     @Test
@@ -121,16 +204,16 @@ class ScheduleRepoTest {
                 }
             }]}}""", emptyMap(),
         )
-        repo.refreshChannels(music = false, items = library)
+        repo.refreshChannels(items = library)
         val id = "decade:tv:1980"
         assertEquals("1980s TV", repo.channel(id)?.name)
         repo.ensure(id, now)
         val entries = repo.entries(id, now, now + DAY)
         assertTrue(entries.isNotEmpty())
         assertTrue(entries.filter { it.itemKey != null }.all { it.itemKey!!.startsWith("e") })
-        repo.refreshChannels(music = false)
+        repo.refreshChannels()
         assertEquals(entries, repo.entries(id, now, now + DAY))
-        repo.refreshChannels(music = false, items = library.dropLast(1))
+        repo.refreshChannels(items = library.dropLast(1))
         assertNull(repo.channel(id))
         assertTrue(repo.entries(id, 0, Long.MAX_VALUE).isEmpty())
         assertNull(db.states().get(id))
@@ -151,11 +234,11 @@ class ScheduleRepoTest {
         assertTrue(entries.size >= 8)
         assertTrue(entries.all { it.kind == com.rerun.core.schedule.EntryKind.PROGRAM && it.itemKey == "ad" })
         assertTrue(entries.zipWithNext().all { (a, b) -> a.endMs == b.startMs })
-        repo.refreshChannels(false, listOf(movie("show")), selectedLibraries = setOf("regular"))
+        repo.refreshChannels(items = listOf(movie("show")), selectedLibraries = setOf("regular"))
         repo.ensure(Lineup.ADS_ID, now)
         assertNotNull(repo.channel(Lineup.ADS_ID))
         val before = repo.entries(Lineup.ADS_ID, now, now + 120_000)
-        repo.refreshChannels(false, listOf(movie("show")))
+        repo.refreshChannels(items = listOf(movie("show")))
         assertEquals(before, repo.entries(Lineup.ADS_ID, now, now + 120_000))
         repo.replaceAds("commercials", listOf(AdRow.of(clip)))
         assertEquals(before, repo.entries(Lineup.ADS_ID, now, now + 120_000))
@@ -174,7 +257,7 @@ class ScheduleRepoTest {
     @Test
     fun editingKeepsTheCurrentProgramAndRebuildsTheFuture() = runBlocking {
         val original = movie("1")
-        repo.refreshChannels(music = false, items = listOf(original, movie("2")))
+        repo.refreshChannels(items = listOf(original, movie("2")))
         val channel = requireNotNull(repo.channel("movies:1"))
         repo.ensure(channel.id, now)
         val current = repo.entries(channel.id, now, now + 1).single()
@@ -189,7 +272,7 @@ class ScheduleRepoTest {
 
     @Test
     fun resyncKeepsAiringAndStillValidEntriesAndTrimsOnlyRemovedItems() = runBlocking {
-        repo.refreshChannels(false, listOf(movie("1"), movie("2"), movie("3")))
+        repo.refreshChannels(items = listOf(movie("1"), movie("2"), movie("3")))
         val id = "movies:1"
         val t = System.currentTimeMillis()
         val hour = 3_600_000L
@@ -198,10 +281,10 @@ class ScheduleRepoTest {
             EntryRow.of(ScheduleEntry(id, t + offset, t + offset + hour, EntryKind.PROGRAM, key))
         })
         db.states().put(StateRow(id, StateCodec.encode(ChannelState(seed = 42))))
-        repo.refreshChannels(false, listOf(movie("1"), movie("2"), movie("3")))
+        repo.refreshChannels(items = listOf(movie("1"), movie("2"), movie("3")))
         assertEquals(4, db.entries().range(id, 0, Long.MAX_VALUE).size)
 
-        repo.refreshChannels(false, listOf(movie("1"), movie("3")))
+        repo.refreshChannels(items = listOf(movie("1"), movie("3")))
         val kept = db.entries().range(id, 0, Long.MAX_VALUE).filter { it.startMs < t + 3 * hour / 2 }
         assertEquals(listOf("1"), kept.map { it.itemKey })
         assertEquals(42L, StateCodec.decode(db.states().get(id)!!.json).seed)
@@ -209,7 +292,7 @@ class ScheduleRepoTest {
 
     @Test
     fun newChannelStatesGetRandomSeedsSoResyncsDoNotReplayTheSameOrder() = runBlocking {
-        repo.refreshChannels(false, listOf(movie("1")))
+        repo.refreshChannels(items = listOf(movie("1")))
         repo.ensure("movies:1", now)
         val seed = StateCodec.decode(db.states().get("movies:1")!!.json).seed
         assertNotEquals("movies:1".hashCode().toLong(), seed)
@@ -217,22 +300,22 @@ class ScheduleRepoTest {
 
     @Test
     fun dormantAndHiddenChannelsDoNotGenerateSchedules() = runBlocking {
-        repo.refreshChannels(false, listOf(movie("1")))
+        repo.refreshChannels(items = listOf(movie("1")))
         val channel = requireNotNull(repo.channel("movies:1"))
         repo.saveChannel(ChannelRow.of(channel.def.copy(hidden = true), true, false))
         repo.ensure(channel.id, now)
         assertTrue(repo.entries(channel.id, 0, Long.MAX_VALUE).isEmpty())
         repo.saveChannel(ChannelRow.of(channel.def.copy(rules = channel.def.rules.copy(titles = setOf("missing"))), true, true))
-        repo.refreshChannels(false)
+        repo.refreshChannels()
         repo.ensure(channel.id, now)
         assertTrue(repo.entries(channel.id, 0, Long.MAX_VALUE).isEmpty())
     }
 
     @Test
     fun libraryRefreshInvalidatesCachedItems() = runBlocking {
-        repo.refreshChannels(false, listOf(movie("1")))
+        repo.refreshChannels(items = listOf(movie("1")))
         assertNotNull(repo.item("1"))
-        repo.refreshChannels(false, listOf(movie("2")))
+        repo.refreshChannels(items = listOf(movie("2")))
         assertNull(repo.item("1"))
         assertNotNull(repo.item("2"))
     }
@@ -322,8 +405,28 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun disablingAndRestoringAChannelPreservesItsSchedule() = runBlocking {
+        repo.refreshChannels(items = listOf(movie("1")))
+        val id = "movies:1"
+        repo.ensure(id, now)
+        val before = repo.entries(id, 0, Long.MAX_VALUE)
+        assertTrue(before.isNotEmpty())
+        val station = requireNotNull(repo.channel(id))
+        val revision = repo.guideRevision.value
+        repo.saveChannel(ChannelRow.of(station.def.copy(hidden = true), station.builtIn))
+        assertTrue(requireNotNull(repo.channel(id)).hidden)
+        assertTrue(repo.active().none { it.id == id })
+        assertEquals(before, repo.entries(id, 0, Long.MAX_VALUE))
+        assertTrue(repo.guideRevision.value > revision)
+        repo.saveChannel(ChannelRow.of(requireNotNull(repo.channel(id)).def.copy(hidden = false), station.builtIn))
+        assertFalse(requireNotNull(repo.channel(id)).hidden)
+        assertTrue(repo.active().any { it.id == id })
+        assertEquals(before, repo.entries(id, 0, Long.MAX_VALUE))
+    }
+
+    @Test
     fun deletingAChannelDeletesItsScheduleAndState() = runBlocking {
-        repo.refreshChannels(false, listOf(movie("1")))
+        repo.refreshChannels(items = listOf(movie("1")))
         repo.ensure("movies:1", now)
         assertNotNull(db.states().get("movies:1"))
         repo.deleteChannel("movies:1")
@@ -342,7 +445,7 @@ class ScheduleRepoTest {
         val seasonTwo = episode("s2", 2, 1)
         val library = listOf(seasonTwo, episode("earlier", 1, 1), episode("other", 1, 3, "other"),
             next, current, episode("unknown", null, 5), episode("special", 0, 1))
-        repo.refreshChannels(false, library)
+        repo.refreshChannels(items = library)
         repo.airFromStart(current, "source", queueEpisodes = true)
         val session = requireNotNull(repo.restartSession())
         assertEquals(listOf("current", "next", "s2"), session.keys)
@@ -359,7 +462,7 @@ class ScheduleRepoTest {
         val projected = reopened.restartEntries(tomorrow)
         assertEquals(tomorrow - 60_000, projected.first().startMs)
         assertEquals(session.keys, projected.map { it.itemKey })
-        reopened.refreshChannels(false, library)
+        reopened.refreshChannels(items = library)
         assertEquals(restored, reopened.restartSession())
         assertTrue(reopened.active().any { it.id == Lineup.RESTART_ID })
 
@@ -376,7 +479,7 @@ class ScheduleRepoTest {
     @Test
     fun singleProgramRestartRemovalAndSignOutNeverRestoreAnOldCheckpoint() = runBlocking {
         val item = movie("one")
-        repo.refreshChannels(false, listOf(item))
+        repo.refreshChannels(items = listOf(item))
         repo.airFromStart(item, "source", queueEpisodes = false)
         val old = requireNotNull(repo.restartSession())
         assertEquals(listOf(item.key), old.keys)
@@ -394,13 +497,13 @@ class ScheduleRepoTest {
     @Test
     fun restartStationAvoidsNumberCollisionsAndInvalidatesWhenQueuedContentIsRemoved() = runBlocking {
         val item = movie("one")
-        repo.refreshChannels(false, listOf(item))
+        repo.refreshChannels(items = listOf(item))
         db.channels().upsert(ChannelRow.of(com.rerun.core.model.ChannelDef(
             "custom", Lineup.RESTART_NUMBER, "Custom", com.rerun.core.model.ChannelKind.CUSTOM,
             com.rerun.core.model.Rules()), false, false))
         repo.airFromStart(item, "source", queueEpisodes = false)
         assertNotEquals(Lineup.RESTART_NUMBER, repo.channel(Lineup.RESTART_ID)?.number)
-        repo.refreshChannels(false, emptyList())
+        repo.refreshChannels(items = emptyList())
         assertNull(repo.restartSession())
         assertNull(repo.channel(Lineup.RESTART_ID))
     }

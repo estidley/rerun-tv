@@ -4,9 +4,13 @@ import android.app.Application
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.filter
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithTag
@@ -47,7 +51,6 @@ class SettingsScreenTest {
     private lateinit var settings: Settings
     private lateinit var sync: LibrarySync
     private lateinit var controller: TvController
-    private val music = MutableStateFlow(false)
     private val subtitleSize = MutableStateFlow("MEDIUM")
     private val subtitleColor = MutableStateFlow("WHITE")
     private val showSettings = mutableStateOf(true)
@@ -67,14 +70,6 @@ class SettingsScreenTest {
         `when`(settings.lastSyncMs()).thenReturn(0L)
         `when`(settings.serverBase()).thenReturn("http://127.0.0.1:32400")
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
-        `when`(settings.flag(Settings.MUSIC, false)).thenReturn(music)
-        doAnswer {
-            if (it.getArgument<String>(0) == Settings.MUSIC) music.value = it.getArgument(1)
-            Unit
-        }.`when`(settings).setFlag(anyString(), anyBoolean())
-        `when`(settings.isOn(anyString(), anyBoolean())).thenAnswer {
-            it.getArgument<String>(0) == Settings.MUSIC && music.value
-        }
         `when`(settings.crtLevel()).thenReturn(flowOf("OFF"))
         `when`(settings.colorTheme()).thenReturn(flowOf("STANDARD_BLUE"))
         `when`(settings.guideDensity()).thenReturn(flowOf("DEFAULT"))
@@ -85,6 +80,8 @@ class SettingsScreenTest {
         doAnswer { subtitleColor.value = it.getArgument(0); Unit }.`when`(settings).setSubtitleColor(anyString())
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
+        `when`(settings.minimumContent()).thenReturn(flowOf(com.rerun.core.catalog.MinimumContentLevel.MEDIUM))
+        `when`(settings.minimumContentValue()).thenReturn(com.rerun.core.catalog.MinimumContentLevel.MEDIUM)
         controller = spy(TvController(app, mock(TunerEngine::class.java)))
         compose.setContent {
             if (showSettings.value) SettingsScreen(controller, app) else BasicText("Guide")
@@ -95,19 +92,18 @@ class SettingsScreenTest {
     fun tearDown() = controller.dispose()
 
     @Test
-    fun musicChangesBeforeSyncCompletesAndIgnoresRepeatedClicks() = runBlocking<Unit> {
-        val finish = CompletableDeferred<Unit>()
-        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
-        `when`(sync.sync()).thenReturn(flow {
-            emit(SyncProgress("Music", 1, 2))
-            finish.await()
-        })
-        compose.onNodeWithText("Music").performScrollTo().performClick()
-        compose.onNodeWithText("■ Music").performScrollTo().assertIsDisplayed().performClick()
-        verify(settings, times(1)).setFlag(Settings.MUSIC, true)
-        compose.runOnIdle { finish.complete(Unit) }
-        compose.onNodeWithText("■ Music").performScrollTo().assertIsDisplayed()
+    fun musicFollowsIncludedLibrariesWithoutASeparateToggle() {
+        compose.onNodeWithText("Music").assertDoesNotExist()
+        compose.onNodeWithText("Included Plex music libraries sync automatically", substring = true).assertExists()
+        compose.onNodeWithText("Manage libraries").assertExists()
+    }
+
+    @Test
+    fun minimumSelectionPersistsAndRebuildsTheSavedLineup() = runBlocking<Unit> {
+        compose.onNodeWithText("High (24 hours)").performScrollTo().performClick()
+        verify(settings).setMinimumContent(com.rerun.core.catalog.MinimumContentLevel.HIGH)
+        verify(sync).refreshChannels()
+        verify(controller).reconcileChannels()
     }
 
     @Test
@@ -143,15 +139,19 @@ class SettingsScreenTest {
 
     @Test
     fun tabVisitsEveryButtonInVisualOrderAndShiftTabReversesIt() {
+        fun assertFocused(label: String) {
+            compose.onAllNodesWithText(label).filter(isFocused()).assertCountEquals(1)
+        }
         val labels = listOf(
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
-            "■ CRT Off", "CRT Subtle", "CRT Full", "■ Standard blue", "70s", "50s",
+            "■ CRT Off", "CRT Subtle", "CRT Full", "■ Default", "Lucy", "Partridge", "Headroom", "Gak",
             "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic", "Size: Medium", "Color: White",
-            "Music", "Shared scheduling pilot", "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
+            "Shared scheduling pilot", "Low (4 hours)", "■ Medium (12 hours)", "High (24 hours)",
+            "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
             "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
         )
         for ((index, label) in labels.withIndex()) {
-            compose.onNodeWithText(label).assertIsFocused()
+            assertFocused(label)
             if (index < labels.lastIndex) compose.onRoot().performKeyInput { pressKey(Key.Tab) }
         }
         for (label in labels.dropLast(1).asReversed()) {
@@ -160,7 +160,7 @@ class SettingsScreenTest {
                 pressKey(Key.Tab)
                 keyUp(Key.ShiftLeft)
             }
-            compose.onNodeWithText(label).assertIsFocused()
+            assertFocused(label)
         }
     }
 
@@ -177,17 +177,56 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun dpadMovesAcrossBothThemeRows() {
+        repeat(9) { compose.onRoot().performKeyInput { pressKey(Key.Tab) } }
+        compose.onAllNodesWithText("■ Default").filter(isFocused()).assertCountEquals(1)
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Lucy").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Lucy").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Partridge").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onAllNodesWithText("■ Default").filter(isFocused()).assertCountEquals(1)
+    }
+
+    @Test
+    fun dpadUsesVisibleThemeColumnsAtSectionBoundaries() {
+        repeat(12) { compose.onRoot().performKeyInput { pressKey(Key.Tab) } }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Compact").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onAllNodesWithText("■ Default").filter(isFocused()).assertCountEquals(1)
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Partridge").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Large").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Partridge").assertIsFocused()
+    }
+
+    @Test
     fun normalizationTogglePersistsAndRefreshesPlayback() = runBlocking<Unit> {
         compose.onNodeWithText("Normalize loudness").performScrollTo().performClick()
         verify(settings).setFlag(Settings.NORMALIZE_LOUDNESS, true)
         verify(controller).setNormalizeLoudness(true)
-    }
-
-    @Test
-    fun sharedPilotMatchesAdjacentMusicButtonHeight() {
-        val music = compose.onNodeWithText("Music").fetchSemanticsNode().boundsInRoot
-        val shared = compose.onNodeWithText("Shared scheduling pilot").fetchSemanticsNode().boundsInRoot
-        org.junit.Assert.assertEquals(music.height, shared.height, 0.1f)
     }
 
     @Test
@@ -199,39 +238,14 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun enablingMusicWithoutAnIncludedAudioLibraryExplainsHowToIncludeOne() = runBlocking<Unit> {
-        `when`(settings.selectedLibraries()).thenReturn(setOf("movies"))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
-        compose.onNodeWithText("Music").performScrollTo().performClick()
-        compose.onNodeWithText("Sync failed: Include a Plex music library in Manage libraries first.")
-            .performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Music").assertExists()
-        verify(settings, never()).setFlag(Settings.MUSIC, true)
-        verify(sync, never()).sync()
-    }
-
-    @Test
-    fun enablingMusicSyncsIncludedAudioLibraries() = runBlocking<Unit> {
-        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
-        `when`(sync.sync()).thenReturn(flowOf(com.rerun.tv.data.SyncProgress("Done", 1, 1, true)))
-        compose.onNodeWithText("Music").performScrollTo().performClick()
-        compose.onNodeWithText("■ Music").assertExists()
-        verify(settings).setFlag(Settings.MUSIC, true)
-        verify(sync).sync()
-    }
-
-    @Test
-    fun leavingSettingsDoesNotCancelMusicScanOrTurnMusicOff() = runBlocking<Unit> {
+    fun leavingSettingsDoesNotCancelLibrarySync() = runBlocking<Unit> {
         val finish = CompletableDeferred<Unit>()
-        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
         `when`(sync.sync()).thenReturn(flow {
             emit(SyncProgress("Music", 1, 2))
             finish.await()
             emit(SyncProgress("Done", 2, 2, true))
         })
-        compose.onNodeWithText("Music").performScrollTo().performClick()
+        controller.resyncLibrary()
         compose.runOnIdle {
             assertTrue(controller.lineupUpdate.value.busy)
             controller.go(Screen.Guide)
@@ -239,31 +253,23 @@ class SettingsScreenTest {
         }
         compose.waitForIdle()
         assertTrue(controller.lineupUpdate.value.busy)
-        assertTrue(music.value)
         compose.runOnIdle { finish.complete(Unit) }
         compose.waitUntil(10_000) { !controller.lineupUpdate.value.busy }
         verify(controller).reconcileChannels()
-        verify(settings, never()).setFlag(Settings.MUSIC, false)
         compose.runOnIdle { showSettings.value = true }
-        compose.onNodeWithText("■ Music").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Re-sync now").performScrollTo().assertIsDisplayed()
     }
 
     @Test
-    fun failedMusicScanRestoresTheSwitchAndShowsTheError() = runBlocking<Unit> {
-        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
+    fun failedLibrarySyncShowsTheError() = runBlocking<Unit> {
         `when`(sync.sync()).thenReturn(flow { throw IllegalStateException("Plex unavailable") })
-        compose.onNodeWithText("Music").performScrollTo().performClick()
+        controller.resyncLibrary()
         compose.onNodeWithText("Sync failed: Plex unavailable").performScrollTo().assertIsDisplayed()
-        assertEquals(false, music.value)
-        verify(settings).setFlag(Settings.MUSIC, false)
     }
 
     @Test
-    fun signingOutCancelsMusicScanBeforeClearingTheConnection() = runBlocking<Unit> {
+    fun signingOutCancelsLibrarySyncBeforeClearingTheConnection() = runBlocking<Unit> {
         var cancelled = false
-        `when`(settings.selectedLibraries()).thenReturn(setOf("audio"))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
         `when`(sync.sync()).thenReturn(flow {
             try {
                 emit(SyncProgress("Music", 1, 2))
@@ -272,13 +278,11 @@ class SettingsScreenTest {
                 cancelled = true
             }
         })
-        compose.onNodeWithText("Music").performScrollTo().performClick()
+        controller.resyncLibrary()
         compose.onNodeWithText("Sign out").performScrollTo().performClick()
         compose.waitUntil(10_000) { !controller.lineupUpdate.value.busy }
         assertTrue(cancelled)
-        val order = inOrder(settings, sync)
-        order.verify(settings).setFlag(Settings.MUSIC, false)
-        order.verify(sync).signOut()
+        verify(sync).signOut()
         assertEquals(Screen.Onboarding, controller.screen.value)
     }
 

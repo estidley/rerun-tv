@@ -49,7 +49,6 @@ data class LineupUpdate(
     val busy: Boolean = false,
     val message: String? = null,
     val error: String? = null,
-    val music: Boolean? = null,
     val lastSyncMs: Long? = null,
 )
 
@@ -106,6 +105,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
     val subtitleColor: StateFlow<String> = app.settings.subtitleColor().stateIn(scope, SharingStarted.Eagerly, "WHITE")
     val audioLanguage: StateFlow<String> = app.settings.audioLanguage().stateIn(scope, SharingStarted.Eagerly, "auto")
     val hdrMode: StateFlow<String> = app.settings.hdrMode().stateIn(scope, SharingStarted.Eagerly, "AUTO")
+    val minimumContent: StateFlow<com.rerun.core.catalog.MinimumContentLevel> = app.settings.minimumContent()
+        .stateIn(scope, SharingStarted.Eagerly, com.rerun.core.catalog.MinimumContentLevel.DEFAULT)
 
     private val _lineupUpdate = MutableStateFlow(LineupUpdate())
     val lineupUpdate = _lineupUpdate.asStateFlow()
@@ -183,21 +184,30 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
-    fun setMusicEnabled(enabled: Boolean) {
-        updateLineup("Updating music...", "Sync failed", music = enabled) {
-            if (enabled) {
-                val included = app.settings.selectedLibraries()
-                require(app.sync.libraries().any { it.type == "artist" && (included == null || it.key in included) }) {
-                    "Include a Plex music library in Manage libraries first."
-                }
-            }
-            changeLineupFlag(com.rerun.tv.data.Settings.MUSIC, enabled) {
-                if (enabled) syncLibrary() else {
-                    app.sync.refreshChannels()
-                    _lineupUpdate.value = _lineupUpdate.value.copy(message = "Music channels off")
-                }
+    fun setChannelHidden(channelId: String, hidden: Boolean) {
+        updateLineup("Updating channel...", "Couldn't update channel") {
+            val row = app.schedule.channel(channelId) ?: return@updateLineup
+            app.schedule.saveChannel(ChannelRow.of(row.def.copy(hidden = hidden), row.builtIn))
+            reconcileChannels()
+        }
+    }
+
+    fun setMinimumContent(value: com.rerun.core.catalog.MinimumContentLevel) {
+        if (minimumContent.value == value) return
+        updateLineup("Updating channel minimums...", "Couldn't update channel minimums") {
+            val previous = app.settings.minimumContentValue()
+            val cleanVersion = app.settings.lineupAppVersion()
+            try {
+                app.settings.invalidateLineupAppVersion()
+                app.settings.setMinimumContent(value)
+                app.sync.refreshChannels()
+                cleanVersion?.let { app.settings.setLineupAppVersion(it) }
+            } catch (e: Exception) {
+                withContext(NonCancellable) { app.settings.setMinimumContent(previous) }
+                throw e
             }
             reconcileChannels()
+            _lineupUpdate.value = _lineupUpdate.value.copy(message = "Minimum programming: ${value.hours} hours")
         }
     }
 
@@ -231,14 +241,14 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         }
     }
 
-    /** Navigation must not cancel a library update or roll back the user's lineup switch. */
+    /** Navigation must not cancel a library update or roll back the user's lineup changes. */
     private fun updateLineup(
-        message: String, failure: String, music: Boolean? = null,
+        message: String, failure: String,
         operation: suspend () -> Unit,
     ) {
         if (_lineupUpdate.value.busy || signingOut) return
         _lineupUpdate.value = LineupUpdate(
-            true, message, music = music, lastSyncMs = _lineupUpdate.value.lastSyncMs,
+            true, message, lastSyncMs = _lineupUpdate.value.lastSyncMs,
         )
         lineupJob = scope.launch {
             try {
@@ -248,24 +258,8 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
             } catch (e: Exception) {
                 _lineupUpdate.value = _lineupUpdate.value.copy(message = null, error = "$failure: ${e.message}")
             } finally {
-                _lineupUpdate.value = _lineupUpdate.value.copy(busy = false, music = null)
+                _lineupUpdate.value = _lineupUpdate.value.copy(busy = false)
             }
-        }
-    }
-
-    private suspend fun changeLineupFlag(key: String, enabled: Boolean, operation: suspend () -> Unit) {
-        val previous = app.settings.isOn(key)
-        val cleanVersion = app.settings.lineupAppVersion()
-        try {
-            // Persist the dirty marker first so an interrupted rebuild is repaired on the next launch.
-            app.settings.invalidateLineupAppVersion()
-            app.settings.setFlag(key, enabled)
-            operation()
-            // Only a completed rebuild restores the marker; failure or cancellation leaves it invalidated.
-            cleanVersion?.let { app.settings.setLineupAppVersion(it) }
-        } catch (e: Exception) {
-            withContext(NonCancellable) { app.settings.setFlag(key, previous) }
-            throw e
         }
     }
 
@@ -636,7 +630,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > SUMMARY_CAPACITY
     }
 
-    /** Program description from Plex, fetched on demand for the focused guide cell. Never persisted; failures are null. */
+    /** Program description for a focused guide cell or visible playback banner. Never persisted; failures are null. */
     suspend fun programSummary(item: MediaItem?): String? {
         if (item == null || item.kind == MediaKind.TRACK) return null
         val base = serverBase ?: return null

@@ -53,6 +53,27 @@ object PlexParse {
     private fun JsonObject.tmdb(): String? =
         arr("Guid").mapNotNull { it.str("id") }.firstOrNull { it.startsWith("tmdb://") }?.removePrefix("tmdb://")
 
+    private val languageNames by lazy {
+        java.util.Locale.getAvailableLocales().mapNotNull { locale ->
+            locale.isO3Language?.takeIf { it.isNotBlank() }?.let { locale.getDisplayLanguage(java.util.Locale.ENGLISH).lowercase() to it }
+        }.toMap()
+    }
+
+    private fun languageCode(value: String): String? {
+        val raw = value.trim().takeIf { it.isNotEmpty() } ?: return null
+        val normalized = raw.lowercase()
+        if (normalized in setOf("und", "zxx", "unknown", "n/a", "none", "null")) return null
+        return if (raw.length <= 3) subtitleLanguageCode(raw) else languageNames[normalized] ?: subtitleLanguageCode(raw)
+    }
+
+    private fun contentLanguage(metadata: JsonObject, media: JsonObject?): String? {
+        metadata.str("originalLanguage")?.let(::languageCode)?.let { return it }
+        metadata.str("language")?.let(::languageCode)?.let { return it }
+        val audio = media?.arr("Part")?.firstOrNull()?.arr("Stream").orEmpty()
+            .firstOrNull { it.int("streamType") == 2 }
+        return audio?.str("languageCode")?.let(::languageCode) ?: audio?.str("language")?.let(::languageCode)
+    }
+
     fun pin(text: String): Pin {
         val o = root(text) as JsonObject
         return Pin(o.long("id") ?: 0, o.str("code").orEmpty(), o.str("authToken"))
@@ -135,6 +156,7 @@ object PlexParse {
             labels = m.tags("Label"), collections = m.tags("Collection"),
             partKey = media?.arr("Part")?.firstOrNull()?.str("key"), container = media?.str("container"),
             videoCodec = media?.str("videoCodec"), audioCodec = media?.str("audioCodec"), thumb = m.str("thumb"),
+            language = contentLanguage(m, media),
         )
     }
 
@@ -143,6 +165,7 @@ object PlexParse {
             key = s.str("ratingKey").orEmpty(), title = s.str("title").orEmpty(), year = s.int("year"),
             studio = s.str("studio"), genres = s.tags("Genre"), contentRating = s.str("contentRating"),
             tmdbId = s.tmdb(), labels = s.tags("Label"), collections = s.tags("Collection"),
+            language = contentLanguage(s, null),
         )
     }
 
@@ -161,6 +184,7 @@ object PlexParse {
             partKey = media?.arr("Part")?.firstOrNull()?.str("key"), container = media?.str("container"),
             videoCodec = media?.str("videoCodec"), audioCodec = media?.str("audioCodec"),
             thumb = e.str("thumb") ?: e.str("grandparentThumb"),
+            language = contentLanguage(e, media) ?: show?.language,
         )
     }
 

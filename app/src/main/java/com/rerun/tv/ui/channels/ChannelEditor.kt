@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import java.util.UUID
 @Composable
 fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = RerunApp.instance) {
     val scope = rememberCoroutineScope()
+    val minimumLevel by controller.minimumContent.collectAsState()
     var existing by remember { mutableStateOf<ChannelRow?>(null) }
     var draft by remember { mutableStateOf<ChannelDef?>(null) }
     var facets by remember { mutableStateOf<Facets?>(null) }
@@ -86,10 +88,10 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         numberText = d.number.toString()
         runCatching { first.requestFocus() }
     }
-    LaunchedEffect(draft?.rules, draft?.blocks, library) {
+    LaunchedEffect(draft?.rules, draft?.blocks, library, minimumLevel) {
         val d = draft ?: return@LaunchedEffect
         val contents = library ?: return@LaunchedEffect
-        poolMs = withContext(Dispatchers.Default) { Resolver.pool(d, contents).sumOf { it.durationMs } }
+        poolMs = withContext(Dispatchers.Default) { Resolver.pool(d, contents, minimumLevel).sumOf { it.durationMs } }
     }
 
     val d = draft
@@ -100,11 +102,11 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             return@TvFrame
         }
         fun update(r: Rules) { draft = d.copy(rules = r) }
-        val minimum = Lineup.minimumContentMs(d) / 3_600_000L
+        val minimum = Lineup.minimumContentMs(d, minimumLevel) / 3_600_000L
         val poolHours = poolMs?.let { ms ->
             "%.1f hours of content".format(ms / 3_600_000.0) +
                 if (ms <= 0) "  (needs playable content)"
-                else if (ms < Lineup.minimumContentMs(d)) "  (needs $minimum to go on the air)" else ""
+                else if (ms < Lineup.minimumContentMs(d, minimumLevel)) "  (needs $minimum to go on the air)" else ""
         } ?: "Checking content..."
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
@@ -115,6 +117,15 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                         numberText.toIntOrNull()?.let { draft = d.copy(number = it) }
                     }
                     BasicText(poolHours, style = Retro.Caption.copy(color = Retro.Cyan))
+                }
+            }
+            item {
+                Section("What plays") {
+                    BasicText(com.rerun.core.catalog.ChannelDescriptions.of(d), style = Retro.Body)
+                    BasicText(
+                        "Network, genre, show, collection, label and metadata-ID matches are alternatives; other filters narrow the pool.",
+                        style = Retro.Caption,
+                    )
                 }
             }
             item {
@@ -135,7 +146,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                         }
                         TvButton(label, { draft = d.copy(order = o) }, selected = d.order == o)
                     }
-                    chipRow(listOf("Kids-safe", "Hidden")) { label ->
+                    chipRow(listOf("Kids-safe", "Disabled")) { label ->
                         if (label == "Kids-safe") TvButton(label, { draft = d.copy(kidsSafe = !d.kidsSafe) }, selected = d.kidsSafe)
                         else TvButton(label, { draft = d.copy(hidden = !d.hidden) }, selected = d.hidden)
                     }
@@ -144,7 +155,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             item {
                 Section("Minimum programming") {
                     BasicText(
-                        "Default: ${Lineup.minimumContentMs(d.copy(minimumContentHours = null)) / 3_600_000L} hours. " +
+                        "Default: ${Lineup.minimumContentMs(d.copy(minimumContentHours = null), minimumLevel) / 3_600_000L} hours. " +
                             "An override allows a smaller pool to repeat more often; an empty pool stays off air.",
                         style = Retro.Caption,
                     )
@@ -161,8 +172,9 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
             item {
                 Section("Networks") {
                     chipRow(f.networks) { id ->
-                        val name = Catalog.networks.firstOrNull { it.id == id }?.name ?: id
-                        TvButton(name, { update(d.rules.copy(networks = d.rules.networks.toggle(id))) }, selected = id in d.rules.networks)
+                        val network = Catalog.networks.firstOrNull { it.id == id }
+                        TvButton(network?.name ?: id, { update(d.rules.copy(networks = d.rules.networks.toggle(id))) },
+                            selected = id in d.rules.networks, sub = network?.realName)
                     }
                 }
             }

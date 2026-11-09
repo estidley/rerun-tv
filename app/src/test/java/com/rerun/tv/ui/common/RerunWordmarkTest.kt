@@ -35,7 +35,7 @@ class RerunWordmarkTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun beretSpansREAndOverlapsTheTopOfTheLettersAtBothSizes() {
+    fun beretSpansREAndOverlapsTheFrontOfTheLettersAtBothSizes() {
         val fontSize = mutableStateOf(32)
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(1f)) {
@@ -56,6 +56,7 @@ class RerunWordmarkTest {
             val plain = compose.onNodeWithTag("plain").captureToImage().toPixelMap()
             var visibleInk = 0
             var plainInk = 0
+            var beretOverInk = 0
             var brimBottom = -1
             var hatRight = -1
             var lettersTop = pixels.height
@@ -65,6 +66,8 @@ class RerunWordmarkTest {
                         0xFFD0122D.toInt(), 0xFF7A0C1C.toInt() -> {
                             brimBottom = maxOf(brimBottom, y)
                             hatRight = maxOf(hatRight, x)
+                            if (y < plain.height && x < plain.width &&
+                                plain[x, y].toArgb() == 0xFF39FF14.toInt()) beretOverInk++
                         }
                         0xFF39FF14.toInt() -> {
                             lettersTop = minOf(lettersTop, y)
@@ -79,9 +82,14 @@ class RerunWordmarkTest {
             val output = java.io.File("build/reports/wordmark-$size.png")
             output.parentFile.mkdirs()
             output.outputStream().use { image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-            assertTrue("The hat must not hide the lettering at $size sp ($visibleInk vs $plainInk)", visibleInk >= plainInk * 0.95f)
+            assertTrue("The beret must be in front of the lettering at $size sp", beretOverInk > 0)
+            assertTrue(
+                "Only the beret should obscure lettering at $size sp ($visibleInk visible, $beretOverInk covered, $plainInk plain)",
+                visibleInk + beretOverInk >= plainInk * 0.95f,
+            )
             assertTrue("Brim should sit on the letter tops at $size sp", brimBottom >= lettersTop - 1)
-            assertTrue("Brim should not cover the letter faces at $size sp", brimBottom <= lettersTop + size * 0.08f)
+            assertTrue("Brim should visibly overlap the letters at $size sp", brimBottom >= lettersTop + size * 0.04f)
+            assertTrue("Brim should not cover the letter faces at $size sp", brimBottom <= lettersTop + size * 0.16f)
             assertTrue("Beret should cover RE at $size sp", hatRight >= pixels.width * 0.35f)
             assertTrue("Beret should stay over RE at $size sp", hatRight < pixels.width * 0.5f)
         }

@@ -95,6 +95,7 @@ class GuideScreenTest {
         `when`(settings.subtitleColor()).thenReturn(flowOf("WHITE"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
+        `when`(settings.minimumContent()).thenReturn(flowOf(com.rerun.core.catalog.MinimumContentLevel.MEDIUM))
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         `when`(settings.isOn(anyString(), anyBoolean())).thenReturn(false)
         schedule = mock(ScheduleRepo::class.java)
@@ -661,13 +662,12 @@ class GuideScreenTest {
         `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
             "music:jazz" to listOf(ScheduleEntry("music:jazz", start, start + 4 * 3_600_000L, EntryKind.PROGRAM, "track")),
         ))
-        `when`(sync.libraries()).thenReturn(listOf(com.rerun.core.plex.Section("audio", "artist", "Music")))
-        `when`(sync.sync()).thenReturn(flow {
+        `when`(sync.sync(setOf("audio"))).thenReturn(flow {
             emit(SyncProgress("Music", 1, 2))
             finish.await()
             emit(SyncProgress("Done", 2, 2, true))
         })
-        controller.setMusicEnabled(true)
+        controller.saveLibraries(setOf("audio"))
         compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.onNodeWithText("Updating Guide").assertExists()
         compose.onNodeWithText("Music 1/2").assertExists()

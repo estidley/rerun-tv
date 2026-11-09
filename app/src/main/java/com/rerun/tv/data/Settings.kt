@@ -130,6 +130,13 @@ class Settings(context: Context, private val dao: SettingDao) {
         dao.put(SettingRow(HDR_MODE, v))
     }
 
+    fun minimumContent(): Flow<com.rerun.core.catalog.MinimumContentLevel> =
+        dao.observe(MINIMUM_CONTENT).map { com.rerun.core.catalog.MinimumContentLevel.from(it) }
+    suspend fun minimumContentValue(): com.rerun.core.catalog.MinimumContentLevel =
+        com.rerun.core.catalog.MinimumContentLevel.from(dao.get(MINIMUM_CONTENT))
+    suspend fun setMinimumContent(value: com.rerun.core.catalog.MinimumContentLevel) =
+        dao.put(SettingRow(MINIMUM_CONTENT, value.name))
+
     fun flag(key: String, default: Boolean = true): Flow<Boolean> = dao.observe(key).map { it?.toBooleanStrictOrNull() ?: default }
     suspend fun setFlag(key: String, on: Boolean) = dao.put(SettingRow(key, on.toString()))
 
@@ -206,7 +213,7 @@ class Settings(context: Context, private val dao: SettingDao) {
         const val SHARED_PREFIX = "shared_pilot:"
         const val SHARED_CODE = "${SHARED_PREFIX}code"
         const val SHARED_EFFECTIVE = "${SHARED_PREFIX}effective"
-        const val MUSIC = "opt_music"
+        const val MINIMUM_CONTENT = "minimum_content"
         const val SUBTITLES = "opt_subtitles"
         const val DEVICE_PREFS = "rerun_device"
         const val SECURE_PREFS = "rerun_secure"

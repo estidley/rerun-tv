@@ -46,18 +46,19 @@ data class ItemRow(
     val videoCodec: String?,
     val audioCodec: String?,
     val thumb: String?,
+    val language: String?,
 ) {
     fun toItem() = MediaItem(
         key, MediaKind.valueOf(kind), title, year, durationMs, SetCodec.decode(genres), network, studio,
         contentRating, showKey, showTitle, season, episode, tmdbId, SetCodec.decode(labels),
-        SetCodec.decode(collections), partKey, container, videoCodec, audioCodec, thumb,
+        SetCodec.decode(collections), partKey, container, videoCodec, audioCodec, thumb, language,
     )
 
     companion object {
         fun of(i: MediaItem) = ItemRow(
             i.key, i.kind.name, i.title, i.year, i.durationMs, SetCodec.encode(i.genres), i.network, i.studio,
             i.contentRating, i.showKey, i.showTitle, i.season, i.episode, i.tmdbId, SetCodec.encode(i.labels),
-            SetCodec.encode(i.collections), i.partKey, i.container, i.videoCodec, i.audioCodec, i.thumb,
+            SetCodec.encode(i.collections), i.partKey, i.container, i.videoCodec, i.audioCodec, i.thumb, i.language,
         )
     }
 }
@@ -325,7 +326,7 @@ interface SettingDao {
 
 @Database(
     entities = [ItemRow::class, AdRow::class, ChannelRow::class, EntryRow::class, StateRow::class, SettingRow::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class RerunDb : RoomDatabase() {
@@ -375,9 +376,15 @@ abstract class RerunDb : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN language TEXT")
+            }
+        }
+
         fun open(context: Context): RerunDb =
             Room.databaseBuilder(context, RerunDb::class.java, "rerun.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
     }
 }

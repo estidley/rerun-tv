@@ -19,6 +19,23 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.time.ZoneId
 
+internal fun removeLanguageColumn(db: SQLiteDatabase) {
+    db.execSQL("ALTER TABLE items RENAME TO items_with_language")
+    db.execSQL(
+        "CREATE TABLE items (`key` TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, title TEXT NOT NULL, " +
+            "year INTEGER, durationMs INTEGER NOT NULL, genres TEXT NOT NULL, network TEXT, studio TEXT, " +
+            "contentRating TEXT, showKey TEXT, showTitle TEXT, season INTEGER, episode INTEGER, tmdbId TEXT, " +
+            "labels TEXT NOT NULL, collections TEXT NOT NULL, partKey TEXT, container TEXT, videoCodec TEXT, " +
+            "audioCodec TEXT, thumb TEXT)",
+    )
+    db.execSQL(
+        "INSERT INTO items SELECT `key`, kind, title, year, durationMs, genres, network, studio, contentRating, " +
+            "showKey, showTitle, season, episode, tmdbId, labels, collections, partKey, container, videoCodec, " +
+            "audioCodec, thumb FROM items_with_language",
+    )
+    db.execSQL("DROP TABLE items_with_language")
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [28])
 class DbMigrationTest {
@@ -37,7 +54,7 @@ class DbMigrationTest {
         )
         val state = StateRow(def.id, """{"seed":42}""")
         val preservedSettings = mapOf(
-            Settings.MUSIC to "true",
+            "opt_music" to "true",
             Settings.COLOR_THEME to "SEVENTIES",
             Settings.LAST_SYNC to "123456",
             Settings.SELECTED_LIBRARIES to """["tv","movies"]""",
@@ -64,9 +81,12 @@ class DbMigrationTest {
             }
             SQLiteDatabase.openDatabase(
                 context.getDatabasePath(name).absolutePath, null, SQLiteDatabase.OPEN_READWRITE,
-            ).use { it.version = 2 }
+            ).use {
+                removeLanguageColumn(it)
+                it.version = 2
+            }
             val upgraded = Room.databaseBuilder(context, RerunDb::class.java, name)
-                .addMigrations(RerunDb.MIGRATION_2_3).allowMainThreadQueries().build()
+                .addMigrations(RerunDb.MIGRATION_2_3, RerunDb.MIGRATION_3_4).allowMainThreadQueries().build()
             try {
                 val expected = def.copy(name = "My Movies")
                 assertEquals(ChannelRow.of(expected, false, false, 3_600_000), upgraded.channels().byId(def.id))
@@ -85,6 +105,39 @@ class DbMigrationTest {
                 repo.ensure("${def.id}:w", 1_000)
                 assertTrue(upgraded.entries().range("${def.id}:w", 0, Long.MAX_VALUE).isEmpty())
                 assertEquals(ChannelCodec.encode(expected), upgraded.channels().byId(def.id)?.defJson)
+            } finally {
+                upgraded.close()
+            }
+        } finally {
+            context.deleteDatabase(name)
+        }
+    }
+
+    @Test
+    @Config(sdk = [35])
+    fun versionThreeUpgradeAddsLanguageWithoutReplacingItems() = runBlocking {
+        val context = RuntimeEnvironment.getApplication()
+        val name = "language-migration-test.db"
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"movie","title":"Movie","duration":3600000}]}}""",
+        ).single()
+        try {
+            val original = Room.databaseBuilder(context, RerunDb::class.java, name).allowMainThreadQueries().build()
+            try {
+                original.items().insertAll(listOf(ItemRow.of(item)))
+            } finally {
+                original.close()
+            }
+            SQLiteDatabase.openDatabase(context.getDatabasePath(name).absolutePath, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+                removeLanguageColumn(db)
+                db.version = 3
+            }
+            val upgraded = Room.databaseBuilder(context, RerunDb::class.java, name)
+                .addMigrations(RerunDb.MIGRATION_3_4).allowMainThreadQueries().build()
+            try {
+                val saved = upgraded.items().all().single().toItem()
+                assertEquals(item.copy(language = null), saved)
+                assertNull(saved.language)
             } finally {
                 upgraded.close()
             }

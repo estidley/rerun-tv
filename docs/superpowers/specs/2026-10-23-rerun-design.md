@@ -6,7 +6,7 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
-Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 102 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music/custom channels use explicit fallback art.
+Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 111 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music/custom channels use explicit fallback art.
 
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
@@ -39,7 +39,7 @@ Room stores media, channels, schedules, scheduler state, ad clips and settings.
 Explicit migrations preserve prior data. Credentials are kept out of play URLs and redacted from
 diagnostics; HTTP token attachment follows the trusted Plex host policy.
 
-Toonuki (channel 105, stable ID `toonami`) uses only the Anime genre for episodes and movies,
+Toonuki (channel 164, stable ID `toonami`) uses only the Anime genre for episodes and movies,
 without network/title or rating restrictions. Animation alone does not match. Stock legacy rules
 upgrade on lineup refresh while preserving channel names/numbers/order and explicitly edited pools.
 Rule upgrades and stale non-anime Toonuki queues discard future entries after the current airing;
@@ -48,7 +48,13 @@ ordinary refreshes preserve valid locked schedules.
 ## Network reference lists
 
 Built-in network channels use parody display names while retaining real network aliases and stable IDs.
-Refresh replaces retired built-in names and preserves names edited by the user.
+The expanded dial adds The Beeb/BBC America (109), The Atlas/National Geographic (142),
+The Wild/Animal Planet (143), The Hearth/Hallmark (133), and The Game Room/Game Show Network (131).
+Tokyo Tower (112) matches explicit Tokyo Broadcasting System/TBS Japan metadata; raw TBS stays on Ted's TV,
+which also accepts Turner Broadcasting System. Network editor choices show parody and real names, and aliases
+must remain unique after case/whitespace normalization. The Film Vault (363) is a theme station for pre-1990
+movies rather than a network claim; High Noon remains the existing Western station. Refresh replaces retired
+built-in names and preserves names edited by the user.
 The optional `:tmdb:run` build-time tool downloads network/company references using `TMDB_TOKEN`.
 It writes gitignored `local/tmdb/rerun/tmdb-networks.json`; subsequent builds bundle that resource.
 The app receives the lists, never the token, and makes no TMDB requests.
@@ -56,6 +62,38 @@ Episodes match their show TMDB ID; movies match the listed production companies,
 Matching combines reference memberships with the network Plex reports, then falls back to owner-family
 routing only if neither matches. Missing or malformed bundled lists retain Plex-based routing. Invalid, missing or inconsistent TMDB discovery pages abort refresh before replacing the previous lists. Tests disable local lists.
 Live refresh coverage and installed-TV behavior still need validation.
+
+## Language and unmatched stations
+
+The Learning Lounge/TLC (144) and The Salon/Bravo (132) extend the network dial without changing genre rules.
+Plex original-language/primary-audio fields are normalized, with show-level inheritance for episodes. Missing markers
+such as `und`, `zxx`, `Unknown` and `N/A` remain null so later audio/show fallbacks can supply a real language. Language
+stations are generated from a single duration aggregation, use stable `language:<code>` IDs from 4000, and follow
+the selected minimum. Mundo, Seoul, Tokyo, Bombay and Berlin cover Spanish, Korean, Japanese, Hindi and German;
+other known languages use localized station names.
+
+The Rest (1999, before genre music) uses `unmatchedOnly` to exclude video covered by stock channels and eligible generated pools.
+Optional genre, movie-multiplex, decade and language templates exclude their pools only after meeting their applicable minimum;
+below-threshold video remains available to The Rest. A refresh drops future bookings no longer in the resolved pool
+while keeping the currently airing entry and unchanged future schedules. Language and catchall channel JSON fields default to empty/false for old data.
+Room migration 3→4 adds nullable item language without replacing saved content. Catchall coverage resolves network IDs once per eligible item;
+performance coverage includes repeated 5,000-item international plans and unedited decade-total reuse, while edited decade pools remain user-owned.
+
+## Broadcast additions, grouping and criteria
+
+Alphabet/ABC (101), The Eye/CBS (102), Peacock Place/NBC (103), The Den/FOX (104), True North/CBC (105),
+Auntie/BBC (107), The One/BBC One (108), The Dish/Sky (110), and Four Sure/Channel 4 (111) join the existing
+PBJ and international stations. Exact Plex aliases accept all movie/episode genres; BBC Two/Three/Four and
+children's BBC services use Auntie, BBC One stays separate, and Sky/Channel 4 include their named channel families.
+Their snapshot entries begin with empty reference lists, so Plex aliases apply until a validated TMDB refresh.
+No token or show list is invented for these additions.
+
+Preferred stock numbers group broadcast (101–112), entertainment (120–134), factual/lifestyle (140–146), and
+kids/animation (160–169). Only untouched legacy stock definitions move; stable IDs and schedules remain.
+User renames, rule edits, manually assigned numbers and custom stations are preserved, with collision allocation
+around fixed rows. `ChannelDescriptions` derives in-app criteria text from the actual rules. New broadcaster and
+The Rest artwork is standalone vector art. Arbitrary Plex music genres generate name-specific icons/wordmarks
+from stable IDs and current names; the existing icon library is not regenerated.
 
 ## Comic franchise channels
 
@@ -78,17 +116,23 @@ The full icon set is bundled in `app/src/main/res/drawable-nodpi`; only physical
 
 This section describes shipped behavior. An approved replacement (local quarter-hour grid, saved ad breaks, gap fillers, episode runs, time-zone setting) is specified in [scheduling v2](2026-10-26-scheduling-v2-design.md) and planned in [the v2 plan](../plans/2026-10-26-scheduling-v2.md).
 
-- Ordinary active pools require at least four hours of content. Channels can be built-in, generated, custom, or music.
-- Additional stock decade stations require 24 hours of TV episodes or 12 hours of music tracks
-  in the decade, alongside existing genre stations. Music decades honor the Music switch.
+- Ordinary active pools use the persisted Low/Medium/High minimum-content preset: 4, 12 or 24
+  hours respectively, with Medium as the default. Channels can be built-in, generated, custom, or music.
+  Changing the preset rebuilds eligibility from the saved library without a Plex scan. Special station
+  thresholds remain when higher than the selected ordinary minimum.
+- Additional stock decade stations require at least 24 hours of TV episodes or 12 hours of music tracks
+  in the decade, alongside existing genre stations. Music decades follow music-library selection.
   Decades span 1900s-2090s; unknown years and items under one minute do not qualify.
   Episode/track year uses the existing Plex show/album fallback. Movies do not count toward TV decades.
   IDs and preferred numbers are stable (`decade:tv:<year>`, 1100+; `decade:music:<year>`, 3000+).
   Ordinary collision resolution, editing and schedule preservation apply.
-  Unedited stations below their threshold are removed; edited definitions retain the existing
+  Unedited stations below their threshold are removed; edited definitions retain the selected
   default station minimum, or an explicit persisted `minimumContentHours` override (0–168).
-  Renames/rule edits do not implicitly lower the minimum. Empty pools stay dormant and Music
-  remains capability/settings gated. Save, refresh and editor previews share the same minimum policy;
+  Renames/rule edits do not implicitly lower the minimum. Empty pools stay dormant and music
+  remains gated by tracks from included Plex music libraries, without a separate enable toggle.
+  Clearly spoken-word/non-music genres do not create stock music or music-decade stations;
+  explicitly edited stations remain preserved. Holding OK in Channels disables/restores an
+  ordinary station without deleting its schedule. Save, refresh and editor previews share the same minimum policy;
   nullable overrides live in the existing channel JSON without a Room schema change.
 - The [complete cable dial](../../channel-lineup.md) documents all predefined names and rules.
   Laugh Track is the Comedy-genre station; the former TBS station is Ted's TV, still matching
@@ -106,7 +150,7 @@ This section describes shipped behavior. An approved replacement (local quarter-
   break position, and never extend the program deadline. Short/unfillable remainders show Up Next.
 - A nonempty enabled ad catalog also creates **Buy Me Maybe**, a generated commercials-only station.
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
-  It shuffles clips back-to-back without the ordinary minimum-duration/four-hour threshold, tail
+  It shuffles clips back-to-back without the ordinary activation minimum, tail
   skipping or padding. Items stay in the ad table, not the main library. Catalog
   changes invalidate only its schedule; disabling ads or emptying the catalog removes it.
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
@@ -140,6 +184,7 @@ The ordinary scheduler remains the default. Physical two-device/TV acceptance re
 
 Startup starts in loading state for an existing sign-in, awaits the automatic saved-lineup refresh,
 then queries active channels. Only a successful settled empty result displays no-channel guidance.
+The RERUN wordmark draws its red beret in front of the RE letter tops, with bounded overlap that leaves the letter faces readable.
 The loading card uses the existing beret wordmark and an indeterminate animated spinner.
 Failures and confirmed empty states retain the wordmark but not the spinner. Missing
 connection/initial-sync configuration returns to onboarding.
@@ -202,7 +247,8 @@ Rollover callbacks relocate playback against current wall time, including after 
 
 Plex HTTP calls are asynchronous and coroutine cancellation cancels their sockets, including stalled
 response bodies. Focused program descriptions have a five-second HTTP deadline and one timeout
-retry. An empty lineup during startup or sync shows progress until loading finishes.
+retry. Visible playback banners reuse the same bounded cache and show at most two lines; hidden banners
+make no description request. An empty lineup during startup or sync shows progress until loading finishes.
 
 ## Performance contracts and validation limits
 

@@ -159,6 +159,58 @@ class PlexParseTest {
     }
 
     @Test
+    fun languageFieldsNormalizeAndEpisodesInheritShowLanguage() {
+        val original = PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"1","originalLanguage":"es"}]}}""",
+        ).single()
+        assertEquals("spa", original.language)
+        val audio = PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"2","Media":[{"Part":[{"Stream":[
+              {"streamType":2,"languageCode":"ko"}
+            ]}]}]}]}}""",
+        ).single()
+        assertEquals("kor", audio.language)
+        val shows = PlexParse.shows(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"s","title":"Show","language":"Japanese"}]}}""",
+        ).associateBy { it.key }
+        val episodes = PlexParse.episodes(
+            """{"MediaContainer":{"Metadata":[
+              {"ratingKey":"e1","grandparentRatingKey":"s"},
+              {"ratingKey":"e2","grandparentRatingKey":"s","language":"de"}
+            ]}}""", shows,
+        )
+        assertEquals(listOf("jpn", "deu"), episodes.map { it.language })
+        assertNull(PlexParse.movies("""{"MediaContainer":{"Metadata":[{}]}}""").single().language)
+    }
+
+    @Test
+    fun missingLanguageMarkersFallBackToAudioOrShowLanguage() {
+        for (placeholder in listOf("und", "Unknown", " UNKNOWN ", "N/A", "zxx")) {
+            val movie = PlexParse.movies(
+                """{"MediaContainer":{"Metadata":[{"ratingKey":"1","originalLanguage":"$placeholder",
+                  "language":"$placeholder","Media":[{"Part":[{"Stream":[
+                  {"streamType":2,"languageCode":"es"}
+                ]}]}]}]}}""",
+            ).single()
+            assertEquals("spa", movie.language, placeholder)
+        }
+        val shows = PlexParse.shows(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"s","title":"Show","language":"Japanese"}]}}""",
+        ).associateBy { it.key }
+        val episode = PlexParse.episodes(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"e","grandparentRatingKey":"s",
+              "originalLanguage":"und","Media":[{"Part":[{"Stream":[
+              {"streamType":2,"languageCode":"Unknown","language":"Unknown"}
+            ]}]}]}]}}""", shows,
+        ).single()
+        assertEquals("jpn", episode.language)
+        val unknown = PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"2","originalLanguage":"und","language":"Unknown"}]}}""",
+        ).single()
+        assertNull(unknown.language)
+    }
+
+    @Test
     fun totalSizeReadsContainer() {
         assertEquals(412, PlexParse.totalSize(fixture("movies.json")))
         assertEquals(3, PlexParse.totalSize(fixture("sections.json")))

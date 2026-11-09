@@ -14,7 +14,7 @@ import kotlinx.coroutines.sync.withLock
 
 data class SyncProgress(val stage: String, val done: Int, val total: Int, val finished: Boolean = false)
 
-/** Pulls movies, episodes, and (when music channels are on) tracks into Room, then rebuilds the dial. */
+/** Pulls movies, episodes, and tracks from included Plex libraries into Room, then rebuilds the dial. */
 class LibrarySync(
     private val api: PlexApi,
     private val settings: Settings,
@@ -93,28 +93,25 @@ class LibrarySync(
                     emit(SyncProgress("Episodes: ${s.title}", done, total))
                 }
             }
-            if (settings.isOn(Settings.MUSIC)) {
-                for (s in sections.filter { it.type == "artist" }) {
-                    val artists = HashMap<String, com.rerun.core.plex.MusicMetadata>()
-                    val albums = HashMap<String, com.rerun.core.plex.MusicMetadata>()
-                    pages(base, "/library/sections/${s.key}/all?type=8", token) { json, done, total ->
-                        PlexParse.musicMetadata(json).forEach { artists[it.key] = it }
-                        emit(SyncProgress("Artists: ${s.title}", done, total))
-                    }
-                    pages(base, "/library/sections/${s.key}/all?type=9", token) { json, done, total ->
-                        PlexParse.musicMetadata(json).forEach { albums[it.key] = it }
-                        emit(SyncProgress("Albums: ${s.title}", done, total))
-                    }
-                    pages(base, "/library/sections/${s.key}/all?type=10", token) { json, done, total ->
-                        items += PlexParse.tracks(json, artists, albums)
-                        emit(SyncProgress("Music: ${s.title}", done, total))
-                    }
+            for (s in sections.filter { it.type == "artist" }) {
+                val artists = HashMap<String, com.rerun.core.plex.MusicMetadata>()
+                val albums = HashMap<String, com.rerun.core.plex.MusicMetadata>()
+                pages(base, "/library/sections/${s.key}/all?type=8", token) { json, done, total ->
+                    PlexParse.musicMetadata(json).forEach { artists[it.key] = it }
+                    emit(SyncProgress("Artists: ${s.title}", done, total))
+                }
+                pages(base, "/library/sections/${s.key}/all?type=9", token) { json, done, total ->
+                    PlexParse.musicMetadata(json).forEach { albums[it.key] = it }
+                    emit(SyncProgress("Albums: ${s.title}", done, total))
+                }
+                pages(base, "/library/sections/${s.key}/all?type=10", token) { json, done, total ->
+                    items += PlexParse.tracks(json, artists, albums)
+                    emit(SyncProgress("Music: ${s.title}", done, total))
                 }
             }
 
             emit(SyncProgress("Saving", items.size, items.size))
             schedule.refreshChannels(
-                music = settings.isOn(Settings.MUSIC),
                 items = items,
                 selectedLibraries = selectedLibraries,
             )
@@ -139,12 +136,10 @@ class LibrarySync(
         }
     }
 
-    /** Rebuilds the dial from the library and the lineup switches. */
+    /** Rebuilds the dial from the saved library and lineup settings. */
     suspend fun refreshChannels() = mutex.withLock {
         if (settings.serverBase() == null) return@withLock
-        schedule.refreshChannels(
-            music = settings.isOn(Settings.MUSIC),
-        )
+        schedule.refreshChannels()
     }
 
     /**

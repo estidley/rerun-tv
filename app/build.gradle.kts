@@ -32,8 +32,8 @@ android {
         applicationId = "com.rerun.tv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.3"
+        versionCode = 6
+        versionName = "1.0.4"
     }
 
     signingConfigs {
@@ -99,6 +99,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(libs.mockito)
+    testImplementation(libs.guava)
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
 }

@@ -3,7 +3,7 @@ package com.rerun.tv.ui.common
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +56,7 @@ fun TvButton(
     selectedIndicator: String? = if (selected) "■" else null,
     textStyle: TextStyle = Retro.Body,
     leading: (@Composable () -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
 ) {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
@@ -69,7 +70,8 @@ fun TvButton(
             .scale(if (focused) 1.04f else 1f)
             .background(bg)
             .border(2.dp, if (focused) Retro.Yellow else if (selected) Retro.Cyan else Retro.Border.copy(alpha = 0.4f))
-            .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
+            .combinedClickable(interactionSource = source, indication = null, enabled = enabled,
+                onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 20.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -109,7 +111,7 @@ fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
     }
     val hatWidth = text.getHorizontalPosition(2, true) * 1.08f
     val hatHeight = hatWidth * 0.34f
-    val overlap = fontPx * 0.085f
+    val overlap = fontPx * 0.14f
     // Anchor to the ink's cap height, not the font's invisible top padding.
     val capTop = text.firstBaseline + capBounds.top
     val textY = ceil(maxOf(0f, hatHeight - capTop - overlap))
@@ -120,6 +122,7 @@ fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
             with(density) { (text.size.height + textY).toDp() },
         ).semantics { contentDescription = "RERUN" },
     ) {
+        drawText(text, topLeft = Offset(0f, textY))
         val w = hatWidth
         val h = hatHeight
         val crown = Path().apply {
@@ -144,7 +147,6 @@ fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
             Offset(w * 0.53f, hatY + h * 0.23f), Offset(w * 0.5f, hatY + h * 0.07f),
             strokeWidth = w * 0.045f, cap = androidx.compose.ui.graphics.StrokeCap.Round,
         )
-        drawText(text, topLeft = Offset(0f, textY))
     }
 }
 

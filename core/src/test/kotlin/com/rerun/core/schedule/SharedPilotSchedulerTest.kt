@@ -19,7 +19,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class SharedPilotSchedulerTest {
-    private val def = Catalog.builtInChannels().first { it.id == "disney" }
+    private val def = Catalog.builtInChannels().first { it.id == "disney" }.copy(number = 101)
     private val recipe = SharedScheduleCode(371, 0)
     private val window = 3 * HOUR
 

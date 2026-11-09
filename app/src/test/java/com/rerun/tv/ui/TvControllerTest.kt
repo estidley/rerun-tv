@@ -66,6 +66,8 @@ class TvControllerTest {
         `when`(settings.subtitleColor()).thenReturn(flowOf("WHITE"))
         `when`(settings.audioLanguage()).thenReturn(flowOf("auto"))
         `when`(settings.hdrMode()).thenReturn(flowOf("AUTO"))
+        `when`(settings.minimumContent()).thenReturn(flowOf(com.rerun.core.catalog.MinimumContentLevel.MEDIUM))
+        `when`(settings.minimumContentValue()).thenReturn(com.rerun.core.catalog.MinimumContentLevel.MEDIUM)
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         controller = TvController(app, engine)
     }
@@ -435,12 +437,11 @@ class TvControllerTest {
     }
 
     @Test
-    fun musicToggleRestoresTheCleanVersionMarkerOnlyAfterSuccess() = runBlocking<Unit> {
+    fun minimumChangeRestoresTheCleanVersionMarkerOnlyAfterSuccess() = runBlocking<Unit> {
         `when`(settings.isSignedIn).thenReturn(true)
         `when`(settings.lineupAppVersion()).thenReturn("3:100")
-        `when`(settings.isOn(Settings.MUSIC, false)).thenReturn(false)
         `when`(repo.active()).thenReturn(listOf(channel("east")))
-        controller.setMusicEnabled(false)
+        controller.setMinimumContent(com.rerun.core.catalog.MinimumContentLevel.HIGH)
         repeat(50) {
             shadowOf(Looper.getMainLooper()).idle()
             if (!controller.lineupUpdate.value.busy) return@repeat
@@ -448,6 +449,7 @@ class TvControllerTest {
         }
         assertFalse(controller.lineupUpdate.value.busy)
         verify(settings).invalidateLineupAppVersion()
+        verify(settings).setMinimumContent(com.rerun.core.catalog.MinimumContentLevel.HIGH)
         verify(settings).setLineupAppVersion("3:100")
     }
 
@@ -519,6 +521,29 @@ class TvControllerTest {
         rows.value = rows.value.filterNot { it.id == "two" }
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(listOf("one", "three"), controller.channels.value.map { it.id })
+    }
+
+    @Test
+    fun signingOutCancelsAndJoinsQuickChannelChanges() = runBlocking<Unit> {
+        var cancelled = false
+        `when`(repo.channel("east")).thenReturn(channel("east"))
+        doAnswer {
+            @Suppress("UNCHECKED_CAST")
+            val continuation = it.rawArguments.last() as Continuation<Unit>
+            (suspend {
+                try {
+                    kotlinx.coroutines.awaitCancellation()
+                } finally {
+                    cancelled = true
+                }
+            }).startCoroutineUninterceptedOrReturn(continuation)
+        }.`when`(repo).saveChannel(ChannelRow.of(channel("east").def.copy(hidden = true), false))
+        controller.setChannelHidden("east", true)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertTrue(controller.lineupUpdate.value.busy)
+        controller.signOut()
+        assertTrue(cancelled)
+        verify(sync).signOut()
     }
 
     @Test
