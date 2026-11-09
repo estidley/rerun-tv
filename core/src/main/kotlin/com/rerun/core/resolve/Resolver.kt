@@ -61,7 +61,8 @@ object Resolver {
     private fun unmatchedPool(
         def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel,
     ): List<MediaItem> {
-        val otherChannels = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels() +
+        val otherChannels = Catalog.builtInChannels() + Lineup.optionalThemes(library, minimum) +
+            Lineup.movieChannels(library, minimum) +
             Lineup.decadeChannels(library, music = true, minimum = minimum) +
             Lineup.languageTemplates(library, minimum)
         val needsNetworks = otherChannels.any { channel ->

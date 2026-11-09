@@ -199,6 +199,30 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun dpadUsesVisibleThemeColumnsAtSectionBoundaries() {
+        repeat(12) { compose.onRoot().performKeyInput { pressKey(Key.Tab) } }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Compact").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onAllNodesWithText("■ Default").filter(isFocused()).assertCountEquals(1)
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Gak").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Headroom").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        compose.onNodeWithText("Partridge").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.onNodeWithText("Large").assertIsFocused()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.onNodeWithText("Partridge").assertIsFocused()
+    }
+
+    @Test
     fun normalizationTogglePersistsAndRefreshesPlayback() = runBlocking<Unit> {
         compose.onNodeWithText("Normalize loudness").performScrollTo().performClick()
         verify(settings).setFlag(Settings.NORMALIZE_LOUDNESS, true)

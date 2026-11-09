@@ -73,8 +73,12 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
         }
         val order = availableRows.flatten()
         val index = order.indexOf(current)
-        fun vertical(target: Int): FocusRequester =
-            availableRows.getOrNull(target)?.let { it[column.coerceAtMost(it.lastIndex)] } ?: FocusRequester.Cancel
+        fun vertical(target: Int): FocusRequester {
+            val buttons = availableRows.getOrNull(target) ?: return FocusRequester.Cancel
+            val visualColumn = if (row == 3) column % 3 else column
+            val targetColumn = if (target == 3 && row > 3 && visualColumn < 2) visualColumn + 3 else visualColumn
+            return buttons[targetColumn.coerceAtMost(buttons.lastIndex)]
+        }
         return Modifier.focusRequester(current).focusProperties {
             previous = order.getOrNull(index - 1) ?: FocusRequester.Cancel
             next = order.getOrNull(index + 1) ?: FocusRequester.Cancel

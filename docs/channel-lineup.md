@@ -160,7 +160,7 @@ Seoul (Korean), Tokyo (Japanese), Bombay (Hindi), Berlin (German), and localized
 Language stations start at 4000, use stable `language:<code>` IDs, and follow the selected content minimum.
 
 **The Rest** (1999, before genre music at 2000+, stable ID `catchall`) is the unmatched-video catchall. Its persisted `unmatchedOnly` rule
-excludes items covered by stock/generated channels, including decade and language stations qualifying at the selected content minimum. Refresh
+excludes items covered by stock channels and eligible generated channels. Optional genre, movie-multiplex, decade and language templates exclude their pools only after meeting their applicable minimum; below-threshold video remains available here. Refresh
 revalidates its future bookings against that pool, rebuilding after any invalid entry while preserving the currently airing entry; unchanged bookings
 remain locked. Short or empty pools never activate. Language/catchall fields decode to empty/false on old channel JSON; the explicit Room
 3→4 migration preserves existing items with null language until the next Plex sync.

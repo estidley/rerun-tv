@@ -9,14 +9,19 @@ object ChannelDescriptions {
     fun of(def: ChannelDef): String {
         if (def.id == Lineup.ADS_ID) return "Commercials from the enabled ad library, back-to-back."
         if (def.rules.unmatchedOnly) {
-            return "Otherwise-unmatched movies and episodes; excludes stock, decade, language and generated pools."
-        }
-        if (def.kind == ChannelKind.MUSIC && def.rules.genres.size == 1) {
-            val genre = def.rules.genres.single()
-            return "Music tracks tagged $genre" +
-                (if (def.rules.excludeGenres.isEmpty()) "." else "; spoken-word and other excluded genres are skipped.")
+            return "Otherwise-unmatched movies and episodes; excludes stock channels and eligible generated pools."
         }
         val rules = def.rules
+        val simpleMusic = def.kind == ChannelKind.MUSIC && def.blocks.isEmpty() &&
+            rules.kinds == setOf(MediaKind.TRACK) && rules.genres.size == 1 &&
+            rules.networks.isEmpty() && rules.titles.isEmpty() && rules.tmdbIds.isEmpty() &&
+            rules.labels.isEmpty() && rules.collections.isEmpty() && rules.franchises.isEmpty() &&
+            rules.decades.isEmpty() && rules.languages.isEmpty() && rules.ratings.isEmpty() && rules.bucketCount == 1
+        if (simpleMusic) {
+            val genre = rules.genres.single()
+            return "Music tracks tagged $genre" +
+                (if (rules.excludeGenres.isEmpty()) "." else "; spoken-word and other excluded genres are skipped.")
+        }
         val sources = mutableListOf<String>()
         if (rules.networks.isNotEmpty()) {
             sources += rules.networks.sorted().joinToString(" or ") { id ->

@@ -33,4 +33,28 @@ class ChannelDescriptionsTest {
         val vault = Catalog.builtInChannels().single { it.id == "filmvault" }
         assertTrue("release 1900s–1980s" in ChannelDescriptions.of(vault))
     }
+
+    @Test
+    fun editedMusicDescriptionsRetainFiltersSourcesAndMediaKinds() {
+        val jazz = com.rerun.core.model.ChannelDef(
+            "music:jazz", 2000, "Jazz", ChannelKind.MUSIC,
+            Rules(genres = setOf("Jazz"), kinds = setOf(MediaKind.TRACK), excludeGenres = setOf("Podcast")),
+        )
+        val filtered = jazz.copy(rules = jazz.rules.copy(decades = setOf(1990)))
+        assertEquals(
+            "Genres: Jazz · music tracks; release 1990s; exclude genres Podcast.",
+            ChannelDescriptions.of(filtered),
+        )
+        val movies = jazz.copy(rules = jazz.rules.copy(kinds = setOf(MediaKind.MOVIE)))
+        assertEquals("Genres: Jazz · movies; exclude genres Podcast.", ChannelDescriptions.of(movies))
+        val withLabel = jazz.copy(rules = jazz.rules.copy(labels = setOf("Favorites")))
+        assertEquals("Genres: Jazz or Labels: Favorites · music tracks; exclude genres Podcast.", ChannelDescriptions.of(withLabel))
+        val blocked = jazz.copy(blocks = listOf(com.rerun.core.model.TimeBlock(
+            setOf(java.time.DayOfWeek.MONDAY), java.time.LocalTime.NOON, java.time.LocalTime.of(13, 0), Rules(),
+        )))
+        assertEquals(
+            "Genres: Jazz · music tracks; exclude genres Podcast; 1 scheduled block.",
+            ChannelDescriptions.of(blocked),
+        )
+    }
 }

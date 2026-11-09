@@ -3,6 +3,8 @@ package com.rerun.core.resolve
 import com.rerun.core.HOUR
 import com.rerun.core.MIN
 import com.rerun.core.catalog.Catalog
+import com.rerun.core.catalog.Lineup
+import com.rerun.core.catalog.MinimumContentLevel
 import com.rerun.core.episode
 import com.rerun.core.movie
 import kotlin.test.Test
@@ -63,6 +65,30 @@ class ResolverTest {
         val zero = movie("zero", genres = setOf("Horror"), durationMs = 0)
         val short = movie("short", genres = setOf("Horror"), durationMs = 30_000)
         assertEquals(listOf(ok), Resolver.pool(def("horror"), listOf(ok, zero, short)))
+    }
+
+    @Test
+    fun catchallRetainsVideoWhoseGeneratedStationsDoNotQualify() {
+        val items = listOf(
+            episode("news", "Daily News", genres = setOf("News"), year = null, durationMs = 6 * HOUR),
+            episode("reality", "Real Life", genres = setOf("Reality"), year = null, durationMs = 6 * HOUR),
+            movie("movie", year = null, durationMs = 11 * HOUR),
+        )
+        assertEquals(
+            setOf("news", "reality", "movie"),
+            Resolver.pool(Lineup.catchAllChannel, items, MinimumContentLevel.MEDIUM).map { it.key }.toSet(),
+        )
+        val channels = Lineup.channels(items, music = false, minimum = MinimumContentLevel.MEDIUM)
+        assertFalse(channels.any { it.id in setOf("opt:news", "opt:reality", "movies:1") })
+        val plan = Lineup.plan(items, emptyList(), music = false, minimum = MinimumContentLevel.MEDIUM)
+        assertEquals(23 * HOUR, plan.channels.single { it.def.id == Lineup.CATCHALL_ID }.poolMs)
+
+        val qualifyingMovies = items + movie("another-movie", year = null, durationMs = HOUR)
+        assertEquals(
+            setOf("news", "reality"),
+            Resolver.pool(Lineup.catchAllChannel, qualifyingMovies, MinimumContentLevel.MEDIUM).map { it.key }.toSet(),
+        )
+        assertTrue(Lineup.channels(qualifyingMovies, music = false).any { it.id == "movies:1" })
     }
 
     @Test

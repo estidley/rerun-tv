@@ -72,9 +72,8 @@ object Lineup {
         library: List<MediaItem>, music: Boolean,
         minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
     ): List<ChannelDef> {
-        val movieMs = moviePoolMs(library)
-        val extras = optionalThemes().filter { qualified(it, library, minimum) }
-        val features = movieChannels().filter { movieMs >= minimumContentMs(it, minimum) }
+        val extras = optionalThemes(library, minimum)
+        val features = movieChannels(library, minimum)
         val stations = if (music) musicTemplates(library).filter { qualified(it, library, minimum) } else emptyList()
         val decades = decadeChannels(library, music, minimum)
         val languages = languageTemplates(library, minimum)
@@ -94,6 +93,17 @@ object Lineup {
 
     fun optionalThemes(): List<ChannelDef> = optional
     fun movieChannels(): List<ChannelDef> = movies
+
+    fun optionalThemes(
+        library: List<MediaItem>, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> = optional.filter { qualified(it, library, minimum) }
+
+    fun movieChannels(
+        library: List<MediaItem>, minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
+        val movieMs = moviePoolMs(library)
+        return movies.filter { movieMs >= minimumContentMs(it, minimum) }
+    }
 
     /**
      * Merges the catalog with channels already stored.

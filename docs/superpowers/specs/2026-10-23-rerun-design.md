@@ -72,8 +72,9 @@ stations are generated from a single duration aggregation, use stable `language:
 the selected minimum. Mundo, Seoul, Tokyo, Bombay and Berlin cover Spanish, Korean, Japanese, Hindi and German;
 other known languages use localized station names.
 
-The Rest (1999, before genre music) uses `unmatchedOnly` to exclude video covered by existing stock/generated pools, including
-decade and language stations qualifying at the selected minimum. A refresh drops future bookings no longer in the resolved pool
+The Rest (1999, before genre music) uses `unmatchedOnly` to exclude video covered by stock channels and eligible generated pools.
+Optional genre, movie-multiplex, decade and language templates exclude their pools only after meeting their applicable minimum;
+below-threshold video remains available to The Rest. A refresh drops future bookings no longer in the resolved pool
 while keeping the currently airing entry and unchanged future schedules. Language and catchall channel JSON fields default to empty/false for old data.
 Room migration 3→4 adds nullable item language without replacing saved content. Catchall coverage resolves network IDs once per eligible item;
 performance coverage includes repeated 5,000-item international plans and unedited decade-total reuse, while edited decade pools remain user-owned.
