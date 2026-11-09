@@ -89,6 +89,43 @@ class PlayerOverlaysTest {
     }
 
     @Test
+    fun visibleBannerLoadsAndShowsTheProgramDescription() {
+        val item = com.rerun.core.plex.PlexParse.movies(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"movie","title":"Movie","duration":1800000}]}}""",
+        ).single()
+        val entry = com.rerun.core.schedule.ScheduleEntry("test", 0, 1_800_000, com.rerun.core.schedule.EntryKind.PROGRAM, item.key)
+        val state = TunerState(
+            item = item, located = com.rerun.core.schedule.Located(entry, 0, null), phase = Phase.PLAYING,
+        )
+        var loaded: String? = null
+        compose.setContent {
+            Box {
+                PlayerOverlays(state, Long.MAX_VALUE) {
+                    loaded = it?.key
+                    "A bounded program description."
+                }
+            }
+        }
+        compose.onNodeWithText("A bounded program description.").assertExists()
+        assertEquals("movie", loaded)
+    }
+
+    @Test
+    fun hiddenBannerDoesNotLoadDescriptions() {
+        var calls = 0
+        compose.setContent {
+            Box {
+                PlayerOverlays(TunerState(phase = Phase.PLAYING), 0) {
+                    calls++
+                    null
+                }
+            }
+        }
+        compose.waitForIdle()
+        assertEquals(0, calls)
+    }
+
+    @Test
     fun upNextTimingShowsStartTimeAndCountdown() {
         val now = 1_000_000_000L
         assertEquals(true, upNextTiming(now + 12 * 60_000, now).endsWith("in 12 min"))

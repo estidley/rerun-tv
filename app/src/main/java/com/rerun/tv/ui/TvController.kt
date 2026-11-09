@@ -630,7 +630,7 @@ class TvController(private val app: RerunApp, val engine: TunerEngine) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > SUMMARY_CAPACITY
     }
 
-    /** Program description from Plex, fetched on demand for the focused guide cell. Never persisted; failures are null. */
+    /** Program description for a focused guide cell or visible playback banner. Never persisted; failures are null. */
     suspend fun programSummary(item: MediaItem?): String? {
         if (item == null || item.kind == MediaKind.TRACK) return null
         val base = serverBase ?: return null

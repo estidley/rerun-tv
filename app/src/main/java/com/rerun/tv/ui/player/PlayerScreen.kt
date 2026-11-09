@@ -127,7 +127,7 @@ fun PlayerScreen(controller: TvController, modifier: Modifier = Modifier, touchC
             StartupMessage(startup, update, channels.isEmpty())
         }
 
-        PlayerOverlays(state, bannerUntil)
+        PlayerOverlays(state, bannerUntil, controller::programSummary)
         PlaybackMessage(state.message, state.phase)
         if (touchControls && visibleUntil(bannerUntil)) {
             TouchControlBar(controller, Modifier.align(Alignment.TopStart).padding(32.dp))
@@ -213,7 +213,11 @@ internal fun PlaybackTransition(state: TunerState, static: Boolean, roll: Boolea
 }
 
 @Composable
-internal fun BoxScope.PlayerOverlays(state: TunerState, bannerUntil: Long) {
+internal fun BoxScope.PlayerOverlays(
+    state: TunerState,
+    bannerUntil: Long,
+    summaryLoader: suspend (com.rerun.core.model.MediaItem?) -> String? = { null },
+) {
     val osdUntil = remember(state.channel?.id) { System.currentTimeMillis() + 3_000 }
     val osdVisible = visibleUntil(osdUntil)
     val bannerVisible = visibleUntil(bannerUntil)
@@ -229,12 +233,19 @@ internal fun BoxScope.PlayerOverlays(state: TunerState, bannerUntil: Long) {
         modifier = Modifier.align(Alignment.BottomCenter),
     ) {
         val entry = state.located?.entry
+        val item = if (entry?.kind == EntryKind.PROGRAM) state.item else null
+        var summary by remember { mutableStateOf<String?>(null) }
+        LaunchedEffect(item?.key, bannerVisible) {
+            summary = null
+            if (bannerVisible) summary = summaryLoader(item)
+        }
         InfoBanner(
             state.channel,
-            if (entry?.kind == EntryKind.PROGRAM) state.item else null,
+            item,
             entry?.takeIf { it.kind == EntryKind.PROGRAM }?.endMs,
             state.nextItem,
             state.nextStartMs,
+            summary = summary,
         )
     }
 }
