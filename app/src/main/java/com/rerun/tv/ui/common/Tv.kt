@@ -122,6 +122,7 @@ fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
             with(density) { (text.size.height + textY).toDp() },
         ).semantics { contentDescription = "RERUN" },
     ) {
+        drawText(text, topLeft = Offset(0f, textY))
         val w = hatWidth
         val h = hatHeight
         val crown = Path().apply {
@@ -146,7 +147,6 @@ fun RerunWordmark(style: TextStyle = Retro.Osd.copy(color = Retro.Vcr)) {
             Offset(w * 0.53f, hatY + h * 0.23f), Offset(w * 0.5f, hatY + h * 0.07f),
             strokeWidth = w * 0.045f, cap = androidx.compose.ui.graphics.StrokeCap.Round,
         )
-        drawText(text, topLeft = Offset(0f, textY))
     }
 }
 

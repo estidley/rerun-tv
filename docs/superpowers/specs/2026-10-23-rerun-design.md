@@ -39,7 +39,7 @@ Room stores media, channels, schedules, scheduler state, ad clips and settings.
 Explicit migrations preserve prior data. Credentials are kept out of play URLs and redacted from
 diagnostics; HTTP token attachment follows the trusted Plex host policy.
 
-Toonuki (channel 105, stable ID `toonami`) uses only the Anime genre for episodes and movies,
+Toonuki (channel 164, stable ID `toonami`) uses only the Anime genre for episodes and movies,
 without network/title or rating restrictions. Animation alone does not match. Stock legacy rules
 upgrade on lineup refresh while preserving channel names/numbers/order and explicitly edited pools.
 Rule upgrades and stale non-anime Toonuki queues discard future entries after the current airing;
@@ -48,9 +48,9 @@ ordinary refreshes preserve valid locked schedules.
 ## Network reference lists
 
 Built-in network channels use parody display names while retaining real network aliases and stable IDs.
-The expanded dial adds The Beeb/BBC America (127), The Atlas/National Geographic (128),
-The Wild/Animal Planet (129), The Hearth/Hallmark (131), and The Game Room/Game Show Network (132).
-Tokyo Tower (133) matches explicit Tokyo Broadcasting System/TBS Japan metadata; raw TBS stays on Ted's TV,
+The expanded dial adds The Beeb/BBC America (109), The Atlas/National Geographic (142),
+The Wild/Animal Planet (143), The Hearth/Hallmark (133), and The Game Room/Game Show Network (131).
+Tokyo Tower (112) matches explicit Tokyo Broadcasting System/TBS Japan metadata; raw TBS stays on Ted's TV,
 which also accepts Turner Broadcasting System. Network editor choices show parody and real names, and aliases
 must remain unique after case/whitespace normalization. The Film Vault (363) is a theme station for pre-1990
 movies rather than a network claim; High Noon remains the existing Western station. Refresh replaces retired
@@ -184,6 +184,7 @@ The ordinary scheduler remains the default. Physical two-device/TV acceptance re
 
 Startup starts in loading state for an existing sign-in, awaits the automatic saved-lineup refresh,
 then queries active channels. Only a successful settled empty result displays no-channel guidance.
+The RERUN wordmark draws its red beret in front of the RE letter tops, with bounded overlap that leaves the letter faces readable.
 The loading card uses the existing beret wordmark and an indeterminate animated spinner.
 Failures and confirmed empty states retain the wordmark but not the spinner. Missing
 connection/initial-sync configuration returns to onboarding.
