@@ -88,10 +88,10 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         numberText = d.number.toString()
         runCatching { first.requestFocus() }
     }
-    LaunchedEffect(draft?.rules, draft?.blocks, library) {
+    LaunchedEffect(draft?.rules, draft?.blocks, library, minimumLevel) {
         val d = draft ?: return@LaunchedEffect
         val contents = library ?: return@LaunchedEffect
-        poolMs = withContext(Dispatchers.Default) { Resolver.pool(d, contents).sumOf { it.durationMs } }
+        poolMs = withContext(Dispatchers.Default) { Resolver.pool(d, contents, minimumLevel).sumOf { it.durationMs } }
     }
 
     val d = draft

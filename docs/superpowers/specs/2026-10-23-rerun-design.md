@@ -72,7 +72,7 @@ the selected minimum. Mundo, Seoul, Tokyo, Bombay and Berlin cover Spanish, Kore
 other known languages use localized station names.
 
 The Rest (3999) uses `unmatchedOnly` to exclude video covered by existing stock/generated pools, including
-qualifying language stations. Language and catchall channel JSON fields default to empty/false for old data.
+decade and language stations qualifying at the selected minimum. Language and catchall channel JSON fields default to empty/false for old data.
 Room migration 3→4 adds nullable item language without replacing saved content. Performance coverage includes
 repeated 5,000-item international plans and unedited decade-total reuse; edited decade pools remain user-owned.
 

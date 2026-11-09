@@ -522,8 +522,9 @@ class ScheduleRepo internal constructor(
         val last = db.entries().lastEnd(row.id)
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
+        val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
         val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
-            else Resolver.pool(def, lib().items)
+            else Resolver.pool(def, lib().items, minimum)
         val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = kotlin.random.Random.nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs,
             backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
@@ -621,9 +622,9 @@ class ScheduleRepo internal constructor(
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {
         val def = row.def
         val contents = lib().items
-        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, contents).sumOf { it.durationMs } }
-        val music = contents.any { it.kind == MediaKind.TRACK }
         val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
+        val poolMs = withContext(Dispatchers.Default) { Resolver.pool(def, contents, minimum).sumOf { it.durationMs } }
+        val music = contents.any { it.kind == MediaKind.TRACK }
         val checked = ChannelRow.of(def, row.builtIn, Lineup.isDormant(def, poolMs, music, minimum), poolMs)
         db.channels().upsert(checked)
         _guideRevision.value++

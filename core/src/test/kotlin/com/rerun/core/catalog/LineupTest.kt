@@ -501,6 +501,61 @@ class LineupTest {
         assertEquals("My Anime", kept.channels.single { it.def.id == "opt:anime" }.def.name)
     }
     @Test
+    fun newBuiltInsAvoidSavedCustomNumbersAndRefreshKeepsUserAssignments() {
+        val customs = listOf(
+            StoredChannel(ChannelDef("custom:beeb", 127, "Mine", ChannelKind.CUSTOM, Rules()), false),
+            StoredChannel(ChannelDef("custom:vault", 363, "Also mine", ChannelKind.CUSTOM, Rules()), false),
+        )
+        val plan = Lineup.plan(emptyList(), customs, music = false)
+        val byId = plan.channels.associate { it.def.id to it.def }
+        assertEquals(127, byId.getValue("custom:beeb").number)
+        assertEquals(363, byId.getValue("custom:vault").number)
+        assertTrue(byId.getValue("bbcamerica").number != 127)
+        assertTrue(byId.getValue("filmvault").number != 363)
+        assertEquals(plan.channels.size, byId.values.map { it.number }.toSet().size)
+
+        val reassigned = plan.channels.map { row ->
+            if (row.def.id == "bbcamerica") row.copy(def = row.def.copy(number = 731)) else row
+        }
+        val refreshed = Lineup.plan(emptyList(), reassigned.map { StoredChannel(it.def, it.builtIn) }, music = false)
+        assertEquals(731, refreshed.channels.single { it.def.id == "bbcamerica" }.def.number)
+        assertEquals(refreshed.channels.size, refreshed.channels.map { it.def.number }.toSet().size)
+    }
+
+    @Test
+    fun catchallExcludesQualifiedTvDecadesAtTheSelectedMinimum() {
+        val items = listOf(episode("nineties", "Nineties", durationMs = 24 * HOUR, year = 1995))
+        val low = com.rerun.core.resolve.Resolver.pool(Lineup.catchAllChannel, items, MinimumContentLevel.LOW)
+        val high = com.rerun.core.resolve.Resolver.pool(Lineup.catchAllChannel, items, MinimumContentLevel.HIGH)
+        assertTrue(Lineup.decadeChannels(items, music = false, MinimumContentLevel.LOW).any { it.id == "decade:tv:1990" })
+        assertTrue(Lineup.decadeChannels(items, music = false, MinimumContentLevel.HIGH).any { it.id == "decade:tv:1990" })
+        assertTrue(low.isEmpty())
+        assertTrue(high.isEmpty())
+    }
+
+    @Test
+    fun catchallAndLanguageChannelsFollowTheSelectedMinimumWithoutDuplicates() {
+        val spanish = episode("spanish", "Programa", durationMs = 18 * HOUR, year = null).copy(language = "spa")
+        val unmatched = episode("unmatched", "Unmatched", durationMs = 5 * HOUR, year = null)
+        val items = listOf(spanish, unmatched)
+        val low = Lineup.plan(items, emptyList(), music = false, minimum = MinimumContentLevel.LOW)
+        val language = low.channels.single { it.def.id == "language:spa" }
+        val catchall = low.channels.single { it.def.id == Lineup.CATCHALL_ID }
+        assertFalse(language.dormant)
+        assertFalse(catchall.dormant)
+        assertEquals(18 * HOUR, language.poolMs)
+        assertEquals(5 * HOUR, catchall.poolMs)
+        assertEquals(
+            listOf("unmatched"),
+            com.rerun.core.resolve.Resolver.pool(Lineup.catchAllChannel, items, MinimumContentLevel.LOW).map { it.key },
+        )
+
+        val high = Lineup.plan(items, low.channels.map { StoredChannel(it.def, it.builtIn) }, music = false,
+            minimum = MinimumContentLevel.HIGH)
+        assertTrue(high.channels.none { it.def.id == "language:spa" || it.def.id == Lineup.CATCHALL_ID })
+    }
+
+    @Test
     fun fullLineupNumbersAreUnique() {
         val library = listOf(
             movie("m", durationMs = 48 * HOUR, genres = setOf("Drama", "News")),

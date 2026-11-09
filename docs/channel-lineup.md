@@ -146,7 +146,7 @@ when an episode has no value. Qualifying libraries can generate Mundo (Spanish),
 start at 4000, use stable `language:<code>` IDs, and follow the selected content minimum.
 
 **The Rest** (3999, stable ID `catchall`) is the unmatched-video catchall. Its persisted `unmatchedOnly` rule
-excludes items covered by stock/generated channels, including qualifying language stations. Short or empty
+excludes items covered by stock/generated channels, including decade and language stations qualifying at the selected content minimum. Short or empty
 pools never activate. Language/catchall fields decode to empty/false on old channel JSON; the explicit Room
 3→4 migration preserves existing items with null language until the next Plex sync.
 

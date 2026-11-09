@@ -139,6 +139,28 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun catchallSaveUsesThePersistedMinimumAndItsLowPoolSchedules() = runBlocking {
+        val spanish = movie("spanish").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 18 * 3_600_000L, year = null, language = "spa")
+        val unmatched = movie("unmatched").copy(kind = com.rerun.core.model.MediaKind.EPISODE,
+            durationMs = 5 * 3_600_000L, year = null)
+        repo.refreshChannels(items = listOf(spanish, unmatched))
+        val station = requireNotNull(repo.channel(Lineup.CATCHALL_ID))
+        assertFalse(station.dormant)
+        assertEquals(5 * 3_600_000L, station.poolMs)
+        repo.ensure(station.id, now)
+        val keys = repo.entries(station.id, now, now + DAY).filter { it.kind == EntryKind.PROGRAM }.map { it.itemKey }
+        assertTrue(keys.isNotEmpty())
+        assertTrue(keys.all { it == "unmatched" })
+
+        db.settings().put(SettingRow(Settings.MINIMUM_CONTENT, com.rerun.core.catalog.MinimumContentLevel.HIGH.name))
+        repo.saveChannel(ChannelRow.of(station.def, station.builtIn))
+        val high = requireNotNull(repo.channel(station.id))
+        assertTrue(high.dormant)
+        assertEquals(23 * 3_600_000L, high.poolMs)
+    }
+
+    @Test
     fun decadeStationsPersistScheduleAndDisappearWhenTheirPoolNoLongerQualifies() = runBlocking {
         val library = PlexParse.episodes(
             """{"MediaContainer":{"Metadata":[${

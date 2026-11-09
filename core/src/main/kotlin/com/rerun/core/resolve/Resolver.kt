@@ -2,6 +2,7 @@ package com.rerun.core.resolve
 
 import com.rerun.core.catalog.Catalog
 import com.rerun.core.catalog.Lineup
+import com.rerun.core.catalog.MinimumContentLevel
 import com.rerun.core.catalog.Router
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.MediaItem
@@ -41,8 +42,11 @@ object Resolver {
      * Everything the channel may ever play: its base rules plus anything its time blocks pull in
      * (e.g. Toonami shows during Cartoon Network's afternoon block).
      */
-    fun pool(def: ChannelDef, library: List<MediaItem>): List<MediaItem> {
-        if (def.rules.unmatchedOnly) return unmatchedPool(def, library)
+    fun pool(
+        def: ChannelDef, library: List<MediaItem>,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<MediaItem> {
+        if (def.rules.unmatchedOnly) return unmatchedPool(def, library, minimum)
         return library.filter { item -> item.durationMs >= MIN_ITEM_MS && matchesAnywhere(def, item) }
     }
 
@@ -52,9 +56,12 @@ object Resolver {
         return def.rules.matches(item, nids) || def.blocks.any { it.rules.matches(item, nids) }
     }
 
-    private fun unmatchedPool(def: ChannelDef, library: List<MediaItem>): List<MediaItem> {
+    private fun unmatchedPool(
+        def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel,
+    ): List<MediaItem> {
         val otherChannels = Catalog.builtInChannels() + Lineup.optionalThemes() + Lineup.movieChannels() +
-            Lineup.languageTemplates(library)
+            Lineup.decadeChannels(library, music = true, minimum = minimum) +
+            Lineup.languageTemplates(library, minimum)
         return library.filter { item ->
             item.durationMs >= MIN_ITEM_MS && def.rules.matches(item, emptySet()) &&
                 otherChannels.none { matchesAnywhere(it, item) }

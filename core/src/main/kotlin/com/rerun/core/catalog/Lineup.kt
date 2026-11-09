@@ -76,13 +76,20 @@ object Lineup {
         val extras = optionalThemes().filter { qualified(it, library, minimum) }
         val features = movieChannels().filter { movieMs >= minimumContentMs(it, minimum) }
         val stations = if (music) musicTemplates(library).filter { qualified(it, library, minimum) } else emptyList()
-        val totals = decadeTotals(library)
-        val decades = decadeTemplates.filter {
-            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= minimumContentMs(it, minimum)
-        }
+        val decades = decadeChannels(library, music, minimum)
         val languages = languageTemplates(library, minimum)
         val catchall = if (qualified(catchAllChannel, library, minimum)) listOf(catchAllChannel) else emptyList()
         return Catalog.builtInChannels() + extras + features + stations + decades + languages + catchall
+    }
+
+    fun decadeChannels(
+        library: List<MediaItem>, music: Boolean,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): List<ChannelDef> {
+        val totals = decadeTotals(library)
+        return decadeTemplates.filter {
+            (it.kind != ChannelKind.MUSIC || music) && totals.getOrDefault(it.id, 0L) >= minimumContentMs(it, minimum)
+        }
     }
 
     fun optionalThemes(): List<ChannelDef> = optional
@@ -110,9 +117,9 @@ object Lineup {
         fun duration(def: ChannelDef, useDecadeTotal: Boolean = false, useLanguageTotal: Boolean = false): Long =
             durations.getOrPut(def) {
                 when {
-                    useDecadeTotal && def.blocks.isEmpty() -> decadeDurations[def.rules] ?: poolMs(def, library)
-                    useLanguageTotal && def.blocks.isEmpty() -> languageDurations[def.rules] ?: poolMs(def, library)
-                    else -> poolMs(def, library)
+                    useDecadeTotal && def.blocks.isEmpty() -> decadeDurations[def.rules] ?: poolMs(def, library, minimum)
+                    useLanguageTotal && def.blocks.isEmpty() -> languageDurations[def.rules] ?: poolMs(def, library, minimum)
+                    else -> poolMs(def, library, minimum)
                 }
             }
         val builtIn = Catalog.builtInChannels()
@@ -170,19 +177,22 @@ object Lineup {
         val deleteIds = existing.map { it.def.id }
             .filter { it !in keep && it != RESTART_ID && isGenerated(it) }
             .sorted()
-        return LineupPlan(uniqueNumbers(upserts), deleteIds)
+        return LineupPlan(uniqueNumbers(upserts, existingById.keys), deleteIds)
     }
 
     /**
-     * Keeps a custom or built-in number where the user left it.
-     * Generated rows (extras and music) take the next free number when theirs is taken.
+     * Keeps existing custom and built-in numbers where the user left them. Generated rows and
+     * newly introduced built-ins take the next free number when their preferred number is taken.
      */
-    private fun uniqueNumbers(channels: List<PlannedChannel>): List<PlannedChannel> {
+    private fun uniqueNumbers(channels: List<PlannedChannel>, existingIds: Set<String>): List<PlannedChannel> {
         val used = HashSet<Int>()
         used += RESTART_NUMBER
-        for (row in channels) if (!isGenerated(row.def.id)) used += row.def.number
+        for (row in channels) {
+            if (!isGenerated(row.def.id) && row.def.id in existingIds) used += row.def.number
+        }
         return channels.map { row ->
-            if (!isGenerated(row.def.id)) row
+            val movable = isGenerated(row.def.id) || (row.builtIn && row.def.id !in existingIds)
+            if (!movable) row
             else {
                 var number = row.def.number
                 while (number in used) number++
@@ -193,10 +203,12 @@ object Lineup {
     }
 
     private fun qualified(def: ChannelDef, library: List<MediaItem>, minimum: MinimumContentLevel): Boolean =
-        !isDormant(def, poolMs(def, library), minimum = minimum)
+        !isDormant(def, poolMs(def, library, minimum), minimum = minimum)
 
-    private fun poolMs(def: ChannelDef, library: List<MediaItem>): Long =
-        Resolver.pool(def, library).sumOf { it.durationMs }
+    private fun poolMs(
+        def: ChannelDef, library: List<MediaItem>,
+        minimum: MinimumContentLevel = MinimumContentLevel.DEFAULT,
+    ): Long = Resolver.pool(def, library, minimum).sumOf { it.durationMs }
 
     private fun moviePoolMs(library: List<MediaItem>): Long =
         library.filter { it.kind == MediaKind.MOVIE && it.durationMs >= Resolver.MIN_ITEM_MS }.sumOf { it.durationMs }
