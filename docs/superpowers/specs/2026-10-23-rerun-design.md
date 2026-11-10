@@ -193,7 +193,7 @@ Music, re-sync, ad catalog and included-library updates are controller-owned and
 Guide rebuilding hides rows behind a fixed-size, square-framed retro window with an Updating Guide
 title bar above bounded progress details and elapsed time. The same window is used over skeleton
 rows and while an empty lineup loads; messages and timer changes do not resize it. Colors follow
-the selected theme, and only Channels and Settings controls are available during rebuilding.
+the selected theme, and only the header actions (Channels, Settings and NOW) are available during rebuilding.
 Failed flag updates restore the previous value; failed imports preserve selections until commit.
 Playback reconciliation preserves open menus. Completing a scan after activity stop does not tune;
 resume starts the appropriate current/replacement station. Sign-out cancels and joins controller work.
@@ -264,9 +264,16 @@ fall back to normal resolution. It retains no per-decade item lists and generate
 cross-product. Forty bounded candidates limit growth; qualifying stations still incur normal
 schedule generation/storage costs.
 Library list/map readers share a coalesced off-Main snapshot; invalidation prevents stale publication.
+Plex section downloads use at most two concurrent requests and assemble results in original section order.
+Dependent show/music requests remain sequential, and no library write occurs until every section succeeds.
+Lineup planning runs outside the Room transaction; queue-repair checks retain their original order
+inside the shorter atomic commit under the repository mutex, preserving library, channel and schedule consistency.
 Parsed playback metadata is cached in memory for at most 16 items and 60 seconds, scoped to server,
-credentials and guide revision. Display capability is checked live; remote track defaults can take
-up to one minute to appear on a subsequent tune.
+credentials and guide revision. Parsing runs off Main. Once playback starts, the next video program's
+metadata is prefetched 45 seconds before rollover so it remains inside the cache TTL; retune, stop
+and clear cancel the work, and prefetch never changes visible playback state. Credential-free stage
+and elapsed-time logs support device timing without claiming a measured performance improvement.
+Display capability is checked live; remote track defaults can take up to one minute to appear on a subsequent tune.
 
 The test suite covers policy, persistence, sync/navigation, lifecycle, remote focus and selected rendering.
 See the [readiness checklist](../plans/2026-10-23-rerun-phase1-core-tv.md) for remaining physical-TV checks.

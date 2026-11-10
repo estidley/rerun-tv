@@ -223,6 +223,37 @@ class LibrarySyncTest {
         assertEquals(listOf("movie"), db.items().all().map { it.key })
     }
 
+    @Test
+    fun sectionDownloadsOverlapWithinTheConfiguredBound() = runBlocking<Unit> {
+        val active = java.util.concurrent.atomic.AtomicInteger()
+        val peak = java.util.concurrent.atomic.AtomicInteger()
+        `when`(api.get(anyString(), anyString(), anyString(), anyInt(), anyInt())).thenAnswer { invocation ->
+            val path = invocation.arguments[1] as String
+            val current = active.incrementAndGet()
+            peak.updateAndGet { maxOf(it, current) }
+            try {
+                Thread.sleep(75)
+                val key = when {
+                    "type=10" in path -> "track"
+                    "/sections/5/" in path && "type=1" in path -> "private"
+                    "type=1" in path -> "movie"
+                    "type=2" in path -> "show"
+                    "type=4" in path -> "episode"
+                    "type=8" in path -> "artist"
+                    "type=9" in path -> "album"
+                    else -> "track"
+                }
+                """{"MediaContainer":{"totalSize":1,"Metadata":[{"ratingKey":"$key","title":"$key","duration":43200000,"Genre":[{"tag":"Jazz"}]}]}}"""
+            } finally {
+                active.decrementAndGet()
+            }
+        }
+        val bounded = LibrarySync(api, settings, ScheduleRepo(db, Scheduler(ZoneId.of("UTC"))), sectionParallelism = 2)
+        bounded.sync().collect()
+        assertEquals(2, peak.get())
+        assertEquals(setOf("movie", "private", "episode", "track"), db.items().all().map { it.key }.toSet())
+    }
+
     private suspend fun page(path: String, key: String) {
         `when`(api.get(base, path, token, 0, 200)).thenReturn(
             """{"MediaContainer":{"totalSize":1,"Metadata":[

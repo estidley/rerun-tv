@@ -23,10 +23,13 @@ Analyze changed PowerShell scripts with PSScriptAnalyzer; check `$LASTEXITCODE` 
 GitHub Actions runs these explicit Gradle tasks on Windows with JDK 21 and Android platform 37,
 plus PSScriptAnalyzer 1.24.0 and the isolated `scripts/test-keystore.ps1` check. The aggregate
 `CI` status requires both verification jobs. Reports/debug APKs are retained for 14 days.
-Keep PR workflows read-only and secret-free; release signing is not part of CI.
-The manually dispatched Prepare release workflow is the exception: it may write a version-bump
-branch/PR and dispatch CI, never sign, tag, publish or merge. Feature PRs need no version bump;
-CI requires both Android version fields to increase together when changed and validates release tags.
+Keep CI and PR workflows read-only and secret-free; release signing is not part of CI.
+The manually dispatched Prepare release workflow may write a version-bump branch/PR and dispatch
+CI, never sign, tag, publish or merge. The separately dispatched Publish release workflow uses a
+protected `release` environment, an existing tag/release and successful tag CI; it verifies the
+established signing certificate before uploading the APK, mapping archive and templated notes.
+Feature PRs need no version bump; CI requires both Android version fields to increase together
+when changed and validates release tags.
 
 ## Behavioral invariants
 
@@ -34,7 +37,7 @@ CI requires both Android version fields to increase together when changed and va
 - The five SVG samples have been approved and the full icon library is integrated. Preserve it; get approval before regenerating or replacing the library.
 
 - Toonuki uses only the Anime genre for movies/episodes; it has no network/title or age-rating restriction. Upgrade only its legacy stock rules and preserve user-edited pools.
-- Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only.
+- Network channels match on what really aired: TMDB reference lists first (a show may belong to several networks), then the network Plex reports, and owner-family routing only when neither matches. Each `NetworkDef` keeps its `realName` and real `aliases`; parody names are display-only. PBS and PBS Kids add curated public-broadcast titles to the same stock stations; do not create franchise-specific stations for them. CBS/ABC/NBC/FOX television-studio fallbacks apply only to episodes and must not reroute movies or streaming originals, or override direct matches. Broaden existing pools rather than adding overlapping stations.
 - The TMDB token is build-time only: read from `TMDB_TOKEN` (or `install.ps1 -TmdbToken`), sent only in the Authorization header, never written to disk, the repo, the APK, logs or URLs. Local refreshes stay in gitignored `local/`; only validated public network/company metadata and TMDB IDs are published to `data/tmdb/`. Tests run with `rerun.tmdb=off`.
 - Never send Plex scrobble/timeline/watch-history updates. Never log or embed real credentials, signing keys, or tokens in URLs, tests, docs, or commits.
 - Preserve explicit Room migrations and existing preferences; do not add destructive database fallback. Keep keystores, `keystore.properties`, and local SDK configuration out of version control.
@@ -48,13 +51,15 @@ CI requires both Android version fields to increase together when changed and va
 - Language stations use normalized Plex original/primary-audio metadata with show inheritance and single-pass generation; never infer language from network ownership. The Rest uses persisted `unmatchedOnly` rules to exclude content covered by stock/generated channels. Keep language/catchall JSON backward-compatible and use explicit Room migrations for item language.
 - Apply `Lineup.minimumContentMs`/`isDormant` consistently on save, refresh and previews, including renamed/generated stations. The persisted Low/Medium/High preset sets ordinary defaults to 4/12/24 hours (Medium by default), and special station thresholds use the higher value. Only a persisted `minimumContentHours` override waives the effective minimum; empty pools never activate. Quick disable/restore in Channels preserves schedules and reconciles playback. Catalog identities and matching rules are documented in `docs/channel-lineup.md`.
 - Linear playback follows wall-clock time even after buffering and fades. Start-over is the explicit exception: device-local From the Top uses saved media position, an optional same-show episode queue, and playback-end advancement. Movies require Start movie/Cancel confirmation; only episodes offer queue choices. Changing stations prompts Pause/Remove/Cancel; menus do not. Keep paused progress/queues in the guide across restarts without changing ordinary schedules or Plex watch history.
+- Guide refreshes preserve the focused channel rather than snapping to the playing station. Native key-repeat timing distinguishes ordinary navigation from hold-to-page and three-hour jumps; NOW restores the current time window without changing stations.
+- After playback starts, prefetch the next video program's metadata 45 seconds before rollover, within the existing 60-second bounded cache. Cancel prefetch on retune, stop and clear; never let it change playback state or delay current-program startup. Parse metadata off Main and keep timing logs free of credentials, URLs and media titles.
 - Ads come from a separately persisted catalog and fit inside scheduled filler; they must never delay the next program. Guide cells include the following break without listing individual ads.
 - Buy Me Maybe is generated from a nonempty enabled ad catalog only. Keep its clips separate from regular library pools, back-to-back without padding/tail skipping. Show hourly station blocks in the guide without changing clip-level playback schedules.
 - Keep audio muted in menus across retunes and rollovers. Activity stop cancels playback, not scans; scan completion must not start background playback.
 - Own navigation-safe library/lineup updates in `TvController`, not a composable coroutine. Sign-out cancels and joins controller jobs before clearing connection data.
 - Do not infer an empty lineup from a flow's initial empty value. Await startup refresh and a successful channel query; keep loading, failure, and confirmed empty states distinct.
-- Keep expensive parsing/snapshot loads and pool calculations off Main. The shared library snapshot must reject invalidated in-flight loads; metadata caching stays bounded and credential/revision scoped.
-- Apply audio/subtitle selections after cached metadata lookup. Recheck display/decoder HDR capability for each tune. Audio-only conversion must not add video downscaling caps.
+- Keep expensive parsing/snapshot loads and pool calculations off Main. The shared library snapshot must reject invalidated in-flight loads; metadata caching stays bounded and credential/revision scoped. Plex section sync allows at most two concurrent downloads and assembles results in original section order without writing partial libraries. Lineup planning stays outside the Room transaction; queue-repair checks retain their original order inside the shorter atomic commit under the repository mutex.
+- Apply audio/subtitle selections after cached metadata lookup. The current-program subtitle picker exposes Off, Automatic and every Plex track with title, format, embedded/external, forced and SDH labels. Per-airing overrides reset on a new program and never change global preferences, Plex track selections or watch history. Refresh from Plex clears bounded playback metadata without a library rescan. Recheck display/decoder HDR capability for each tune. Audio-only conversion must not add video downscaling caps.
 - Normalization is opt-in and capability-gated, not client volume control. Explain skipped normalization and errors; do not claim live-server support or measured output without device evidence.
 
 ## Tests and documentation

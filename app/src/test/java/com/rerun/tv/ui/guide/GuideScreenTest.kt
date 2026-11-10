@@ -730,6 +730,66 @@ class GuideScreenTest {
         }
     }
 
+    @Test
+    fun rowRefreshKeepsTheFocusedChannelInsteadOfSnappingToThePlayingStation() = runBlocking<Unit> {
+        controller.tuneTo("test:30", sound = false)
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        val selected31 = hasAnyAncestor(hasTestTag("guide-row:test:31")) and isSelected()
+        compose.waitUntil(5_000) { compose.onAllNodes(selected31).fetchSemanticsNodes().isNotEmpty() }
+        val extra = ChannelRow.of(
+            ChannelDef("test:extra", 1000, "Extra", ChannelKind.CUSTOM, Rules()),
+            builtIn = false, dormant = false,
+        )
+        compose.runOnIdle { channels.value = channels.value + extra }
+        compose.waitForIdle()
+        compose.onNode(selected31).assertExists()
+        compose.onNode(hasAnyAncestor(hasTestTag("guide-row:test:30")) and isSelected()).assertDoesNotExist()
+    }
+
+    @Test
+    fun holdStateDistinguishesSinglePressesLongPressesAndRelease() {
+        val hold = GuideHold()
+        assertEquals(GuideKeyAction.SINGLE, hold.onDown(0, 1_000))
+        assertEquals(GuideKeyAction.IGNORE, hold.onDown(1, 1_599))
+        assertEquals(GuideKeyAction.LONG, hold.onDown(2, 1_600))
+        assertEquals(GuideKeyAction.IGNORE, hold.onDown(3, 1_700))
+        assertEquals(GuideKeyAction.LONG, hold.onDown(4, 1_850))
+        hold.reset()
+        assertEquals(GuideKeyAction.SINGLE, hold.onDown(0, 3_000))
+        assertEquals(GuideKeyAction.IGNORE, hold.onDown(1, 3_100))
+    }
+
+    @Test
+    fun nowHeaderActionReturnsToTheCurrentWindow() = runBlocking<Unit> {
+        val start = com.rerun.core.schedule.gridFloor(baseNow)
+        val slot = com.rerun.core.schedule.GRID_MS
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
+            "test:0" to (0 until 20).map {
+                ScheduleEntry("test:0", start + it * slot, start + (it + 1) * slot, EntryKind.PROGRAM, null)
+            },
+        ))
+        compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
+        val currentWindow = "guide-time:$start"
+        compose.onNodeWithTag(currentWindow).assertExists()
+        repeat(7) {
+            compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            compose.waitForIdle()
+        }
+        compose.onNodeWithTag(currentWindow).assertDoesNotExist()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        compose.waitForIdle()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForIdle()
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        compose.waitForIdle()
+        compose.onRoot().performKeyInput { pressKey(Key.Enter) }
+        compose.waitForIdle()
+        compose.onNodeWithTag(currentWindow).assertExists()
+    }
+
     private fun assertGuideRendering() {
         val theme = mutableStateOf(ColorTheme.STANDARD_BLUE)
         val metrics = RuntimeEnvironment.getApplication().resources.displayMetrics

@@ -1,5 +1,7 @@
 package com.rerun.tv.data
 
+import android.os.SystemClock
+import android.util.Log
 import com.rerun.core.catalog.Lineup
 import com.rerun.core.catalog.StoredChannel
 import androidx.room.withTransaction
@@ -332,6 +334,19 @@ class ScheduleRepo internal constructor(
         items: List<MediaItem>? = null,
         selectedLibraries: Set<String>? = null,
     ) = mutex.withLock {
+        val planStartedAt = SystemClock.elapsedRealtime()
+        val contents = items ?: db.items().all().map { it.toItem() }
+        val restart = restartSession()
+        val available = contents.mapTo(HashSet()) { it.key }
+        val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
+        val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
+        val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
+        val music = contents.any { it.kind == MediaKind.TRACK }
+        val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs, minimum = minimum)
+        val previousById = existing.associateBy { it.def.id }
+        Log.d("RerunTiming", "lineup_plan channels=${planned.channels.size} elapsedMs=${SystemClock.elapsedRealtime() - planStartedAt}")
+
+        val commitStartedAt = SystemClock.elapsedRealtime()
         db.withTransaction {
             if (selectedLibraries != null) {
                 val previous = db.settings().get(Settings.SELECTED_LIBRARIES)
@@ -364,18 +379,9 @@ class ScheduleRepo internal constructor(
                     if (from != null) db.entries().deleteFrom(id, from)
                 }
             }
-            val contents = items ?: db.items().all().map { it.toItem() }
-            val restart = restartSession()
-            val available = contents.mapTo(HashSet()) { it.key }
             if (restart != null && restart.keys.drop(restart.index).any { it !in available }) {
                 removeRestart()
             }
-            val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
-            val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
-            val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
-            val music = contents.any { it.kind == MediaKind.TRACK }
-            val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs, minimum = minimum)
-            val previousById = existing.associateBy { it.def.id }
             val nowMs = System.currentTimeMillis()
             for (row in planned.channels) {
                 val previous = previousById[row.def.id]?.def ?: continue
@@ -406,17 +412,21 @@ class ScheduleRepo internal constructor(
             )
             for (id in planned.deleteIds) removeChannel(id)
         }
+        Log.d("RerunTiming", "lineup_commit elapsedMs=${SystemClock.elapsedRealtime() - commitStartedAt}")
         invalidateLibrary()
         _guideRevision.value++
     }
 
     /** Tops up any active channel with less than a day of schedule left. */
     suspend fun ensure(nowMs: Long) = mutex.withLock {
+        val startedAt = SystemClock.elapsedRealtime()
         db.entries().pruneBefore(nowMs - KEEP_PAST_MS)
         val shared = db.settings().get(Settings.SHARED_CODE) != null
-        for (row in db.channels().active()) {
+        val rows = db.channels().active()
+        for (row in rows) {
             if (!shared || !SharedPilotScheduler.participates(row.def)) topUp(row, nowMs)
         }
+        Log.d("RerunTiming", "schedule_all channels=${rows.size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
     }
 
     /** Tops up only the given channels, so the guide does not resolve pools for rows nobody is looking at. */

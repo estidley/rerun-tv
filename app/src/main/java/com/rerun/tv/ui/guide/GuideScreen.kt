@@ -101,6 +101,34 @@ private class LoadMarks {
     var ids: Set<String> = emptySet()
 }
 
+internal enum class GuideKeyAction { SINGLE, LONG, IGNORE }
+
+internal class GuideHold {
+    private var downAt = 0L
+    private var lastLongAt = 0L
+    private var longStarted = false
+
+    fun onDown(repeatCount: Int, eventTime: Long): GuideKeyAction {
+        if (repeatCount == 0) {
+            downAt = eventTime
+            lastLongAt = eventTime
+            longStarted = false
+            return GuideKeyAction.SINGLE
+        }
+        if (eventTime - downAt < 600) return GuideKeyAction.IGNORE
+        if (!longStarted || eventTime - lastLongAt >= 250) {
+            longStarted = true
+            lastLongAt = eventTime
+            return GuideKeyAction.LONG
+        }
+        return GuideKeyAction.IGNORE
+    }
+
+    fun reset() {
+        longStarted = false
+    }
+}
+
 /** Grows the preloaded row range only when the viewport nears its edge, so scrolling a row rarely reloads. */
 internal fun wantRange(current: IntRange, first: Int, count: Int, size: Int): IntRange {
     if (size <= 0) return IntRange.EMPTY
@@ -151,8 +179,11 @@ fun GuideScreen(
     var timeFormat by remember { mutableStateOf(clockFormatSettings()) }
     var windowStart by rememberSaveable { mutableLongStateOf(gridFloor(now)) }
     var focusRow by rememberSaveable { mutableIntStateOf(0) }
+    var focusChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var focusTime by rememberSaveable { mutableLongStateOf(now) }
     var headerIndex by rememberSaveable { mutableIntStateOf(0) }
+    var pageRows by remember { mutableIntStateOf(1) }
+    val hold = remember { GuideHold() }
     var blocks by remember { mutableStateOf<Map<String, List<GuideBlock>>>(emptyMap()) }
     var items by remember { mutableStateOf<Map<String, MediaItem>>(emptyMap()) }
     val visibleBlocks = remember(blocks, windowStart) {
@@ -192,12 +223,28 @@ fun GuideScreen(
     }
 
     LaunchedEffect(rows) {
-        val idx = rows.indexOfFirst { it.id == controller.currentChannelId() }
-        focusRow = if (idx >= 0) idx else focusRow.coerceIn(-1, rows.lastIndex.coerceAtLeast(-1))
+        if (rows.isEmpty()) {
+            focusRow = -1
+            focusChannelId = null
+            return@LaunchedEffect
+        }
+        if (focusRow < 0) {
+            focusChannelId = null
+            return@LaunchedEffect
+        }
+        val previous = focusChannelId?.let { id -> rows.indexOfFirst { it.id == id } } ?: -1
+        val current = rows.indexOfFirst { it.id == controller.currentChannelId() }
+        focusRow = when {
+            previous >= 0 -> previous
+            focusChannelId == null && current >= 0 -> current
+            else -> focusRow.coerceIn(0, rows.lastIndex)
+        }
+        focusChannelId = rows.getOrNull(focusRow)?.id
     }
     LaunchedEffect(updating, rows) {
         if (!updating && loadError == null && rows.isNotEmpty() && selectCurrentOnOpen) {
             focusRow = rows.indexOfFirst { it.id == controller.currentChannelId() }.coerceAtLeast(0)
+            focusChannelId = rows.getOrNull(focusRow)?.id
             focusTime = clock()
             selectCurrentOnOpen = false
         }
@@ -293,6 +340,7 @@ fun GuideScreen(
     fun move(dRow: Int) {
         if (updating) return
         focusRow = (focusRow + dRow).coerceIn(-1, rows.size - 1)
+        focusChannelId = rows.getOrNull(focusRow)?.id
     }
 
     fun moveTime(forward: Boolean, b: GuideBlock? = focusedBlock) {
@@ -303,6 +351,18 @@ fun GuideScreen(
         if (focusTime < windowStart) windowStart = maxOf(gridFloor(clock()), windowStart - GRID_MS)
     }
 
+    fun jumpTime(forward: Boolean) {
+        if (updating || rows.isEmpty() || focusRow < 0) return
+        val delta = if (forward) WINDOW_MS else -WINDOW_MS
+        windowStart = (windowStart + delta).coerceAtLeast(gridFloor(clock()))
+        focusTime = (focusTime + delta).coerceAtLeast(clock())
+    }
+
+    fun jumpNow() {
+        windowStart = gridFloor(clock())
+        focusTime = clock()
+    }
+
     // Touch: the first tap selects a cell like moving focus, tapping the selection is OK.
     fun tapCell(rowIndex: Int, block: GuideBlock?) {
         if (updating) return
@@ -311,6 +371,7 @@ fun GuideScreen(
         when (TouchControls.guideTap(selected)) {
             GuideTouchAction.SELECT -> {
                 focusRow = rowIndex
+                focusChannelId = channel.id
                 focusTime = maxOf(block?.startMs ?: windowStart, windowStart, clock())
             }
             GuideTouchAction.WATCH -> { controller.go(Screen.Player); controller.tuneTo(channel.id) }
@@ -340,14 +401,40 @@ fun GuideScreen(
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { e ->
+                val direction = when (e.key) {
+                    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight -> e.key
+                    else -> null
+                }
+                if (direction != null) {
+                    when (e.type) {
+                        KeyEventType.KeyDown -> when (hold.onDown(e.nativeKeyEvent.repeatCount, e.nativeKeyEvent.eventTime)) {
+                            GuideKeyAction.SINGLE -> when (direction) {
+                                Key.DirectionUp -> move(-1)
+                                Key.DirectionDown -> move(+1)
+                                Key.DirectionRight -> if (header) headerIndex = (headerIndex + 1).coerceAtMost(2) else moveTime(true)
+                                Key.DirectionLeft -> if (header) headerIndex = (headerIndex - 1).coerceAtLeast(0) else moveTime(false)
+                            }
+                            GuideKeyAction.LONG -> if (!header) when (direction) {
+                                Key.DirectionUp -> move(-pageRows.coerceAtLeast(1))
+                                Key.DirectionDown -> move(pageRows.coerceAtLeast(1))
+                                Key.DirectionRight -> jumpTime(true)
+                                Key.DirectionLeft -> jumpTime(false)
+                            }
+                            GuideKeyAction.IGNORE -> Unit
+                        }
+                        KeyEventType.KeyUp -> hold.reset()
+                        else -> return@onPreviewKeyEvent false
+                    }
+                    return@onPreviewKeyEvent true
+                }
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
-                    Key.DirectionUp -> move(-1)
-                    Key.DirectionDown -> move(+1)
-                    Key.DirectionRight -> if (header) headerIndex = 1 else moveTime(true)
-                    Key.DirectionLeft -> if (header) headerIndex = 0 else moveTime(false)
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> when {
-                        header -> controller.go(if (headerIndex == 0) Screen.Channels else Screen.Settings)
+                        header -> when (headerIndex) {
+                            0 -> controller.go(Screen.Channels)
+                            1 -> controller.go(Screen.Settings)
+                            else -> jumpNow()
+                        }
                         loadError != null -> attempt++
                         !updating && focusedChannel != null -> { controller.go(Screen.Player); controller.tuneTo(focusedChannel.id) }
                     }
@@ -358,7 +445,7 @@ fun GuideScreen(
             },
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
-            // Header: brand, clock, and the two menu buttons.
+            // Header: brand, clock, and the three menu buttons.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 RerunWordmark()
                 Spacer(Modifier.width(24.dp))
@@ -367,6 +454,8 @@ fun GuideScreen(
                 HeaderButton("CHANNELS", header && headerIndex == 0, Modifier.guideTouchTap(touch, { controller.go(Screen.Channels) }))
                 Spacer(Modifier.width(16.dp))
                 HeaderButton("SETTINGS", header && headerIndex == 1, Modifier.guideTouchTap(touch, { controller.go(Screen.Settings) }))
+                Spacer(Modifier.width(16.dp))
+                HeaderButton("NOW", header && headerIndex == 2, Modifier.guideTouchTap(touch, { jumpNow() }))
             }
             Spacer(Modifier.height(12.dp))
             key(timeFormat) {
@@ -395,6 +484,7 @@ fun GuideScreen(
                 }
                 val layout = guideRows((maxHeight - TIME_HEADER_H).value, rows.size, focusRow, GuideDensity.from(density))
                 LaunchedEffect(layout.firstIndex, layout.visibleCount, rows.size) {
+                    pageRows = layout.visibleCount
                     want = wantRange(want, layout.firstIndex, layout.visibleCount, rows.size)
                 }
                 val scale = GuideDensity.from(density).textScale
@@ -402,7 +492,7 @@ fun GuideScreen(
                 val channelW = (iconDp * 400f / 270f + 34f + 20f).dp
                 val timelineW = maxWidth - channelW
                 val pxPerMs = timelineW.value / WINDOW_MS
-                // While the skeleton shows, touch reaches only CHANNELS and SETTINGS, like the remote.
+                // While the skeleton shows, touch reaches only the header actions, like the remote.
                 val gridTouch = touch && !updating
                 Box(Modifier.fillMaxSize()) {
                     Column(
@@ -445,9 +535,9 @@ fun GuideScreen(
             BasicText(
                 when {
                     touch && updating -> "Tap CHANNELS or SETTINGS   BACK return"
-                    touch -> "Swipe to browse   Tap to select, tap again to watch   Hold to edit channel   BACK return"
-                    updating -> "◀▶ Channels / Settings   OK open   BACK return"
-                    else -> "▲▼ channels   ◀▶ time   OK watch   ☰ edit channel   BACK return"
+                    touch -> "Swipe to browse   Tap select/watch   Hold edit   NOW current time   BACK return"
+                    updating -> "◀▶ choose   OK open   BACK return"
+                    else -> "▲▼ rows, hold page   ◀▶ time, hold 3h   OK watch   ☰ edit   BACK return"
                 },
                 style = Retro.Caption,
             )
@@ -566,7 +656,7 @@ private fun HeaderButton(text: String, focused: Boolean, modifier: Modifier = Mo
 
 @Composable
 private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp, timeFormat: ClockFormatSettings) {
-    Row(Modifier.height(TIME_HEADER_H)) {
+    Row(Modifier.height(TIME_HEADER_H).testTag("guide-time:$windowStart")) {
         Box(
             Modifier.width(channelW).fillMaxHeight().background(Retro.GuideBlueDeep)
                 .border(2.dp, Retro.Cyan).padding(start = 12.dp),

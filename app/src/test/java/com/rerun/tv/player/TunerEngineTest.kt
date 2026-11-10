@@ -493,6 +493,55 @@ class TunerEngineTest {
     }
 
     @Test
+    fun subtitleTrackOverridesOffAutomaticAndRefreshApplyOnlyToTheCurrentAiring() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"selected":true}""",
+            """"selected":true,"languageCode":"eng"},{"id":8,"streamType":3,"codec":"srt","key":"/library/streams/8","languageCode":"spa"}""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals(2, engine.state.value.subtitleTracks.size)
+        assertEquals(7, engine.state.value.selectedSubtitleId)
+
+        engine.selectSubtitleTrack(8, engine.state.value.tuneId)
+        await { sources.size == 2 }
+        assertEquals("plex-subtitle-8", sources.last().mediaItem.localConfiguration!!.subtitleConfigurations.single().id)
+        assertEquals(8, engine.state.value.selectedSubtitleId)
+        assertFalse(engine.state.value.subtitleAutomatic)
+
+        engine.selectSubtitleTrack(null, engine.state.value.tuneId)
+        await { sources.size == 3 }
+        assertFalse(engine.state.value.subtitlesEnabled)
+        assertTrue(sources.last().mediaItem.localConfiguration!!.subtitleConfigurations.isEmpty())
+        assertEquals(2, engine.state.value.subtitleTracks.size)
+
+        engine.useAutomaticSubtitles(engine.state.value.tuneId)
+        await { sources.size == 4 }
+        assertEquals(7, engine.state.value.selectedSubtitleId)
+        assertTrue(engine.state.value.subtitleAutomatic)
+
+        engine.refreshSubtitles(engine.state.value.tuneId)
+        await { sources.size == 5 }
+        verify(api, times(2)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
+        assertEquals(7, engine.state.value.selectedSubtitleId)
+
+        engine.selectSubtitleTrack(8, engine.state.value.tuneId)
+        await { sources.size == 6 }
+        assertEquals(8, engine.state.value.selectedSubtitleId)
+        val current = engine.state.value.located!!.entry
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", current.startMs + 1_000, current.endMs + 1_000, EntryKind.PROGRAM, current.itemKey),
+        ))
+        engine.tune("east")
+        await { sources.size == 7 }
+        assertEquals(7, engine.state.value.selectedSubtitleId)
+        assertTrue(engine.state.value.subtitleAutomatic)
+    }
+
+    @Test
     fun metadataIsReusedOnRetuneButReloadedAfterSyncAndClear() = runBlocking<Unit> {
         val metadata = videoWithSubtitle("srt")
         prepare("east", PlexParse.movies(metadata).single())
@@ -971,6 +1020,66 @@ class TunerEngineTest {
         assertEquals(2, sources.size)
         assertEquals("other", engine.state.value.channel?.id)
         assertFalse(engine.state.value.sameChannelTransition)
+    }
+
+    @Test
+    fun nextProgramMetadataPrefetchIsReusedAtRollover() = runBlocking<Unit> {
+        val current = PlexParse.movies(videoWithSubtitle("srt")).single()
+        val next = current.copy(key = "next")
+        prepare("east", current)
+        `when`(repo.item(next.key)).thenReturn(next)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 200_000, EntryKind.PROGRAM, current.key),
+            ScheduleEntry("east", now + 200_000, now + 800_000, EntryKind.PROGRAM, next.key),
+        ))
+        val metadata = videoWithSubtitle("srt")
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(154))
+        verify(api, never()).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
+        verify(api).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
+        wallTime = now + 200_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(44))
+        await { sources.size == 2 }
+        assertEquals(next.key, engine.state.value.item?.key)
+        verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
+    }
+
+    @Test
+    fun retuneAndStopCancelScheduledMetadataPrefetch() = runBlocking<Unit> {
+        val current = PlexParse.movies(videoWithSubtitle("srt")).single()
+        val next = current.copy(key = "next")
+        prepare("east", current)
+        prepare("other", current)
+        `when`(repo.item(next.key)).thenReturn(next)
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenAnswer { invocation ->
+            if (invocation.arguments[0] == "east") listOf(
+                ScheduleEntry("east", now - 60_000, now + 200_000, EntryKind.PROGRAM, current.key),
+                ScheduleEntry("east", now + 200_000, now + 800_000, EntryKind.PROGRAM, next.key),
+            ) else listOf(
+                ScheduleEntry("other", now - 60_000, now + 600_000, EntryKind.PROGRAM, current.key),
+            )
+        }
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        engine.tune("other")
+        await { sources.size == 2 }
+        engine.tune("east")
+        await { sources.size == 3 }
+        listener.onRenderedFirstFrame()
+        engine.stop()
+        wallTime = now + 200_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(200))
+        verify(api, never()).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
     }
 
     private suspend fun prepare(id: String, item: MediaItem) {

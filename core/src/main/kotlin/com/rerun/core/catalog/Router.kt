@@ -1,17 +1,18 @@
 package com.rerun.core.catalog
 
 import com.rerun.core.model.MediaItem
+import com.rerun.core.model.MediaKind
 
 /**
  * Owner-family routing: streaming originals and studio-only items land on the classic network
  * their owner runs, picked by audience (rating) and genre. Spec §3.2a.
  */
 object Router {
-    private enum class Family { DISNEY, PARAMOUNT, WARNER, NBCU, HULU, STREAMER }
+    private enum class Family { DISNEY, PARAMOUNT, WARNER, NBCU, HULU, STREAMER, ABC_TV, NBC_TV, FOX_TV, CBS_TV }
 
     private val families: Map<String, Family> = buildMap {
         listOf(
-            "Disney+", "Walt Disney Pictures", "Walt Disney Animation Studios", "Walt Disney Television",
+            "Disney+", "Walt Disney Pictures", "Walt Disney Animation Studios",
             "Disney Television Animation", "Pixar", "Marvel Studios", "Marvel Animation", "Marvel Television",
             "Lucasfilm", "Lucasfilm Animation",
         ).forEach { put(key(it), Family.DISNEY) }
@@ -23,6 +24,18 @@ object Router {
         put(key("Hulu"), Family.HULU)
         listOf("Netflix", "Prime Video", "Amazon", "Amazon Studios", "Amazon MGM Studios", "Apple TV+", "Apple TV")
             .forEach { put(key(it), Family.STREAMER) }
+        listOf(
+            "ABC Studios", "ABC Signature", "ABC Entertainment", "ABC Studios International",
+            "Touchstone Television", "Walt Disney Television",
+        ).forEach { put(key(it), Family.ABC_TV) }
+        listOf("NBC Studios", "Universal Television", "Universal Media Studios", "NBCUniversal Television", "NBC Universal Television")
+            .forEach { put(key(it), Family.NBC_TV) }
+        listOf("20th Century Fox Television", "20th Television", "Fox Television Studios", "Fox 21 Television Studios")
+            .forEach { put(key(it), Family.FOX_TV) }
+        listOf(
+            "CBS Studios", "CBS Television Studios", "CBS Paramount Network Television",
+            "Paramount Television", "Paramount Television Studios", "Paramount Network Television",
+        ).forEach { put(key(it), Family.CBS_TV) }
     }
 
     private fun key(s: String) = s.trim().lowercase()
@@ -76,6 +89,10 @@ object Router {
                 "documentary" in genres -> if ("history" in genres) "history" else "discovery"
                 else -> "usa"
             }
+            Family.ABC_TV -> if (item.kind == MediaKind.EPISODE) "abc" else null
+            Family.NBC_TV -> if (item.kind == MediaKind.EPISODE) "nbc" else null
+            Family.FOX_TV -> if (item.kind == MediaKind.EPISODE) "fox" else null
+            Family.CBS_TV -> if (item.kind == MediaKind.EPISODE) "cbs" else null
         }
     }
 }

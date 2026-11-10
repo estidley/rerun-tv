@@ -201,6 +201,7 @@ fun RerunRoot(controller: TvController, onPoweredOff: () -> Unit, onPlayerKeyEve
             Screen.SubtitleLanguage -> SubtitleLanguageScreen(controller)
             Screen.AudioLanguage -> SubtitleLanguageScreen(controller, audio = true)
             Screen.AudioTracks -> com.rerun.tv.ui.player.AudioTrackScreen(controller)
+            Screen.SubtitleTracks -> com.rerun.tv.ui.player.SubtitleTrackScreen(controller)
         }
         CrtOverlay(level)
         com.rerun.tv.ui.player.RestartDialog(controller)

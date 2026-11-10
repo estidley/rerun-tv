@@ -6,6 +6,20 @@ package com.rerun.core.catalog
  * punctuation and a leading "The". Editable on the TV.
  */
 object Curated {
+    val pbsShows: List<String> = listOf(
+        "Austin City Limits", "Masterpiece", "Masterpiece Theatre", "Masterpiece Theater", "Great Performances",
+        "Agatha Christie's Poirot", "Poirot", "Agatha Christie's Miss Marple", "Miss Marple", "Sherlock", "Sherlock Holmes",
+        "Inspector Morse", "Morse", "Inspector Lewis", "Endeavour", "Downton Abbey", "Victoria", "Poldark", "Wolf Hall",
+        "NOVA", "Nature", "Frontline", "American Experience", "American Masters", "Antiques Roadshow", "PBS NewsHour",
+        "Washington Week", "The French Chef", "Julia Child", "This Old House", "Ask This Old House", "MotorWeek",
+    )
+
+    val pbsKidsShows: List<String> = listOf(
+        "Sesame Street", "Mister Rogers' Neighborhood", "Arthur", "Curious George", "Daniel Tiger's Neighborhood",
+        "Wild Kratts", "Odd Squad", "Cyberchase", "WordGirl", "Super Why!", "Clifford the Big Red Dog", "Dragon Tales",
+        "The Electric Company", "Zoom", "Reading Rainbow", "Wishbone", "Bill Nye the Science Guy",
+    )
+
     val boomerangShows: List<String> = listOf(
         "Scooby-Doo, Where Are You!", "The Scooby-Doo Show", "The New Scooby-Doo Movies",
         "Scooby-Doo and Scrappy-Doo", "The 13 Ghosts of Scooby-Doo", "A Pup Named Scooby-Doo",
