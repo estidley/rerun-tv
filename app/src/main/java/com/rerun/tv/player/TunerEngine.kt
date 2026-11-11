@@ -327,7 +327,6 @@ class TunerEngine(
 
     fun refreshSubtitles(expectedTuneId: Long) {
         check(_state.value.tuneId == expectedTuneId) { "The program changed. Reopen subtitle tracks." }
-        subtitleOverride = null
         metadataCache.clear()
         _state.value.channel?.id?.let(::tune)
     }
@@ -474,7 +473,7 @@ class TunerEngine(
                     subtitleTracks = subtitleStreams,
                     selectedSubtitleId = subtitle?.id,
                     subtitlesEnabled = effectiveSubtitlesOn(),
-                    subtitleAutomatic = subtitleOverride?.trackId == null,
+                    subtitleAutomatic = subtitleOverride?.let { it.trackId == null } ?: (subtitleLanguage == "auto"),
                     message = listOfNotNull(
                         if (convertingHdr) "Converting HDR to SDR using Plex tone mapping." else null,
                         if (normalizationRequested && !normalize)

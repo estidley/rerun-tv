@@ -55,6 +55,13 @@ class LineupTest {
         val upgraded = Lineup.plan(library, listOf(StoredChannel(legacyPbs, true), StoredChannel(legacyKids, true)), false)
         assertEquals(pbs, upgraded.channels.single { it.def.id == "pbs" }.def)
         assertEquals(pbsKids, upgraded.channels.single { it.def.id == "pbskids" }.def)
+        val previousNumberKids = legacyKids.copy(number = Catalog.previousNetworkNumber("pbskids")!!)
+        val migrated = Lineup.plan(library, listOf(StoredChannel(previousNumberKids, true)), false)
+            .channels.single { it.def.id == "pbskids" }.def
+        assertEquals(pbsKids, migrated)
+        val manuallyRenumbered = legacyKids.copy(number = 999)
+        assertEquals(manuallyRenumbered, Lineup.plan(library, listOf(StoredChannel(manuallyRenumbered, true)), false)
+            .channels.single { it.def.id == "pbskids" }.def)
         val renamed = legacyPbs.copy(name = "My Public")
         assertEquals(renamed, Lineup.plan(library, listOf(StoredChannel(renamed, true)), false)
             .channels.single { it.def.id == "pbs" }.def)

@@ -561,6 +561,52 @@ class TunerEngineTest {
     }
 
     @Test
+    fun refreshPreservesExplicitAndOffSubtitleOverrides() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"selected":true}""",
+            """"selected":true,"languageCode":"eng"},{"id":8,"streamType":3,"codec":"srt","key":"/library/streams/8","languageCode":"spa"}""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        engine.selectSubtitleTrack(8, engine.state.value.tuneId)
+        await { sources.size == 2 }
+        engine.refreshSubtitles(engine.state.value.tuneId)
+        await { sources.size == 3 }
+        assertEquals(8, engine.state.value.selectedSubtitleId)
+        assertFalse(engine.state.value.subtitleAutomatic)
+        engine.selectSubtitleTrack(null, engine.state.value.tuneId)
+        await { sources.size == 4 }
+        engine.refreshSubtitles(engine.state.value.tuneId)
+        await { sources.size == 5 }
+        assertFalse(engine.state.value.subtitlesEnabled)
+        assertNull(engine.state.value.selectedSubtitleId)
+        verify(api, times(3)).get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")
+    }
+
+    @Test
+    fun pickerAutomaticStateReflectsTheGlobalLanguageWithoutAnOverride() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"selected":true}""",
+            """"languageCode":"spa","selected":true},{"id":8,"streamType":3,"codec":"srt","key":"/library/streams/8","languageCode":"eng"}""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(settings.subtitleLanguageValue()).thenReturn("en")
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertEquals(8, engine.state.value.selectedSubtitleId)
+        assertFalse(engine.state.value.subtitleAutomatic)
+        engine.useAutomaticSubtitles(engine.state.value.tuneId)
+        await { sources.size == 2 }
+        assertEquals(7, engine.state.value.selectedSubtitleId)
+        assertTrue(engine.state.value.subtitleAutomatic)
+    }
+
+    @Test
     fun metadataIsReusedOnRetuneButReloadedAfterSyncAndClear() = runBlocking<Unit> {
         val metadata = videoWithSubtitle("srt")
         prepare("east", PlexParse.movies(metadata).single())

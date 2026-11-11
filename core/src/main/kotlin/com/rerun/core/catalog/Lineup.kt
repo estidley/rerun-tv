@@ -145,10 +145,12 @@ object Lineup {
                 (template.id.startsWith("music:") || template.id.startsWith("decade:music:")) &&
                 looksStock(stored, template.copy(rules = template.rules.copy(excludeGenres = emptySet())))
             // Upgrade legacy stock pools without taking over edited rules or presentation.
+            val legacyNumber = Catalog.previousNetworkNumber(template.id)
             val legacyStockPublicBroadcast = stored != null && prev?.builtIn == true &&
                 template.id in setOf("pbs", "pbskids") && stored.kind == ChannelKind.NETWORK &&
                 stored.rules == Rules(networks = setOf(template.id)) && stored.blocks.isEmpty() &&
-                looksStock(stored, template.copy(kind = ChannelKind.NETWORK, rules = stored.rules))
+                (stored.number == template.number || stored.number == legacyNumber) &&
+                looksStock(stored, template.copy(kind = ChannelKind.NETWORK, rules = stored.rules, number = stored.number))
             val base = when {
                 legacyStockPublicBroadcast -> stored.copy(
                     kind = template.kind, rules = template.rules, kidsSafe = template.kidsSafe,
