@@ -144,9 +144,15 @@ object Lineup {
             val legacyStockMusic = stored != null && prev?.builtIn == true &&
                 (template.id.startsWith("music:") || template.id.startsWith("decade:music:")) &&
                 looksStock(stored, template.copy(rules = template.rules.copy(excludeGenres = emptySet())))
-            // Upgrade the old stock Toonami pool, retaining names and play order.
-            // Explicitly edited rules or time blocks remain owned by the user.
+            // Upgrade legacy stock pools without taking over edited rules or presentation.
+            val legacyStockPublicBroadcast = stored != null && prev?.builtIn == true &&
+                template.id in setOf("pbs", "pbskids") && stored.kind == ChannelKind.NETWORK &&
+                stored.rules == Rules(networks = setOf(template.id)) && stored.blocks.isEmpty() &&
+                looksStock(stored, template.copy(kind = ChannelKind.NETWORK, rules = stored.rules))
             val base = when {
+                legacyStockPublicBroadcast -> stored.copy(
+                    kind = template.kind, rules = template.rules, kidsSafe = template.kidsSafe,
+                )
                 template.id == "toonami" && prev?.builtIn == true &&
                     stored?.rules == Rules(networks = setOf("toonami"), titles = Curated.toonamiShows.toSet()) &&
                     stored.blocks.isEmpty() -> stored.copy(rules = template.rules, kidsSafe = template.kidsSafe)

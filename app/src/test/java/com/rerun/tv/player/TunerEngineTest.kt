@@ -542,6 +542,25 @@ class TunerEngineTest {
     }
 
     @Test
+    fun automaticSubtitleOverrideIgnoresTheSavedGlobalLanguageFilter() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"selected":true}""",
+            """"selected":true,"languageCode":"eng"},{"id":8,"streamType":3,"codec":"srt","key":"/library/streams/8","languageCode":"spa"}""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.subtitleLanguageValue()).thenReturn("ja")
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertFalse(engine.state.value.subtitlesEnabled)
+        engine.useAutomaticSubtitles(engine.state.value.tuneId)
+        await { sources.size == 2 }
+        assertEquals(7, engine.state.value.selectedSubtitleId)
+        assertTrue(engine.state.value.subtitlesEnabled)
+        assertTrue(engine.state.value.subtitleAutomatic)
+    }
+
+    @Test
     fun metadataIsReusedOnRetuneButReloadedAfterSyncAndClear() = runBlocking<Unit> {
         val metadata = videoWithSubtitle("srt")
         prepare("east", PlexParse.movies(metadata).single())
@@ -1080,6 +1099,42 @@ class TunerEngineTest {
         wallTime = now + 200_000
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(200))
         verify(api, never()).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
+    }
+
+    @Test
+    fun longEmptyFillerBreakRearmsPrefetchAgainstTheNextProgramStart() = runBlocking<Unit> {
+        val current = PlexParse.movies(videoWithSubtitle("srt")).single()
+        val next = current.copy(key = "next")
+        prepare("east", current)
+        `when`(repo.item(next.key)).thenReturn(next)
+        `when`(repo.adCatalog()).thenReturn(emptyList())
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 10_000, EntryKind.PROGRAM, current.key),
+            ScheduleEntry("east", now + 10_000, now + 120_000, EntryKind.FILLER, null),
+            ScheduleEntry("east", now + 120_000, now + 600_000, EntryKind.PROGRAM, next.key),
+        ))
+        val metadata = videoWithSubtitle("srt")
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onRenderedFirstFrame()
+        wallTime = now + 10_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(10))
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        wallTime = now + 74_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(64))
+        verify(api, never()).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
+        wallTime = now + 76_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(2))
+        verify(api).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
+        wallTime = now + 120_000
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(44))
+        await { sources.size == 2 }
+        assertEquals(next.key, engine.state.value.item?.key)
+        verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
     }
 
     private suspend fun prepare(id: String, item: MediaItem) {

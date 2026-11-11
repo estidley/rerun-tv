@@ -342,7 +342,9 @@ class ScheduleRepo internal constructor(
         val adsMs = if (db.settings().get(Settings.AD_LIBRARY) != null) db.ads().all().sumOf { it.durationMs } else 0L
         val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
         val music = contents.any { it.kind == MediaKind.TRACK }
-        val planned = Lineup.plan(contents, existing, music, adsPoolMs = adsMs, minimum = minimum)
+        val planned = withContext(Dispatchers.Default) {
+            Lineup.plan(contents, existing, music, adsPoolMs = adsMs, minimum = minimum)
+        }
         val previousById = existing.associateBy { it.def.id }
         Log.d("RerunTiming", "lineup_plan channels=${planned.channels.size} elapsedMs=${SystemClock.elapsedRealtime() - planStartedAt}")
 

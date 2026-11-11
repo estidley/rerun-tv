@@ -40,6 +40,30 @@ class LineupTest {
     }
 
     @Test
+    fun legacyPublicBroadcastStationsUpgradeCuratedPoolsWithoutOverridingEdits() {
+        val pbs = Catalog.builtInChannels().single { it.id == "pbs" }
+        val pbsKids = Catalog.builtInChannels().single { it.id == "pbskids" }
+        val legacyPbs = ChannelDef("pbs", pbs.number, "PBJ", ChannelKind.NETWORK, Rules(networks = setOf("pbs")))
+        val legacyKids = ChannelDef(
+            "pbskids", pbsKids.number, "PBJ Kids", ChannelKind.NETWORK,
+            Rules(networks = setOf("pbskids")), kidsSafe = true,
+        )
+        val library = listOf(
+            episode("austin", "Austin City Limits", durationMs = 12 * HOUR),
+            episode("arthur", "Arthur", durationMs = 12 * HOUR),
+        )
+        val upgraded = Lineup.plan(library, listOf(StoredChannel(legacyPbs, true), StoredChannel(legacyKids, true)), false)
+        assertEquals(pbs, upgraded.channels.single { it.def.id == "pbs" }.def)
+        assertEquals(pbsKids, upgraded.channels.single { it.def.id == "pbskids" }.def)
+        val renamed = legacyPbs.copy(name = "My Public")
+        assertEquals(renamed, Lineup.plan(library, listOf(StoredChannel(renamed, true)), false)
+            .channels.single { it.def.id == "pbs" }.def)
+        val edited = legacyKids.copy(rules = Rules(genres = setOf("Kids")))
+        assertEquals(edited, Lineup.plan(library, listOf(StoredChannel(edited, true)), false)
+            .channels.single { it.def.id == "pbskids" }.def)
+    }
+
+    @Test
     fun decadesQualifyIndependentlyByMediaTypeAndEligibleDuration() {
         val library = listOf(
             episode("tv", "Show", durationMs = 24 * HOUR, year = 1985),

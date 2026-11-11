@@ -56,7 +56,7 @@ Preferred stock numbers group broadcast (101–112), entertainment (120–134), 
 | 103 | Peacock Place | NBC / National Broadcasting Company / NBC Network / NBC-TV, plus Universal/NBC television-studio episode fallback; all genres |
 | 104 | The Den | FOX / Fox Broadcasting Company / Fox Network / FOX-TV, plus Fox/20th Television-studio episode fallback; all genres |
 | 105 | True North | CBC / Canadian Broadcasting Corporation / CBC Television / CBC TV / CBC News Network; all genres |
-| 106 | PBJ | PBS plus curated public-broadcast series including Austin City Limits, Masterpiece, Poirot, Sherlock, other mysteries, documentaries and lifestyle programs; one broad pool rather than separate franchise stations |
+| 106 | PBJ | PBS plus curated public-broadcast series including Austin City Limits, Masterpiece, Poirot, Sherlock, other mysteries, documentaries and lifestyle programs; one broad pool rather than separate franchise stations. Curated title matches require episodes; direct PBS network matches can also include movies |
 | 107 | Auntie | BBC, BBC Television, BBC Two/Three/Four, CBBC and CBeebies; all genres |
 | 108 | The One | BBC One / BBC1 and their HD variants; all genres |
 | 109 | The Beeb | BBC America / BBC America HD; British programming on U.S. cable, all genres |
@@ -90,7 +90,7 @@ Preferred stock numbers group broadcast (101–112), entertainment (120–134), 
 | 162 | Cartoon Notwork | Cartoon Network / CN, plus the weekday 4–7 PM curated action-cartoon block |
 | 163 | Kaboomerang | Boomerang network metadata or the curated classic-series list |
 | 164 | Toonuki | Anime-tagged movies and episodes, regardless of network, title or rating; animation alone does not qualify |
-| 165 | PBJ Kids | PBS Kids, curated children's public-broadcast series and existing preschool fallback routing; kept separate from the general PBJ pool |
+| 165 | PBJ Kids | PBS Kids, curated children's public-broadcast series and existing preschool fallback routing; kept separate from the general PBJ pool. Curated title matches require episodes, while direct PBS Kids network matches can also include movies |
 | 166 | Dinky XD | Disney XD / Jetix and existing family/action fallback routing |
 | 167 | Playhouse Dinky | Disney Junior / Disney Jr. / Playhouse Disney and existing preschool fallback routing |
 | 168 | Slime Jr. | Nick Jr. / Nick Jr and existing preschool fallback routing |

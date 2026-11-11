@@ -266,12 +266,13 @@ schedule generation/storage costs.
 Library list/map readers share a coalesced off-Main snapshot; invalidation prevents stale publication.
 Plex section downloads use at most two concurrent requests and assemble results in original section order.
 Dependent show/music requests remain sequential, and no library write occurs until every section succeeds.
-Lineup planning runs outside the Room transaction; queue-repair checks retain their original order
+Lineup planning runs on Dispatchers.Default outside the Room transaction; queue-repair checks retain their original order
 inside the shorter atomic commit under the repository mutex, preserving library, channel and schedule consistency.
 Parsed playback metadata is cached in memory for at most 16 items and 60 seconds, scoped to server,
 credentials and guide revision. Parsing runs off Main. Once playback starts, the next video program's
-metadata is prefetched 45 seconds before rollover so it remains inside the cache TTL; retune, stop
-and clear cancel the work, and prefetch never changes visible playback state. Credential-free stage
+metadata is prefetched 45 seconds before its scheduled start so it remains inside the cache TTL,
+including across filler breaks. Empty breaks re-arm the work; retune, stop and clear cancel it,
+and prefetch never changes visible playback state. Credential-free stage
 and elapsed-time logs support device timing without claiming a measured performance improvement.
 Display capability is checked live; remote track defaults can take up to one minute to appear on a subsequent tune.
 

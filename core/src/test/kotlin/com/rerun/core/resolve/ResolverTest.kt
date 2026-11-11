@@ -72,6 +72,10 @@ class ResolverTest {
         val arthur = episode("arthur", "Arthur", durationMs = 4 * HOUR)
         assertEquals(listOf(arthur), Resolver.pool(def("pbskids"), listOf(arthur)))
         assertTrue(Resolver.pool(def("pbs"), listOf(arthur)).isEmpty())
+        val movieArthur = movie("movie-arthur", "Arthur", durationMs = 4 * HOUR)
+        assertTrue(Resolver.pool(def("pbskids"), listOf(movieArthur)).isEmpty())
+        val directNetworkMovie = movieArthur.copy(network = "PBS Kids")
+        assertEquals(listOf(directNetworkMovie), Resolver.pool(def("pbskids"), listOf(directNetworkMovie)))
     }
 
     @Test

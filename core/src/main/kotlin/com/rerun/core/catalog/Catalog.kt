@@ -197,11 +197,18 @@ object Catalog {
             when (n.id) {
                 "pbs" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.CURATED,
-                    Rules(networks = setOf(n.id), titles = Curated.pbsShows.toSet()),
+                    Rules(
+                        networks = setOf(n.id), titles = Curated.pbsShows.toSet(),
+                        titleKinds = setOf(MediaKind.EPISODE),
+                    ),
                 )
                 "pbskids" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.CURATED,
-                    Rules(networks = setOf(n.id), titles = Curated.pbsKidsShows.toSet()), kidsSafe = true,
+                    Rules(
+                        networks = setOf(n.id), titles = Curated.pbsKidsShows.toSet(),
+                        titleKinds = setOf(MediaKind.EPISODE),
+                    ),
+                    kidsSafe = true,
                 )
                 "boomerang" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.CURATED,

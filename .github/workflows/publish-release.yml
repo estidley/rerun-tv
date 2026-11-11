@@ -61,6 +61,12 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $headCommit -ne $tagCommit) {
             throw 'The checkout does not match the release tag'
           }
+          git fetch --no-tags origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch trusted main history' }
+          git merge-base --is-ancestor $tagCommit FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The release tag must be reachable from main before publishing'
+          }
           .\scripts\check-version.ps1 -TagName $tag
           if ($LASTEXITCODE -ne 0) { throw 'Release version validation failed' }
 

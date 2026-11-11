@@ -35,6 +35,8 @@ fun bucketOf(item: MediaItem, count: Int): Int {
 data class Rules(
     val networks: Set<String> = emptySet(),
     val titles: Set<String> = emptySet(),
+    /** Restricts title-source matches without narrowing direct network or other source matches. */
+    val titleKinds: Set<MediaKind> = emptySet(),
     val tmdbIds: Set<String> = emptySet(),
     val labels: Set<String> = emptySet(),
     val collections: Set<String> = emptySet(),
@@ -91,7 +93,8 @@ data class Rules(
 
         if (nNetworks.isNotEmpty() && networkHit()) return true
         val title = if (item.kind == MediaKind.EPISODE) item.showTitle else item.title
-        if (nTitles.isNotEmpty() && title != null && titleKey(title) in nTitles) return true
+        if (nTitles.isNotEmpty() && title != null && titleKey(title) in nTitles &&
+            (titleKinds.isEmpty() || item.kind in titleKinds)) return true
         if (nTmdb.isNotEmpty() && item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true
         if (nLabels.isNotEmpty() && item.labels.any { norm(it) in nLabels }) return true
         if (nCollections.isNotEmpty() && item.collections.any { norm(it) in nCollections }) return true

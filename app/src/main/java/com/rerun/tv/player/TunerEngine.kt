@@ -436,6 +436,7 @@ class TunerEngine(
                 if (loc.entry.kind == EntryKind.FILLER && ad == null) {
                     player.stop()
                     _state.value = _state.value.copy(phase = Phase.UP_NEXT)
+                    scheduleMetadataPrefetch()
                     return@launch
                 }
                 val base = settings.serverBase()
@@ -462,7 +463,7 @@ class TunerEngine(
                 val subtitle = when {
                     !effectiveSubtitlesOn() -> null
                     subtitleOverride?.trackId != null -> subtitleStreams.firstOrNull { it.id == subtitleOverride?.trackId }
-                    else -> selectSubtitle(subtitleStreams, subtitleLanguage)
+                    else -> selectSubtitle(subtitleStreams, if (subtitleOverride != null) "auto" else subtitleLanguage)
                 }
                 val normalizationCompatible = !convertingHdr && subtitle == null && details.range != DynamicRange.DOLBY_VISION &&
                     item?.let { Playback.canDirectPlay(if (audio?.codec != null) it.copy(audioCodec = audio.codec) else it) } == true
@@ -616,7 +617,8 @@ class TunerEngine(
             }
         }
         prefetch = r
-        handler.postDelayed(r, (rolloverAtMs - clock() - PREFETCH_LEAD_MS).coerceAtLeast(0))
+        val nextStartMs = current.nextStartMs ?: rolloverAtMs
+        handler.postDelayed(r, (nextStartMs - clock() - PREFETCH_LEAD_MS).coerceAtLeast(0))
     }
 
     /** Linear channels follow wall time; start-over returns on playback end, not a metadata timer. */
