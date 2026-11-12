@@ -145,7 +145,7 @@ class SettingsScreenTest {
         val labels = listOf(
             "All effects on", "All effects off", "Static", "Static sound", "Picture roll", "Power on/off",
             "■ CRT Off", "CRT Subtle", "CRT Full", "■ Default", "Lucy", "Partridge", "Headroom", "Gak",
-            "Compact", "■ Default", "Large", "Subtitles", "Subtitle language: Automatic", "Size: Medium", "Color: White",
+            "Compact", "■ Default", "Large", "Subtitles", "Current program subtitle tracks", "Size: Medium", "Color: White",
             "Shared scheduling pilot", "Low (4 hours)", "■ Medium (12 hours)", "High (24 hours)",
             "Manage libraries", "Re-sync now", "Channels", "Sign out", "Ad library",
             "Audio language: Automatic", "Current program audio tracks", "Normalize loudness", "■ Auto HDR", "Convert HDR to SDR", "Prefer native HDR",
@@ -230,9 +230,9 @@ class SettingsScreenTest {
     }
 
     @Test
-    fun subtitlesAndLanguageAreAdjacentInTheSameRow() {
+    fun subtitlesAndTrackPickerAreAdjacentInTheSameRow() {
         val toggle = compose.onNodeWithText("Subtitles").fetchSemanticsNode().boundsInRoot
-        val language = compose.onNodeWithText("Subtitle language: Automatic").fetchSemanticsNode().boundsInRoot
+        val language = compose.onNodeWithText("Current program subtitle tracks").fetchSemanticsNode().boundsInRoot
         org.junit.Assert.assertEquals(toggle.top, language.top, 1f)
         org.junit.Assert.assertTrue(language.left > toggle.right)
     }

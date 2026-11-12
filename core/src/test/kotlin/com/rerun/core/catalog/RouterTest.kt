@@ -76,6 +76,38 @@ class RouterTest {
         assertEquals("usa", Router.route(episode("e", "Crime Show", network = "Netflix", rating = "TV-MA", genres = setOf("Crime", "Drama"))))
 
     @Test
+    fun televisionStudioEpisodesUseTheirBroadcastNetworks() {
+        assertEquals("cbs", Router.route(episode("cbs-show", "NCIS", studio = "CBS Television Studios")))
+        assertEquals("cbs", Router.route(episode("paramount-show", "Star Trek", studio = "Paramount Television Studios")))
+        assertEquals("abc", Router.route(episode("abc-show", "Grey's Anatomy", studio = "ABC Signature")))
+        assertEquals("nbc", Router.route(episode("nbc-show", "The Office", studio = "Universal Television")))
+        assertEquals("fox", Router.route(episode("fox-show", "The Simpsons", studio = "20th Century Fox Television")))
+    }
+
+    @Test
+    fun televisionStudioRulesDoNotRerouteMoviesOrStreamingOriginals() {
+        assertNull(Router.route(movie("paramount-movie", studio = "Paramount Television Studios")))
+        assertEquals("paramountnet", Router.route(episode("paramount-plus", "Ranch Saga", network = "Paramount+", rating = "TV-MA")))
+    }
+
+    @Test
+    fun disneyTelevisionEpisodesUseAbcWhileMoviesKeepDisneyRouting() {
+        assertEquals("abc", Router.route(episode("disney-tv", "Network Show", studio = "Walt Disney Television", rating = "TV-PG")))
+        assertEquals("touchstone", Router.route(movie("disney-movie", studio = "Walt Disney Television", rating = "PG-13")))
+        assertEquals("disney", Router.route(movie("disney-family-movie", studio = "Walt Disney Television", rating = "PG")))
+    }
+
+    @Test
+    fun streamingNetworkFamilyWinsOverTheDisneyTelevisionStudioException() {
+        assertEquals("usa", Router.route(episode("netflix-show", "Streaming Show", network = "Netflix",
+            studio = "Walt Disney Television", rating = "TV-MA", genres = setOf("Drama"))))
+        assertEquals("disney", Router.route(episode("disney-plus-show", "Family Show", network = "Disney+",
+            studio = "Walt Disney Television", rating = "TV-PG", genres = setOf("Family"))))
+        assertEquals("abc", Router.route(episode("unknown-network", "Network Show", network = "Unknown",
+            studio = "Walt Disney Television", rating = "TV-PG")))
+    }
+
+    @Test
     fun unknownStudioRoutesNowhere() =
         assertNull(Router.route(movie("m", studio = "Universal Pictures", rating = "PG-13")))
 }

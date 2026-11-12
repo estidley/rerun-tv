@@ -195,6 +195,21 @@ object Catalog {
     fun builtInChannels(): List<ChannelDef> {
         val net = networks.map { n ->
             when (n.id) {
+                "pbs" -> ChannelDef(
+                    n.id, n.number, n.name, ChannelKind.CURATED,
+                    Rules(
+                        networks = setOf(n.id), titles = Curated.pbsShows.toSet(),
+                        titleKinds = setOf(MediaKind.EPISODE),
+                    ),
+                )
+                "pbskids" -> ChannelDef(
+                    n.id, n.number, n.name, ChannelKind.CURATED,
+                    Rules(
+                        networks = setOf(n.id), titles = Curated.pbsKidsShows.toSet(),
+                        titleKinds = setOf(MediaKind.EPISODE),
+                    ),
+                    kidsSafe = true,
+                )
                 "boomerang" -> ChannelDef(
                     n.id, n.number, n.name, ChannelKind.CURATED,
                     Rules(networks = setOf(n.id), titles = Curated.boomerangShows.toSet()), kidsSafe = true,

@@ -5,7 +5,9 @@ import com.rerun.core.plex.PlexParse
 import com.rerun.core.plex.SubtitleStream
 import com.rerun.core.plex.VideoDetails
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 internal data class PlaybackMetadata(val video: VideoDetails, val subtitles: List<SubtitleStream>)
 
@@ -32,7 +34,9 @@ internal class PlaybackMetadataCache(
         val started = generation
         val json = load()
         currentCoroutineContext().ensureActive()
-        val value = PlaybackMetadata(PlexParse.videoDetails(json), PlexParse.subtitles(json))
+        val value = withContext(Dispatchers.Default) {
+            PlaybackMetadata(PlexParse.videoDetails(json), PlexParse.subtitles(json))
+        }
         if (generation == started) {
             entries[key] = Cached(value, clock())
             if (entries.size > CAPACITY) entries.remove(entries.keys.first())

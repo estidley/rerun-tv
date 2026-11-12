@@ -107,11 +107,14 @@ Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timi
 - [ ] Sync a library with qualifying TV/music decades; verify the resulting lineup, hourly music
   guide blocks, refresh duration and guide responsiveness on the largest target library.
 - [ ] Confirm fades composite correctly over the real video surface, including program/ad transitions and station changes during fades.
-- [ ] Check audio and subtitle selection with multi-track 4K/HDR media on a live server; audio-only changes should not impose video downscaling limits.
+- [ ] Check audio and subtitle selection with multi-track 4K/HDR media on a live server; audio-only changes should not impose video downscaling limits. In the subtitle picker, verify Off, Automatic, explicit tracks, reset on a new airing, forced/SDH labels and refresh after downloading through Plex; no global preference or Plex watch-history changes.
+- [ ] On the real library, verify PBJ includes Austin City Limits, Masterpiece, Poirot and Sherlock without separate franchise stations, PBJ Kids remains separate, and CBS/Paramount plus ABC/NBC/FOX television episodes reach their broadcast stations only when direct network metadata does not match. Review active/dormant pools for fragmentation or excessive consolidation.
+- [ ] Measure sync concurrency against the target Plex server: at most two section requests overlap, results stay complete/deterministic, failed fetches preserve the previous library, and lineup/schedule commits remain atomic.
 - [ ] Check all subtitle sizes and colors on a physical TV, including Medium/White defaults and the semi-transparent background. Confirm persistence, embedded/external text styling, and the documented bitmap/burn-in limitation.
 - [ ] Verify HDR color rendering, tone mapping, fallback errors and Dolby Vision limitations on affected TVs.
 - [ ] With Plex Pass, server support and analyzed program/ad audio, verify normalization eligibility, output loudness consistency and server transcode load.
-- [ ] Measure target-TV frame rate, CPU, memory, channel-change latency and long-running playback.
+- [ ] Measure target-TV frame rate, CPU, memory, channel-change latency and long-running playback. Use the credential-safe RerunTiming logs to compare current-program startup and rollover metadata behavior; JVM tests do not establish a device speedup.
+- [ ] Exercise hold-to-page and three-hour guide jumps on each target remote, confirm NOW restores the current window, and verify lineup refreshes preserve the focused channel. Confirm next-program prefetch fires once after playback starts, remains valid across long empty filler breaks, reuses metadata at the next scheduled program start, and cancels on retune/stop. Verify Automatic subtitles ignore an unavailable global language filter and honor Plex's selected track.
 - [ ] Check music stations with MP3/MPEG, FLAC, M4A and non-DRM WMA requiring Plex HTTP/MP3 conversion; songs should play instead of cycling silent countdowns, including after a failed direct decoder attempt. General multi-device testing has improved performance and exposed regressions; the latest WMA correction still needs a device retest.
 
 Unimplemented roadmap ideas (HDHomeRun/live TV, general TMDb metadata enrichment, automatic clip splitting,

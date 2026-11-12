@@ -165,7 +165,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                     selected = subtitlesOn,
                     sub = if (subtitlesOn) "on" else "off",
                 )
-                TvButton("Subtitle language: ${languageName(subtitleLanguage)}", { controller.go(Screen.SubtitleLanguage) }, modifier = buttonFocus(5, 1))
+                TvButton("Current program subtitle tracks", { controller.go(Screen.SubtitleTracks) }, modifier = buttonFocus(5, 1))
                 TvButton("Size: ${SubtitleSize.from(subtitleSize).label}", {
                     scope.launch {
                         try {

@@ -1,0 +1,255 @@
+name: Publish release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag with successful CI (for example, v1.0.4)
+        required: true
+        type: string
+      highlights:
+        description: User-facing highlights, one Markdown bullet per line
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: publish-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    environment: release
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Validate tag, CI, release, and highlights
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_HIGHLIGHTS: ${{ inputs.highlights }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:RELEASE_TAG.Trim()
+          if ($tag -notmatch '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+            throw 'The release tag must be a semantic version such as v1.0.4'
+          }
+          $tagCommit = git rev-parse "$tag^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the release tag' }
+          $headCommit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $headCommit -ne $tagCommit) {
+            throw 'The checkout does not match the release tag'
+          }
+          git fetch --no-tags origin main
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch trusted main history' }
+          git merge-base --is-ancestor $tagCommit FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The release tag must be reachable from main before publishing'
+          }
+          .\scripts\check-version.ps1 -TagName $tag
+          if ($LASTEXITCODE -ne 0) { throw 'Release version validation failed' }
+
+          $runsJson = gh run list --repo $env:GITHUB_REPOSITORY --workflow ci.yml --branch $tag --event push --limit 30 --json headSha,status,conclusion
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot check release CI' }
+          $runs = @($runsJson | ConvertFrom-Json)
+          $tagRuns = @($runs | Where-Object headSha -eq $tagCommit)
+          if ($tagRuns.Count -eq 0 -or $tagRuns[0].status -ne 'completed' -or $tagRuns[0].conclusion -ne 'success') {
+            throw 'The latest tag CI run must complete successfully before publishing'
+          }
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,isDraft | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Create the GitHub release for this tag before running this workflow' }
+
+          $highlightLines = @($env:RELEASE_HIGHLIGHTS -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+          if ($highlightLines.Count -eq 0 -or @($highlightLines | Where-Object { $_ -notmatch '^\s*-\s+\S' }).Count -gt 0) {
+            throw 'Highlights must contain one non-empty Markdown bullet per line'
+          }
+
+      - name: Install Android platform
+        run: |
+          $sdkRoot = $env:ANDROID_HOME
+          if (-not $sdkRoot) { $sdkRoot = $env:ANDROID_SDK_ROOT }
+          $sdkManager = Get-ChildItem -Path (Join-Path $sdkRoot 'cmdline-tools') -Filter sdkmanager.bat -Recurse | Select-Object -First 1
+          if (-not $sdkManager) { throw 'sdkmanager was not found on the runner' }
+          (1..100 | ForEach-Object { 'y' }) | & $sdkManager.FullName --licenses | Out-Null
+          & $sdkManager.FullName 'platforms;android-37.0'
+          if ($LASTEXITCODE -ne 0) { throw 'Android platform installation failed' }
+
+      - name: Set up Gradle and validate wrapper
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+        with:
+          cache-read-only: true
+
+      - name: Configure release signing
+        env:
+          RERUN_KEYSTORE_BASE64: ${{ secrets.RERUN_KEYSTORE_BASE64 }}
+          RERUN_KEYSTORE_PASSWORD: ${{ secrets.RERUN_KEYSTORE_PASSWORD }}
+          RERUN_KEY_ALIAS: ${{ secrets.RERUN_KEY_ALIAS }}
+          RERUN_KEY_PASSWORD: ${{ secrets.RERUN_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('RERUN_KEYSTORE_BASE64', 'RERUN_KEYSTORE_PASSWORD', 'RERUN_KEY_ALIAS', 'RERUN_KEY_PASSWORD')) {
+            if ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($name))) {
+              throw "Required release-environment secret $name is missing"
+            }
+          }
+          function ConvertTo-JavaProperty([string]$Value) {
+            $sb = New-Object System.Text.StringBuilder
+            foreach ($c in $Value.ToCharArray()) {
+              $code = [int]$c
+              if ($c -eq '\') { [void]$sb.Append('\\'); continue }
+              if ($c -eq ' ') { [void]$sb.Append('\ '); continue }
+              if ($c -eq "`n") { [void]$sb.Append('\n'); continue }
+              if ($c -eq "`r") { [void]$sb.Append('\r'); continue }
+              if ($c -eq "`t") { [void]$sb.Append('\t'); continue }
+              if ($code -lt 0x20 -or $code -gt 0x7E) {
+                [void]$sb.Append(('\u{0:x4}' -f $code))
+                continue
+              }
+              [void]$sb.Append($c)
+            }
+            return $sb.ToString()
+          }
+          $keyPath = Join-Path $env:RUNNER_TEMP 'rerun-release.jks'
+          [IO.File]::WriteAllBytes($keyPath, [Convert]::FromBase64String($env:RERUN_KEYSTORE_BASE64))
+          $properties = @(
+            "storeFile=$(ConvertTo-JavaProperty $keyPath)"
+            "storePassword=$(ConvertTo-JavaProperty $env:RERUN_KEYSTORE_PASSWORD)"
+            "keyAlias=$(ConvertTo-JavaProperty $env:RERUN_KEY_ALIAS)"
+            "keyPassword=$(ConvertTo-JavaProperty $env:RERUN_KEY_PASSWORD)"
+          ) -join "`n"
+          [IO.File]::WriteAllText((Join-Path $PWD 'keystore.properties'), $properties + "`n", [Text.UTF8Encoding]::new($false))
+
+      - name: Build signed release APK
+        run: |
+          .\gradlew.bat :app:assembleRelease --console=plain --stacktrace
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+
+      - name: Verify APK and prepare release assets
+        env:
+          EXPECTED_CERT_SHA256: ${{ secrets.RERUN_SIGNING_CERT_SHA256 }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_HIGHLIGHTS: ${{ inputs.highlights }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . .\scripts\version.ps1
+          $tag = $env:RELEASE_TAG.Trim()
+          $version = Get-RerunVersion -Text (Get-Content -LiteralPath 'app\build.gradle.kts' -Raw)
+          $apk = (Resolve-Path 'app\build\outputs\apk\release\app-release.apk').Path
+          $sdkRoot = $env:ANDROID_HOME
+          if (-not $sdkRoot) { $sdkRoot = $env:ANDROID_SDK_ROOT }
+          $buildTools = Get-ChildItem -LiteralPath (Join-Path $sdkRoot 'build-tools') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (-not $buildTools) { throw 'Android build tools were not found' }
+          $apksigner = Join-Path $buildTools.FullName 'apksigner.bat'
+          $aapt = Join-Path $buildTools.FullName 'aapt.exe'
+
+          $signing = & $apksigner verify --verbose --print-certs $apk 2>&1
+          if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed' }
+          $signing | ForEach-Object { Write-Output $_ }
+          $signingText = $signing | Out-String
+          if ($signingText -notmatch 'Number of signers: 1') { throw 'Expected exactly one APK signer' }
+          if ($signingText -notmatch 'Verified using v2 scheme.*true' -and $signingText -notmatch 'Verified using v3 scheme.*true') {
+            throw 'APK must have a valid v2 or v3 signature'
+          }
+          $expectedCert = ($env:EXPECTED_CERT_SHA256 -replace '[^0-9A-Fa-f]', '').ToLowerInvariant()
+          if ($expectedCert -notmatch '^[0-9a-f]{64}$') { throw 'RERUN_SIGNING_CERT_SHA256 must contain one SHA-256 certificate digest' }
+          $certMatches = @($signing | Select-String 'Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]{64})' | ForEach-Object { $_.Matches[0].Groups[1].Value.ToLowerInvariant() })
+          if ($certMatches.Count -ne 1 -or $certMatches[0] -ne $expectedCert) {
+            throw 'APK signing certificate does not match the established release certificate'
+          }
+
+          $badging = & $aapt dump badging $apk
+          if ($LASTEXITCODE -ne 0) { throw 'APK package inspection failed' }
+          $expectedPackage = "package: name='com.rerun.tv' versionCode='$($version.Code)' versionName='$($version.Name)'"
+          if ($badging[0] -notmatch [regex]::Escape($expectedPackage)) { throw 'APK package or version is incorrect' }
+
+          $stage = Join-Path $env:RUNNER_TEMP "rerun-$tag"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          $apkName = "rerun-tv-$tag.apk"
+          $mappingName = "rerun-tv-$tag-mapping.zip"
+          Copy-Item -LiteralPath $apk -Destination (Join-Path $stage $apkName) -Force
+          $mappingPath = Join-Path $stage $mappingName
+          Compress-Archive -Path 'app\build\outputs\mapping\release\*' -DestinationPath $mappingPath -Force
+          $apkSha = (Get-FileHash -Algorithm SHA256 (Join-Path $stage $apkName)).Hash.ToLowerInvariant()
+          $mappingSha = (Get-FileHash -Algorithm SHA256 $mappingPath).Hash.ToLowerInvariant()
+
+          $highlights = (@($env:RELEASE_HIGHLIGHTS -split '\r?\n' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) | ForEach-Object { $_.Trim() }) -join "`n"
+          $tags = @(git tag --list 'v*' --sort=version:refname | Where-Object { $_ -match '^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$' })
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot list release tags' }
+          $tagIndex = [Array]::IndexOf($tags, $tag)
+          if ($tagIndex -lt 0) { throw 'Release tag was not found locally' }
+          $previousTag = if ($tagIndex -gt 0) { $tags[$tagIndex - 1] } else { $null }
+          $compareUrl = if ($previousTag) {
+            "https://github.com/$env:GITHUB_REPOSITORY/compare/$previousTag...$tag"
+          } else {
+            "https://github.com/$env:GITHUB_REPOSITORY/commits/$tag"
+          }
+          $shortSha = (git rev-parse --short HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve release commit' }
+          $template = @(
+            'Rerun turns your Plex library into a retro cable TV experience, with scheduled channels, a classic guide, and optional commercials.'
+            ''
+            '## What''s new in __TAG__'
+            ''
+            '__HIGHLIGHTS__'
+            ''
+            '## Install or update'
+            ''
+            '1. Download **__APK_NAME__** below.'
+            '2. Sideload it on Android 8.0 or newer. Rerun supports Android TV, compatible Fire TV devices, phones, and tablets; Android 7-based Fire OS devices are not supported.'
+            '3. Open Rerun and link Plex at [plex.tv/link](https://plex.tv/link), then choose your server and libraries.'
+            ''
+            'To update, install the APK over your existing version without uninstalling. Your channels and settings stay on the device. Rerun never reports watch history to Plex.'
+            ''
+            '## File checks'
+            ''
+            '- APK SHA-256: `__APK_SHA__`'
+            '- Mapping archive SHA-256: `__MAPPING_SHA__`'
+            ''
+            '`__MAPPING_NAME__` is only needed by developers to decode crash reports from this minified release.'
+            ''
+            'Built from `__SHORT_SHA__` (versionCode __VERSION_CODE__). [Full changelog](__COMPARE_URL__).'
+          ) -join "`n"
+          $notes = $template.Replace('__TAG__', $tag).Replace('__HIGHLIGHTS__', $highlights).Replace('__APK_NAME__', $apkName).Replace('__APK_SHA__', $apkSha).Replace('__MAPPING_SHA__', $mappingSha).Replace('__MAPPING_NAME__', $mappingName).Replace('__SHORT_SHA__', $shortSha).Replace('__VERSION_CODE__', [string]$version.Code).Replace('__COMPARE_URL__', $compareUrl)
+          [IO.File]::WriteAllText((Join-Path $stage 'release-notes.md'), $notes + "`n", [Text.UTF8Encoding]::new($false))
+
+      - name: Upload assets and update release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:RELEASE_TAG.Trim()
+          $stage = Join-Path $env:RUNNER_TEMP "rerun-$tag"
+          $apkName = "rerun-tv-$tag.apk"
+          $mappingName = "rerun-tv-$tag-mapping.zip"
+          gh release upload $tag (Join-Path $stage $apkName) (Join-Path $stage $mappingName) --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed' }
+          gh release edit $tag --verify-tag --repo $env:GITHUB_REPOSITORY --notes-file (Join-Path $stage 'release-notes.md')
+          if ($LASTEXITCODE -ne 0) { throw 'Release notes update failed' }
+          gh release view $tag --repo $env:GITHUB_REPOSITORY --json url,assets
+
+      - name: Remove release signing files
+        if: ${{ always() }}
+        run: |
+          Remove-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'rerun-release.jks'), (Join-Path $PWD 'keystore.properties') -Force -ErrorAction SilentlyContinue

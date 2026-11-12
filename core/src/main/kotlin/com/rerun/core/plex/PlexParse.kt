@@ -26,6 +26,9 @@ data class SubtitleStream(
     val key: String?,
     val language: String?,
     val selected: Boolean,
+    val title: String? = null,
+    val forced: Boolean = false,
+    val hearingImpaired: Boolean = false,
 ) {
     val mimeType: String? get() = when (codec?.lowercase()) {
         "srt" -> "application/x-subrip"
@@ -143,7 +146,19 @@ object PlexParse {
             .filter { it.int("streamType") == 3 }
             .mapNotNull { s ->
                 val id = s.int("id") ?: return@mapNotNull null
-                SubtitleStream(id, s.str("codec"), s.str("key"), s.str("languageCode"), s.bool("selected") || s.int("selected") == 1)
+                SubtitleStream(
+                    id = id,
+                    codec = s.str("codec"),
+                    key = s.str("key"),
+                    language = s.str("languageCode")?.let(::languageCode)
+                        ?: s.str("language")?.let(::languageCode)
+                        ?: s.str("languageTag")?.let(::languageCode),
+                    selected = s.bool("selected") || s.int("selected") == 1,
+                    title = s.str("title") ?: s.str("displayTitle"),
+                    forced = s.bool("forced") || s.int("forced") == 1,
+                    hearingImpaired = s.bool("hearingImpaired") || s.int("hearingImpaired") == 1 ||
+                        s.bool("sdh") || s.int("sdh") == 1,
+                )
             }
 
     fun movies(text: String): List<MediaItem> = container(text).arr("Metadata").map { m ->

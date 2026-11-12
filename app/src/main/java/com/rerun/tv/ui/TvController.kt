@@ -76,6 +76,7 @@ sealed interface Screen {
     data object SubtitleLanguage : Screen
     data object AudioLanguage : Screen
     data object AudioTracks : Screen
+    data object SubtitleTracks : Screen
 }
 
 /** App-level state and remote-control actions. One per activity. */

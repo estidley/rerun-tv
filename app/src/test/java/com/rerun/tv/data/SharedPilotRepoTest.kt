@@ -91,6 +91,29 @@ class SharedPilotRepoTest {
     }
 
     @Test
+    fun publicBroadcastMigrationUsesSafeSharedCutoverWithoutDeletingTheQueue() = runBlocking {
+        val pbs = Catalog.builtInChannels().single { it.id == "pbs" }.copy(
+            kind = com.rerun.core.model.ChannelKind.NETWORK,
+            rules = com.rerun.core.model.Rules(networks = setOf("pbs")),
+        )
+        db.items().replaceAll(listOf(ItemRow.of(movie.copy(key = "pbs", network = "PBS", durationMs = 12 * 3_600_000L))))
+        db.channels().upsert(ChannelRow.of(pbs, true, false))
+        repo.ensure("pbs", now)
+        db.settings().put(SettingRow(Settings.SHARED_CODE, recipe.encode()))
+        db.settings().put(SettingRow("${Settings.SHARED_PREFIX}channel:pbs", "$now|legacy"))
+        val current = repo.entries("pbs", now, now + 1).single()
+        val scheduled = repo.entries("pbs", now, now + SHARED_HORIZON_MS)
+        repo.refreshChannels()
+        assertEquals(scheduled, repo.entries("pbs", now, now + SHARED_HORIZON_MS))
+        assertTrue(SharedPilotScheduler.participates(repo.channel("pbs")!!.def))
+        repo.ensure("pbs", now)
+        assertEquals(current, repo.entries("pbs", now, now + 1).single())
+        val transition = db.settings().get("${Settings.SHARED_PREFIX}channel:pbs")!!
+        val cutover = transition.substringBefore('|').toLong()
+        assertTrue("transition=$transition now=$now", cutover > now)
+    }
+
+    @Test
     fun fingerprintsAreReusedAcrossValidationStatusAndHorizonExtensions() = runBlocking {
         var builds = 0
         repo = ScheduleRepo(db, Scheduler(ZoneId.of("UTC"))) { channel, pool, code ->

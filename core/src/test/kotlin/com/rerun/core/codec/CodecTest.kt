@@ -61,6 +61,8 @@ class CodecTest {
         val withoutLanguages = encoded.replace(""","languages":[],"unmatchedOnly":false""", "")
         assertEquals(emptySet(), ChannelCodec.decode(withoutLanguages).rules.languages)
         assertEquals(false, ChannelCodec.decode(withoutLanguages).rules.unmatchedOnly)
+        val withoutTitleKinds = encoded.replace(""","titleKinds":[]""", "")
+        assertEquals(emptySet(), ChannelCodec.decode(withoutTitleKinds).rules.titleKinds)
     }
 
     @Test

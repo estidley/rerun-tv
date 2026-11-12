@@ -60,6 +60,25 @@ class ResolverTest {
     }
 
     @Test
+    fun pbsUsesOneBroadPublicBroadcastPoolWhilePbsKidsStaysSeparate() {
+        val publicShows = listOf(
+            episode("austin", "Austin City Limits", durationMs = 4 * HOUR),
+            episode("masterpiece", "Masterpiece Theatre", durationMs = 4 * HOUR),
+            episode("poirot", "Agatha Christie's Poirot", durationMs = 4 * HOUR),
+            episode("sherlock", "Sherlock", durationMs = 4 * HOUR),
+        )
+        assertEquals(publicShows.toSet(), Resolver.pool(def("pbs"), publicShows).toSet())
+        assertTrue(Resolver.pool(def("pbskids"), publicShows).isEmpty())
+        val arthur = episode("arthur", "Arthur", durationMs = 4 * HOUR)
+        assertEquals(listOf(arthur), Resolver.pool(def("pbskids"), listOf(arthur)))
+        assertTrue(Resolver.pool(def("pbs"), listOf(arthur)).isEmpty())
+        val movieArthur = movie("movie-arthur", "Arthur", durationMs = 4 * HOUR)
+        assertTrue(Resolver.pool(def("pbskids"), listOf(movieArthur)).isEmpty())
+        val directNetworkMovie = movieArthur.copy(network = "PBS Kids")
+        assertEquals(listOf(directNetworkMovie), Resolver.pool(def("pbskids"), listOf(directNetworkMovie)))
+    }
+
+    @Test
     fun poolExcludesShortAndZeroDuration() {
         val ok = movie("ok", genres = setOf("Horror"))
         val zero = movie("zero", genres = setOf("Horror"), durationMs = 0)

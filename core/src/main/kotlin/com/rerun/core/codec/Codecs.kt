@@ -83,6 +83,7 @@ object ChannelCodec {
 
     private fun rules(r: Rules): JsonObject = buildJsonObject {
         put("networks", strings(r.networks)); put("titles", strings(r.titles)); put("tmdbIds", strings(r.tmdbIds))
+        put("titleKinds", strings(r.titleKinds.map { it.name }))
         put("labels", strings(r.labels)); put("collections", strings(r.collections)); put("genres", strings(r.genres))
         put("excludeGenres", strings(r.excludeGenres)); put("decades", strings(r.decades.map { it.toString() }))
         put("ratings", strings(r.ratings)); put("kinds", strings(r.kinds.map { it.name }))
@@ -93,6 +94,8 @@ object ChannelCodec {
 
     private fun rules(o: JsonObject): Rules = Rules(
         networks = o["networks"].stringSet(), titles = o["titles"].stringSet(), tmdbIds = o["tmdbIds"].stringSet(),
+        titleKinds = o["titleKinds"]?.let { k -> k.stringList().mapTo(LinkedHashSet()) { MediaKind.valueOf(it) } }
+            ?: emptySet(),
         labels = o["labels"].stringSet(), collections = o["collections"].stringSet(), genres = o["genres"].stringSet(),
         excludeGenres = o["excludeGenres"].stringSet(),
         decades = o["decades"].stringList().mapTo(LinkedHashSet()) { it.toInt() },

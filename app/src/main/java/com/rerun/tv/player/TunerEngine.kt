@@ -79,6 +79,10 @@ data class TunerState(
     val tuneId: Long = 0,
     val audioTracks: List<AudioStream> = emptyList(),
     val selectedAudioId: Int? = null,
+    val subtitleTracks: List<SubtitleStream> = emptyList(),
+    val selectedSubtitleId: Int? = null,
+    val subtitlesEnabled: Boolean = false,
+    val subtitleAutomatic: Boolean = true,
     val convertingHdr: Boolean = false,
     val message: String? = null,
     val sameChannelTransition: Boolean = false,
@@ -114,6 +118,10 @@ class TunerEngine(
     private var tuneJob: Job? = null
     private var rollover: Runnable? = null
     private var retry: Runnable? = null
+    private var prefetch: Runnable? = null
+    private var prefetchJob: Job? = null
+    private var prefetchIdentity: Pair<Long, String>? = null
+    private var rolloverAtMs = 0L
     private var tuneSeq = 0L
     private var subtitlesOn = false
     private var subtitleLanguage = "auto"
@@ -133,11 +141,15 @@ class TunerEngine(
     }
     private var identity: PlaybackIdentity? = null
     private var audioOverride: Int? = null
+    private data class SubtitleOverride(val enabled: Boolean, val trackId: Int?)
+    private var subtitleOverride: SubtitleOverride? = null
     private var hdrFallback = false
     private var audioFallback = false
     private var currentHdr = false
     private var convertingHdr = false
     private var normalizingAudio = false
+    private var timingTuneId = 0L
+    private var timingStartedAt = 0L
     private val metadataCache = PlaybackMetadataCache()
 
     /** Called when the saved start-over queue finishes and the TV should go back. */
@@ -150,7 +162,7 @@ class TunerEngine(
             playWhenReady = true
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
-                    if (_state.value.phase == Phase.TUNING) _state.value = _state.value.copy(phase = Phase.PLAYING)
+                    markPlaying()
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -190,7 +202,7 @@ class TunerEngine(
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY && _state.value.phase == Phase.TUNING &&
                         _state.value.item?.kind == MediaKind.TRACK) {
-                        _state.value = _state.value.copy(phase = Phase.PLAYING)
+                        markPlaying()
                     }
                     if (playbackState != Player.STATE_ENDED || _state.value.phase != Phase.PLAYING) return
                     if (_state.value.channel?.id == Lineup.RESTART_ID) {
@@ -204,6 +216,21 @@ class TunerEngine(
         }
 
     fun player(): ExoPlayer = player
+
+    private fun markPlaying() {
+        val current = _state.value
+        if (current.phase != Phase.TUNING) return
+        _state.value = current.copy(phase = Phase.PLAYING)
+        if (timingTuneId == current.tuneId) {
+            android.util.Log.i(
+                "RerunTiming",
+                "tune_ready tuneId=${current.tuneId} elapsedMs=${android.os.SystemClock.elapsedRealtime() - timingStartedAt} " +
+                    "kind=${current.item?.kind} transcoded=$transcoded",
+            )
+            timingTuneId = 0
+        }
+        scheduleMetadataPrefetch()
+    }
 
     /** Muting survives media replacement and wall-clock rollovers while menus are open. */
     fun setVisible(visible: Boolean) {
@@ -277,11 +304,33 @@ class TunerEngine(
 
     /** Subtitle switch. Direct play selects a text track; a transcode has to be requested again. */
     fun setSubtitles(on: Boolean) {
+        subtitleOverride = null
         subtitlesOn = on
         applySubtitles(player.currentTracks)
         val id = _state.value.channel?.id ?: return
         if (_state.value.item?.kind != MediaKind.TRACK && _state.value.phase != Phase.DIFFICULTIES) tune(id)
     }
+
+    fun selectSubtitleTrack(id: Int?, expectedTuneId: Long) {
+        check(_state.value.tuneId == expectedTuneId) { "The program changed. Reopen subtitle tracks." }
+        require(id == null || _state.value.subtitleTracks.any { it.id == id }) { "Subtitle track is unavailable" }
+        subtitleOverride = SubtitleOverride(enabled = id != null, trackId = id)
+        _state.value.channel?.id?.let(::tune)
+    }
+
+    fun useAutomaticSubtitles(expectedTuneId: Long) {
+        check(_state.value.tuneId == expectedTuneId) { "The program changed. Reopen subtitle tracks." }
+        subtitleOverride = SubtitleOverride(enabled = true, trackId = null)
+        _state.value.channel?.id?.let(::tune)
+    }
+
+    fun refreshSubtitles(expectedTuneId: Long) {
+        check(_state.value.tuneId == expectedTuneId) { "The program changed. Reopen subtitle tracks." }
+        metadataCache.clear()
+        _state.value.channel?.id?.let(::tune)
+    }
+
+    private fun effectiveSubtitlesOn(): Boolean = subtitleOverride?.enabled ?: subtitlesOn
 
     fun tune(channelId: String) {
         if (channelId != Lineup.RESTART_ID) restartHeld = false
@@ -297,6 +346,8 @@ class TunerEngine(
         convertingHdr = false
         normalizingAudio = false
         val seq = ++tuneSeq
+        timingTuneId = seq
+        timingStartedAt = android.os.SystemClock.elapsedRealtime()
         tuneJob = scope.launch {
             saveJob?.join()
             if (sameChannel && previous.phase == Phase.PLAYING) {
@@ -365,6 +416,7 @@ class TunerEngine(
                 if (identity != nextIdentity) {
                     identity = nextIdentity
                     audioOverride = null
+                    subtitleOverride = null
                     hdrFallback = false
                     audioFallback = false
                 }
@@ -382,15 +434,20 @@ class TunerEngine(
                 if (loc.entry.kind == EntryKind.FILLER && ad == null) {
                     player.stop()
                     _state.value = _state.value.copy(phase = Phase.UP_NEXT)
+                    scheduleMetadataPrefetch()
                     return@launch
                 }
                 val base = settings.serverBase()
                 val token = settings.serverToken ?: settings.accountToken
                 if (base == null || token == null) return@launch difficulties()
                 val metadata = if (item != null && item.kind != MediaKind.TRACK) {
-                    val path = "/library/metadata/${item.key}"
-                    require(ServerUri.isLibraryPath(path)) { "Invalid Plex metadata path" }
-                    metadataCache.get(base, token, repo.guideRevision.value, item.key) { api.get(base, path, token) }
+                    val startedAt = android.os.SystemClock.elapsedRealtime()
+                    playbackMetadata(base, token, item).also {
+                        android.util.Log.d(
+                            "RerunTiming",
+                            "tune_metadata tuneId=$seq elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+                        )
+                    }
                 } else null
                 val details = metadata?.video ?: VideoDetails()
                 val preferredAudio = selectAudio(details.audio, settings.audioLanguageValue())
@@ -400,14 +457,22 @@ class TunerEngine(
                 val supported = !currentHdr || mode != HdrMode.AUTO || hdrSupported(details)
                 convertingHdr = requiresSdr(details, mode, supported) || (currentHdr && hdrFallback)
                 val normalizationRequested = item?.kind != MediaKind.TRACK && settings.isOn(Settings.NORMALIZE_LOUDNESS)
-                val subtitleStreams = if (subtitlesOn) metadata?.subtitles.orEmpty() else emptyList()
-                val subtitle = selectSubtitle(subtitleStreams, subtitleLanguage)
+                val subtitleStreams = metadata?.subtitles.orEmpty()
+                val subtitle = when {
+                    !effectiveSubtitlesOn() -> null
+                    subtitleOverride?.trackId != null -> subtitleStreams.firstOrNull { it.id == subtitleOverride?.trackId }
+                    else -> selectSubtitle(subtitleStreams, if (subtitleOverride != null) "auto" else subtitleLanguage)
+                }
                 val normalizationCompatible = !convertingHdr && subtitle == null && details.range != DynamicRange.DOLBY_VISION &&
                     item?.let { Playback.canDirectPlay(if (audio?.codec != null) it.copy(audioCodec = audio.codec) else it) } == true
                 val normalize = normalizationRequested && audio?.canNormalizeLoudness == true && normalizationCompatible
                 normalizingAudio = normalize
                 _state.value = _state.value.copy(
                     audioTracks = details.audio, selectedAudioId = audio?.id, convertingHdr = convertingHdr,
+                    subtitleTracks = subtitleStreams,
+                    selectedSubtitleId = subtitle?.id,
+                    subtitlesEnabled = effectiveSubtitlesOn(),
+                    subtitleAutomatic = subtitleOverride?.let { it.trackId == null } ?: (subtitleLanguage == "auto"),
                     message = listOfNotNull(
                         if (convertingHdr) "Converting HDR to SDR using Plex tone mapping." else null,
                         if (normalizationRequested && !normalize)
@@ -418,7 +483,8 @@ class TunerEngine(
                     ).joinToString(" ").ifEmpty { null },
                 )
                 selectedSubtitle = subtitle
-                embeddedSubtitleIndex = subtitleStreams.filter { it.key == null }.indexOfFirst { it.id == subtitle?.id }
+                embeddedSubtitleIndex = subtitleStreams.filter { it.key == null && it.mimeType != null }
+                    .indexOfFirst { it.id == subtitle?.id }
                 subtitleAvailable = subtitle != null
                 // Whatever time loading took, add it back so we land exactly on schedule.
                 val lag = clock() - now
@@ -427,7 +493,7 @@ class TunerEngine(
                     else (ad?.let { now - it.startMs } ?: loc.offsetMs) + lag
                 when (val plan = planPlayback(
                     item?.let { if (audio?.codec != null) it.copy(audioCodec = audio.codec) else it },
-                    base, settings.clientId, "$session-$seq", offset, subtitlesOn && subtitleAvailable,
+                    base, settings.clientId, "$session-$seq", offset, effectiveSubtitlesOn() && subtitleAvailable,
                     subtitleStreamId = subtitle?.id,
                     forceTranscode = (item?.kind == MediaKind.TRACK && audioFallback) ||
                         (subtitle != null && subtitle.mimeType == null),
@@ -515,9 +581,49 @@ class TunerEngine(
     private suspend fun channelItem(channelId: String, key: String?): MediaItem? =
         if (channelId == Lineup.ADS_ID) repo.adItem(key) else repo.item(key)
 
+    private suspend fun playbackMetadata(base: String, token: String, item: MediaItem): PlaybackMetadata {
+        val path = "/library/metadata/${item.key}"
+        require(ServerUri.isLibraryPath(path)) { "Invalid Plex metadata path" }
+        return metadataCache.get(base, token, repo.guideRevision.value, item.key) { api.get(base, path, token) }
+    }
+
+    private fun scheduleMetadataPrefetch() {
+        val current = _state.value
+        val next = current.nextItem ?: return
+        if (next.kind == MediaKind.TRACK || current.channel?.id == Lineup.RESTART_ID) return
+        val nextIdentity = current.tuneId to next.key
+        if (prefetchIdentity == nextIdentity) return
+        prefetch?.let(handler::removeCallbacks)
+        prefetchJob?.cancel()
+        prefetchIdentity = nextIdentity
+        val r = Runnable {
+            if (_state.value.tuneId != current.tuneId) return@Runnable
+            prefetchJob = scope.launch {
+                try {
+                    val base = settings.serverBase() ?: return@launch
+                    val token = settings.serverToken ?: settings.accountToken ?: return@launch
+                    val startedAt = android.os.SystemClock.elapsedRealtime()
+                    playbackMetadata(base, token, next)
+                    android.util.Log.d(
+                        "RerunTiming",
+                        "metadata_prefetch outcome=ok elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAt}",
+                    )
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    android.util.Log.d("RerunTiming", "metadata_prefetch outcome=error type=${e.javaClass.simpleName}")
+                }
+            }
+        }
+        prefetch = r
+        val nextStartMs = current.nextStartMs ?: rolloverAtMs
+        handler.postDelayed(r, (nextStartMs - clock() - PREFETCH_LEAD_MS).coerceAtLeast(0))
+    }
+
     /** Linear channels follow wall time; start-over returns on playback end, not a metadata timer. */
     private fun scheduleRollover(channelId: String, endMs: Long, hardEnd: Boolean = false) {
         if (channelId == Lineup.RESTART_ID) return
+        rolloverAtMs = endMs
         val r = Runnable {
             if (hardEnd) {
                 player.stop()
@@ -564,10 +670,13 @@ class TunerEngine(
         builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
         val language = selectedSubtitle?.language ?: subtitleLanguage.takeUnless { it == "auto" }
         builder.setPreferredTextLanguage(language)
-        if (subtitlesOn && subtitleAvailable && !transcoded) {
+        if (effectiveSubtitlesOn() && subtitleAvailable && !transcoded) {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             val candidates = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }.flatMap { group ->
-                (0 until group.length).filter { group.isTrackSupported(it) }.map { group to it }
+                (0 until group.length).filter { index ->
+                    group.isTrackSupported(index) &&
+                        group.getTrackFormat(index).sampleMimeType in DIRECT_TEXT_MIME_TYPES
+                }.map { group to it }
             }
             val subtitle = selectedSubtitle
             val selection = if (subtitle?.key != null) {
@@ -578,7 +687,7 @@ class TunerEngine(
                 val matches = candidates.filter { (group, index) ->
                     language == null || group.getTrackFormat(index).language?.let(::subtitleLanguageCode) == subtitleLanguageCode(language)
                 }
-                candidates.getOrNull(embeddedSubtitleIndex)?.takeIf { it in matches } ?: matches.firstOrNull()
+                candidates.getOrNull(embeddedSubtitleIndex)?.takeIf { it in matches }
             }
             if (selection != null) {
                 builder.setOverrideForType(TrackSelectionOverride(selection.first.mediaTrackGroup, selection.second))
@@ -608,8 +717,12 @@ class TunerEngine(
     private fun clearTimers() {
         rollover?.let(handler::removeCallbacks)
         retry?.let(handler::removeCallbacks)
+        prefetch?.let(handler::removeCallbacks)
+        prefetchJob?.cancel()
         rollover = null
         retry = null
+        prefetch = null
+        prefetchIdentity = null
     }
 
     fun stop() {
@@ -628,6 +741,7 @@ class TunerEngine(
         restartSession = null
         identity = null
         audioOverride = null
+        subtitleOverride = null
         hdrFallback = false
         audioFallback = false
         currentHdr = false
@@ -645,6 +759,10 @@ class TunerEngine(
 
     private companion object {
         const val RETRY_MS = 15_000L
+        const val PREFETCH_LEAD_MS = 45_000L
+        val DIRECT_TEXT_MIME_TYPES = setOf(
+            "application/x-subrip", "text/x-ssa", "text/vtt", "application/ttml+xml", "application/x-quicktime-tx3g",
+        )
         const val NORMALIZATION_HELP = "Plex normalized audio playback failed. Check Plex Pass and audio loudness analysis, " +
             "or turn off Normalize loudness in Settings."
         const val HDR_HELP = "HDR conversion failed. Enable HDR tone mapping in Plex Server > Transcoder " +
