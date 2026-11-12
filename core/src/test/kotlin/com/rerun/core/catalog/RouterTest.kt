@@ -98,6 +98,16 @@ class RouterTest {
     }
 
     @Test
+    fun streamingNetworkFamilyWinsOverTheDisneyTelevisionStudioException() {
+        assertEquals("usa", Router.route(episode("netflix-show", "Streaming Show", network = "Netflix",
+            studio = "Walt Disney Television", rating = "TV-MA", genres = setOf("Drama"))))
+        assertEquals("disney", Router.route(episode("disney-plus-show", "Family Show", network = "Disney+",
+            studio = "Walt Disney Television", rating = "TV-PG", genres = setOf("Family"))))
+        assertEquals("abc", Router.route(episode("unknown-network", "Network Show", network = "Unknown",
+            studio = "Walt Disney Television", rating = "TV-PG")))
+    }
+
+    @Test
     fun unknownStudioRoutesNowhere() =
         assertNull(Router.route(movie("m", studio = "Universal Pictures", rating = "PG-13")))
 }

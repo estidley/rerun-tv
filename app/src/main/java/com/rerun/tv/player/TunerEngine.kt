@@ -673,7 +673,10 @@ class TunerEngine(
         if (effectiveSubtitlesOn() && subtitleAvailable && !transcoded) {
             builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             val candidates = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }.flatMap { group ->
-                (0 until group.length).filter { group.isTrackSupported(it) }.map { group to it }
+                (0 until group.length).filter { index ->
+                    group.isTrackSupported(index) &&
+                        group.getTrackFormat(index).sampleMimeType in DIRECT_TEXT_MIME_TYPES
+                }.map { group to it }
             }
             val subtitle = selectedSubtitle
             val selection = if (subtitle?.key != null) {
@@ -757,6 +760,9 @@ class TunerEngine(
     private companion object {
         const val RETRY_MS = 15_000L
         const val PREFETCH_LEAD_MS = 45_000L
+        val DIRECT_TEXT_MIME_TYPES = setOf(
+            "application/x-subrip", "text/x-ssa", "text/vtt", "application/ttml+xml", "application/x-quicktime-tx3g",
+        )
         const val NORMALIZATION_HELP = "Plex normalized audio playback failed. Check Plex Pass and audio loudness analysis, " +
             "or turn off Normalize loudness in Settings."
         const val HDR_HELP = "HDR conversion failed. Enable HDR tone mapping in Plex Server > Transcoder " +

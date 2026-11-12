@@ -658,6 +658,33 @@ class TunerEngineTest {
     }
 
     @Test
+    fun exposedBitmapTrackCannotShiftAnExplicitTextSubtitleSelection() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+            .replace("\"key\":\"/library/streams/7\",", "")
+            .replace(
+                """"selected":true}""",
+                """"languageCode":"eng","selected":true},{"id":8,"streamType":3,"codec":"srt","languageCode":"eng"}""",
+            )
+            .replace("""{"id":7""", """{"id":6,"streamType":3,"codec":"pgs"},{"id":7""")
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.SUBTITLES)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        engine.selectSubtitleTrack(8, engine.state.value.tuneId)
+        await { sources.size == 2 }
+        val bitmap = TrackGroup(Format.Builder().setSampleMimeType("image/pgs").setLanguage("eng").build())
+        val first = TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("eng").build())
+        val second = TrackGroup(Format.Builder().setSampleMimeType("application/x-subrip").setLanguage("eng").build())
+        listener.onTracksChanged(Tracks(listOf(bitmap, first, second).map {
+            Tracks.Group(it, false, intArrayOf(C.FORMAT_HANDLED), booleanArrayOf(false))
+        }))
+        val parameters = ArgumentCaptor.forClass(TrackSelectionParameters::class.java)
+        verify(player, atLeastOnce()).trackSelectionParameters = parameters.capture()
+        assertEquals(second, parameters.value.overrides.values.single().mediaTrackGroup)
+    }
+
+    @Test
     fun metadataIsReusedOnRetuneButReloadedAfterSyncAndClear() = runBlocking<Unit> {
         val metadata = videoWithSubtitle("srt")
         prepare("east", PlexParse.movies(metadata).single())

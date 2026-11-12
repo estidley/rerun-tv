@@ -45,12 +45,13 @@ object Router {
     private val scifiGenres = setOf("science fiction", "sci-fi & fantasy", "fantasy", "horror")
 
     fun route(item: MediaItem): String? {
-        val disneyTelevisionEpisode = item.kind == MediaKind.EPISODE && listOfNotNull(item.network, item.studio).any {
-            key(it) == "walt disney television"
-        }
-        val fam = if (disneyTelevisionEpisode) Family.ABC_TV else item.network?.let { families[key(it)] }
-            ?: item.studio?.let { families[key(it)] }
-            ?: return null
+        val networkFamily = item.network?.let { families[key(it)] }
+        val studioFamily = item.studio?.let { families[key(it)] }
+        val fam = networkFamily ?: studioFamily ?: return null
+        val disneyTelevisionEpisode = item.kind == MediaKind.EPISODE && fam == Family.DISNEY &&
+            if (networkFamily != null) key(item.network!!) == "walt disney television"
+            else key(item.studio!!) == "walt disney television"
+        val selectedFamily = if (disneyTelevisionEpisode) Family.ABC_TV else fam
         val rating = item.contentRating?.let(::key)
         val genres = item.genres.mapTo(HashSet(), ::key)
         val isPreschool = rating in preschool
@@ -62,7 +63,7 @@ object Router {
         val marvelOrLucas = listOfNotNull(item.studio, item.network).any {
             val k = key(it); k.startsWith("marvel") || k.startsWith("lucasfilm")
         }
-        return when (fam) {
+        return when (selectedFamily) {
             Family.DISNEY -> when {
                 isPreschool -> "disneyjr"
                 isFamily && animated && (action || marvelOrLucas) -> "disneyxd"
