@@ -247,7 +247,9 @@ class GuideScreenTest {
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { testNow += 10 * 60_000L }
         compose.mainClock.advanceTimeBy(30_100)
-        compose.waitForIdle()
+        compose.waitUntil(10_000) {
+            mockingDetails(schedule).invocations.count { it.method.name == "ensure" } >= 2
+        }
         verify(schedule, times(2)).ensure(anyCollection(), anyLong())
         verify(schedule, times(2)).entriesFor(anyCollection(), anyLong(), anyLong())
     }
