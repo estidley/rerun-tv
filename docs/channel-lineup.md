@@ -51,7 +51,7 @@ Preferred stock numbers group broadcast (101–112), entertainment (120–134), 
 
 | Number | Name | Cable-era nod and actual programming |
 |---|---|---|
-| 101 | Alphabet | ABC / American Broadcasting Company / ABC Network / ABC-TV, plus ABC/Walt Disney Television-studio episode fallback when no direct network match exists; all genres |
+| 101 | Alphabet | ABC / American Broadcasting Company / ABC Network / ABC-TV, plus ABC/Walt Disney Television-studio episode fallback when no direct network match exists. Non-episode Walt Disney Television items retain their existing Disney-family routing; all genres |
 | 102 | The Eye | CBS / Columbia Broadcasting System / CBS Network / CBS-TV, plus CBS/Paramount television-studio episode fallback when no direct match exists; all genres |
 | 103 | Peacock Place | NBC / National Broadcasting Company / NBC Network / NBC-TV, plus Universal/NBC television-studio episode fallback; all genres |
 | 104 | The Den | FOX / Fox Broadcasting Company / Fox Network / FOX-TV, plus Fox/20th Television-studio episode fallback; all genres |

@@ -91,6 +91,13 @@ class RouterTest {
     }
 
     @Test
+    fun disneyTelevisionEpisodesUseAbcWhileMoviesKeepDisneyRouting() {
+        assertEquals("abc", Router.route(episode("disney-tv", "Network Show", studio = "Walt Disney Television", rating = "TV-PG")))
+        assertEquals("touchstone", Router.route(movie("disney-movie", studio = "Walt Disney Television", rating = "PG-13")))
+        assertEquals("disney", Router.route(movie("disney-family-movie", studio = "Walt Disney Television", rating = "PG")))
+    }
+
+    @Test
     fun unknownStudioRoutesNowhere() =
         assertNull(Router.route(movie("m", studio = "Universal Pictures", rating = "PG-13")))
 }

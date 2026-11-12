@@ -266,7 +266,7 @@ schedule generation/storage costs.
 Library list/map readers share a coalesced off-Main snapshot; invalidation prevents stale publication.
 Plex section downloads use at most two concurrent requests and assemble results in original section order.
 Dependent show/music requests remain sequential, and no library write occurs until every section succeeds.
-Lineup planning runs on Dispatchers.Default outside the Room transaction; queue-repair checks retain their original order
+Saved-item decoding and lineup planning run on Dispatchers.Default outside the Room transaction; queue-repair checks retain their original order
 inside the shorter atomic commit under the repository mutex, preserving library, channel and schedule consistency.
 Parsed playback metadata is cached in memory for at most 16 items and 60 seconds, scoped to server,
 credentials and guide revision. Parsing runs off Main. Once playback starts, the next video program's

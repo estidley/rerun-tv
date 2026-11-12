@@ -335,7 +335,7 @@ class ScheduleRepo internal constructor(
         selectedLibraries: Set<String>? = null,
     ) = mutex.withLock {
         val planStartedAt = SystemClock.elapsedRealtime()
-        val contents = items ?: db.items().all().map { it.toItem() }
+        val contents = items ?: withContext(Dispatchers.Default) { db.items().all().map { it.toItem() } }
         val restart = restartSession()
         val available = contents.mapTo(HashSet()) { it.key }
         val existing = db.channels().all().map { StoredChannel(it.def, it.builtIn) }
@@ -388,6 +388,9 @@ class ScheduleRepo internal constructor(
             for (row in planned.channels) {
                 val previous = previousById[row.def.id]?.def ?: continue
                 val rulesChanged = previous.rules != row.def.rules || previous.blocks != row.def.blocks
+                val sharedPublicBroadcastMigration = row.def.id in setOf("pbs", "pbskids") &&
+                    previous.kind == ChannelKind.NETWORK && previous.rules == Rules(networks = setOf(row.def.id)) &&
+                    db.settings().get(Settings.SHARED_CODE) != null && SharedPilotScheduler.participates(row.def)
                 // Also repair queues left behind by the initial Anime-rule upgrade.
                 val staleAnimeQueue = if (row.def.id == "toonami" && row.def.rules == Rules(genres = setOf("Anime"))) {
                     val allowed = Resolver.pool(row.def, contents).mapTo(HashSet()) { it.key }
@@ -404,7 +407,7 @@ class ScheduleRepo internal constructor(
                         futurePrograms.any { it.itemKey !in allowed }
                     }
                 } else false
-                if (rulesChanged || staleAnimeQueue || staleCatchallQueue) {
+                if ((rulesChanged || staleAnimeQueue || staleCatchallQueue) && !sharedPublicBroadcastMigration) {
                     val current = db.entries().range(row.def.id, nowMs, nowMs + 1).firstOrNull()
                     db.entries().deleteFrom(row.def.id, current?.endMs ?: nowMs)
                 }

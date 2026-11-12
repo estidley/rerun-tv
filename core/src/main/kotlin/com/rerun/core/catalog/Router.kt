@@ -12,7 +12,7 @@ object Router {
 
     private val families: Map<String, Family> = buildMap {
         listOf(
-            "Disney+", "Walt Disney Pictures", "Walt Disney Animation Studios",
+            "Disney+", "Walt Disney Pictures", "Walt Disney Animation Studios", "Walt Disney Television",
             "Disney Television Animation", "Pixar", "Marvel Studios", "Marvel Animation", "Marvel Television",
             "Lucasfilm", "Lucasfilm Animation",
         ).forEach { put(key(it), Family.DISNEY) }
@@ -24,10 +24,8 @@ object Router {
         put(key("Hulu"), Family.HULU)
         listOf("Netflix", "Prime Video", "Amazon", "Amazon Studios", "Amazon MGM Studios", "Apple TV+", "Apple TV")
             .forEach { put(key(it), Family.STREAMER) }
-        listOf(
-            "ABC Studios", "ABC Signature", "ABC Entertainment", "ABC Studios International",
-            "Touchstone Television", "Walt Disney Television",
-        ).forEach { put(key(it), Family.ABC_TV) }
+        listOf("ABC Studios", "ABC Signature", "ABC Entertainment", "ABC Studios International", "Touchstone Television")
+            .forEach { put(key(it), Family.ABC_TV) }
         listOf("NBC Studios", "Universal Television", "Universal Media Studios", "NBCUniversal Television", "NBC Universal Television")
             .forEach { put(key(it), Family.NBC_TV) }
         listOf("20th Century Fox Television", "20th Television", "Fox Television Studios", "Fox 21 Television Studios")
@@ -47,7 +45,10 @@ object Router {
     private val scifiGenres = setOf("science fiction", "sci-fi & fantasy", "fantasy", "horror")
 
     fun route(item: MediaItem): String? {
-        val fam = item.network?.let { families[key(it)] }
+        val disneyTelevisionEpisode = item.kind == MediaKind.EPISODE && listOfNotNull(item.network, item.studio).any {
+            key(it) == "walt disney television"
+        }
+        val fam = if (disneyTelevisionEpisode) Family.ABC_TV else item.network?.let { families[key(it)] }
             ?: item.studio?.let { families[key(it)] }
             ?: return null
         val rating = item.contentRating?.let(::key)

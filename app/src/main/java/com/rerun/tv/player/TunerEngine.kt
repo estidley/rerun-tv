@@ -239,7 +239,6 @@ class TunerEngine(
 
     fun refreshPlaybackPreferences() {
         audioOverride = null
-        subtitleOverride = null
         hdrFallback = false
         audioFallback = false
         _state.value.channel?.id?.let(::tune)
@@ -484,7 +483,8 @@ class TunerEngine(
                     ).joinToString(" ").ifEmpty { null },
                 )
                 selectedSubtitle = subtitle
-                embeddedSubtitleIndex = subtitleStreams.filter { it.key == null }.indexOfFirst { it.id == subtitle?.id }
+                embeddedSubtitleIndex = subtitleStreams.filter { it.key == null && it.mimeType != null }
+                    .indexOfFirst { it.id == subtitle?.id }
                 subtitleAvailable = subtitle != null
                 // Whatever time loading took, add it back so we land exactly on schedule.
                 val lag = clock() - now
@@ -684,7 +684,7 @@ class TunerEngine(
                 val matches = candidates.filter { (group, index) ->
                     language == null || group.getTrackFormat(index).language?.let(::subtitleLanguageCode) == subtitleLanguageCode(language)
                 }
-                candidates.getOrNull(embeddedSubtitleIndex)?.takeIf { it in matches } ?: matches.firstOrNull()
+                candidates.getOrNull(embeddedSubtitleIndex)?.takeIf { it in matches }
             }
             if (selection != null) {
                 builder.setOverrideForType(TrackSelectionOverride(selection.first.mediaTrackGroup, selection.second))
