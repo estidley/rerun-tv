@@ -1,28 +1,24 @@
 # Scheduling v2 implementation plan and handoff
 
-Status: **not started**. The design is approved in the
+Status: **partially implemented**. The design is approved in the
 [scheduling v2 design spec](../specs/2026-10-26-scheduling-v2-design.md); read it first, since
-section numbers below (§) refer to it. Base: `main` at `638ac71` (v1.0.2 plus PR #21, merged 2026-11-03). No implementation code
-exists yet: no `feat/scheduling-v2` branch was created and there's no WIP stash.
+section numbers below (§) refer to it. The device-local quarter-hour grid is implemented in 1.1.0,
+but the time-zone setting/reset flow and all other steps below remain unimplemented.
+The retired sharing-code pilot was removed in the same release; its algorithms are not part of
+this plan or a baseline for future sharing.
 
 ## Handoff summary
 
-- **Goal:** replace the 30-minute UTC grid and tune-time ad fill with a local quarter-hour grid,
-  ad breaks saved at build time, gap fillers, the block-overrun rule, 3-episode runs in daily
-  slots, strict timeline mode, background sync before top-up, safer item removal, a time-zone
-  setting with a reset prompt, and a one-time upgrade rebuild.
-- **Ship as 8 small PRs to `main`, in order.** Each must pass validation on its own and leave the
-  app working.
+- **Remaining goal:** replace tune-time ad fill with ad breaks saved at build time, gap fillers,
+  the block-overrun rule, 3-episode runs in daily slots, strict timeline mode, background sync
+  before top-up, safer item removal, and a time-zone setting with a reset prompt and upgrade rebuild.
+- **Ship the remaining steps as small PRs to `main`, in order.** Each must pass validation on its
+  own and leave the app working.
 - **Defaults Ethan didn't explicitly pick:** run slot times (4 PM and 8 PM), next-season
   continuation, and movie-only channel handling. Keep them configurable and call them out in PR
   descriptions.
 - **Marvelous Timeline (decided):** same quarter-hour grid and ad fill as every channel, with
   strict order and no fillers (§1.6). The earlier fixed-2-ads rule is superseded.
-- **Implemented separately, not part of these eight PRs:** the opt-in
-  [sharing-code pilot](../specs/2026-10-26-shared-schedules-design.md).
-  Preserve its stable identities and explicit algorithm/state versions during the v2 rewrite.
-  Different Plex users can participate with matching effective access. It uses no-service
-  seekable video blocks; commercials and music stay local.
 
 ## Repository rules (from AGENTS.md and owner instructions)
 
@@ -77,8 +73,8 @@ CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; add
   - `app/.../ui/guide/GuideScreen.kt`: window flooring and clock in the effective zone. Reuse
     `app/.../ui/ClockWatch.kt` (PR #11): it already detects clock jumps and zone changes on the
     guide's 30-second tick and bumps `clockEpoch`. Hook the "Reset your schedule?" check into the
-    same signal rather than adding a second poller. Note `gridFloor` there is still the UTC
-    30-minute grid.
+    same signal rather than adding a second poller. The baseline `gridFloor` already uses the
+    device zone and a 15-minute grid, but does not yet read a per-build effective-zone setting.
   - Formatting already follows the device locale, 12/24-hour setting and zone (`clockTime`,
     `clockDate`, `clockFormatSettings` in `Overlays.kt`); a manual zone setting must feed them too.
 - **Tests:**

@@ -94,6 +94,21 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun legacySharingSettingsDoNotClearOrReplaceLockedLocalSchedules() = runBlocking {
+        repo.refreshChannels(items = listOf(movie("one").copy(durationMs = 4 * 3_600_000L)))
+        val station = Lineup.movieChannels().first()
+        repo.ensure(station.id, now)
+        val before = repo.entries(station.id, now, now + 2 * DAY)
+        assertTrue(before.isNotEmpty())
+        db.settings().put(SettingRow("shared_pilot:code", "retired-pilot-setting"))
+
+        repo.refreshChannels()
+        repo.ensure(station.id, now)
+
+        assertEquals(before, repo.entries(station.id, now, now + 2 * DAY))
+    }
+
+    @Test
     fun minimumOverridesPersistAndCannotAccidentallyActivateAnEmptyOrSmallStockPool() = runBlocking {
         val item = movie("one").copy(durationMs = 3_600_000)
         repo.refreshChannels(items = listOf(item))

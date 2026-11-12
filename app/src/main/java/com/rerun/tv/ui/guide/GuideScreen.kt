@@ -83,6 +83,7 @@ import com.rerun.tv.ui.touch.guideTouchScroll
 import com.rerun.tv.ui.touch.guideTouchTap
 import com.rerun.tv.ui.touch.rememberTouchControlsEnabled
 import kotlin.math.abs
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -91,6 +92,8 @@ import kotlinx.coroutines.withContext
 private const val WINDOW_MS = 3 * 3_600_000L
 private const val ENSURE_INTERVAL_MS = 10 * 60_000L
 private val TIME_HEADER_H = 36.dp
+
+private fun gridFloorLocal(ms: Long): Long = gridFloor(ms, ZoneId.systemDefault())
 
 /** Bookkeeping for what the guide has already loaded; plain fields so updating them never recomposes. */
 private class LoadMarks {
@@ -158,7 +161,7 @@ private fun Modifier.vertical(): Modifier = layout { measurable, constraints ->
     }
 }
 
-/** 90s cable-guide grid: channels down the side, half-hours across, a cyan now-line. */
+/** 90s cable-guide grid: channels down the side, quarter-hours across, a cyan now-line. */
 @Composable
 fun GuideScreen(
     controller: TvController,
@@ -177,7 +180,7 @@ fun GuideScreen(
 
     var now by remember { mutableLongStateOf(clock()) }
     var timeFormat by remember { mutableStateOf(clockFormatSettings()) }
-    var windowStart by rememberSaveable { mutableLongStateOf(gridFloor(now)) }
+    var windowStart by rememberSaveable { mutableLongStateOf(gridFloorLocal(now)) }
     var focusRow by rememberSaveable { mutableIntStateOf(0) }
     var focusChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var focusTime by rememberSaveable { mutableLongStateOf(now) }
@@ -207,7 +210,7 @@ fun GuideScreen(
             val jumped = clockWatch.changed()
             now = clock()
             timeFormat = clockFormatSettings()
-            windowStart = if (jumped) gridFloor(now) else maxOf(windowStart, gridFloor(now))
+            windowStart = if (jumped) gridFloorLocal(now) else maxOf(windowStart, gridFloorLocal(now))
             focusTime = if (jumped) now else maxOf(focusTime, now)
             if (jumped) clockEpoch++
             delay(30_000)
@@ -344,22 +347,22 @@ fun GuideScreen(
     }
 
     fun moveTime(forward: Boolean, b: GuideBlock? = focusedBlock) {
-        val minTime = maxOf(clock(), gridFloor(clock()))
+        val minTime = maxOf(clock(), gridFloorLocal(clock()))
         focusTime = if (forward) minOf(b?.endMs ?: (focusTime + GRID_MS), windowStart + WINDOW_MS)
             else maxOf(minTime, maxOf(b?.startMs ?: focusTime, windowStart) - 1)
         if (focusTime >= windowStart + WINDOW_MS - GRID_MS) windowStart += GRID_MS
-        if (focusTime < windowStart) windowStart = maxOf(gridFloor(clock()), windowStart - GRID_MS)
+        if (focusTime < windowStart) windowStart = maxOf(gridFloorLocal(clock()), windowStart - GRID_MS)
     }
 
     fun jumpTime(forward: Boolean) {
         if (updating || rows.isEmpty() || focusRow < 0) return
         val delta = if (forward) WINDOW_MS else -WINDOW_MS
-        windowStart = (windowStart + delta).coerceAtLeast(gridFloor(clock()))
+        windowStart = (windowStart + delta).coerceAtLeast(gridFloorLocal(clock()))
         focusTime = (focusTime + delta).coerceAtLeast(clock())
     }
 
     fun jumpNow() {
-        windowStart = gridFloor(clock())
+        windowStart = gridFloorLocal(clock())
         focusTime = clock()
     }
 

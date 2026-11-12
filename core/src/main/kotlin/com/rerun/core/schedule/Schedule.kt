@@ -1,11 +1,23 @@
 package com.rerun.core.schedule
 
-/** Programs start on :00 and :30. Works in every whole- or half-hour UTC offset. */
-const val GRID_MS = 30 * 60_000L
+import java.time.Instant
+import java.time.ZoneId
 
-fun gridFloor(ms: Long): Long = Math.floorDiv(ms, GRID_MS) * GRID_MS
+/** Programs start at local :00, :15, :30, or :45. */
+const val GRID_MS = 15 * 60_000L
 
-fun gridCeil(ms: Long): Long = -Math.floorDiv(-ms, GRID_MS) * GRID_MS
+fun gridFloor(ms: Long, zone: ZoneId = ZoneId.of("UTC")): Long {
+    val local = Instant.ofEpochMilli(ms).atZone(zone)
+    return local.withMinute((local.minute / 15) * 15).withSecond(0).withNano(0)
+        .toInstant().toEpochMilli()
+}
+
+fun gridCeil(ms: Long, zone: ZoneId = ZoneId.of("UTC")): Long {
+    val local = Instant.ofEpochMilli(ms).atZone(zone)
+    if (local.minute % 15 == 0 && local.second == 0 && local.nano == 0) return ms
+    return Instant.ofEpochMilli(gridFloor(ms, zone)).atZone(zone).plusMinutes(15)
+        .toInstant().toEpochMilli()
+}
 
 enum class EntryKind { PROGRAM, FILLER }
 

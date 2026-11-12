@@ -1,21 +1,15 @@
 # Scheduling v2 design (approved decisions)
 
-Status: **approved by Ethan on 2026-10-26, not implemented.** This is the source of truth for the
-scheduling rewrite. The build order, tests and acceptance criteria are in the
+Status: **approved by Ethan on 2026-10-26, partially implemented.** The device-local
+quarter-hour grid shipped in 1.1.0; the remaining scheduling rewrite is still planned. The build
+order, tests and acceptance criteria are in the
 [implementation plan](../plans/2026-10-26-scheduling-v2.md). Current behavior is described in the
-[design reference](2026-10-23-rerun-design.md#scheduling-and-ads) until v2 ships; update that
+[design reference](2026-10-23-rerun-design.md#scheduling-and-ads); update that
 reference (and README, AGENTS.md, `docs/channel-lineup.md`) as each step lands.
 
 Items marked **(default)** are defaults chosen during review; Ethan didn't pick them explicitly.
 Keep them configurable or easy to change. Everything else is an explicit decision.
-
-Implemented separately: the opt-in
-[shared scheduling pilot using a sharing code](2026-10-26-shared-schedules-design.md).
-This supports the same Plex server with independently authenticated users when their effective
-media access matches. The pilot is implemented, but the scheduling-v2 rewrite described here
-remains unimplemented; the pilot is not part of its approved delivery sequence.
-It uses seekable, code-derived video blocks with device-local commercials and independent music,
-not a hosted publisher. Identical regular-video inputs and effective rules are still required.
+The retired sharing-code pilot is not part of this design or its delivery sequence.
 
 ## 1. Decisions
 
@@ -211,11 +205,11 @@ not a hosted publisher. Identical regular-video inputs and effective rules are s
 - Playback continues to follow wall-clock time (existing invariant). Ads never delay the next
   program.
 
-## 2. Current code facts (main at 638ac71, after PR #21; app version 1.0.2)
+## 2. Current code facts (app version 1.1.0)
 
 | Area | Today | Where |
 |---|---|---|
-| Grid | 30-minute grid computed in **UTC** epoch ms (`GRID_MS`, `gridFloor`, `gridCeil`); each video program padded to the next `:00/:30` with a `FILLER` entry | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
+| Grid | 15-minute grid computed in the scheduler's local wall-clock zone (`GRID_MS`, `gridFloor`, `gridCeil`); each video program is padded to the next `:00/:15/:30/:45` with a `FILLER` entry | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
 | Build model | `Scheduler.extend` appends from the last saved end (or the current grid floor) to 48 h ahead; never rewrites saved entries | `core/.../schedule/Scheduler.kt` |
 | Top-up | `ScheduleRepo.ensure` tops up channels with under 24 h left (`needsTopUp`). It's lazy. Tuning tops up one channel (`ensure(channelId)`, `TunerEngine`); a library sync tops up all (`ensure(now)`, `LibrarySync`). Since PR #11 the guide tops up **only the visible rows plus a margin** (`ensure(ids, now)`, `wantRange`), reads them with `entriesFor(ids, …)`, and repeats the top-up **every 10 minutes while open** (`ENSURE_INTERVAL_MS`). It prunes entries that ended over 6 h ago | `app/src/main/java/com/rerun/tv/data/ScheduleRepo.kt`, `app/.../ui/guide/GuideScreen.kt`, `core/.../schedule/Tune.kt` |
 | Randomness | Since PR #11 a channel with no saved state gets a **random seed** on its first build (`ChannelState(seed = Random.nextLong())` in `ScheduleRepo.topUp`); before that it was `row.id.hashCode()`. The seed and the rest of the scheduler state (deck, recent, episode pointers, `msSinceMovie`, `rngCalls`) are saved as JSON, so a channel is deterministic **from its saved state** but differs between installs and after a state reset | `ScheduleRepo.kt`, `Scheduler.kt`, `Schedule.kt` (`ChannelState`), `core/.../codec/Codecs.kt` (`StateCodec`) |

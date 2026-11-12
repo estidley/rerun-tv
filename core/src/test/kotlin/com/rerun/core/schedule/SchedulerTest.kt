@@ -36,7 +36,7 @@ class SchedulerTest {
     @Test
     fun fillsFortyEightHoursFromGridFloor() {
         val ext = scheduler.extend(horrorDef, movies(10), ChannelState(seed = 42), null, now)
-        assertEquals(gridFloor(now), ext.entries.first().startMs)
+        assertEquals(gridFloor(now, zone), ext.entries.first().startMs)
         assertTrue(ext.entries.last().endMs >= now + 48 * HOUR)
     }
 
@@ -44,7 +44,11 @@ class SchedulerTest {
     fun entriesAreContiguousAndProgramsStartOnGrid() {
         val ext = scheduler.extend(horrorDef, movies(10), ChannelState(seed = 42), null, now)
         ext.entries.zipWithNext().forEach { (a, b) -> assertEquals(a.endMs, b.startMs) }
-        programs(ext.entries).forEach { assertEquals(0L, it.startMs % GRID_MS, "program at ${it.startMs}") }
+        programs(ext.entries).forEach {
+            val local = Instant.ofEpochMilli(it.startMs).atZone(zone)
+            assertEquals(0, local.minute % 15, "program at $local")
+            assertEquals(0, local.second, "program at $local")
+        }
         ext.entries.filter { it.kind == EntryKind.FILLER }.forEach { assertTrue(it.endMs > it.startMs) }
     }
 
@@ -139,7 +143,7 @@ class SchedulerTest {
         val first = scheduler.extend(horrorDef, movies(6), ChannelState(seed = 3), null, now)
         val later = now + 5 * 24 * HOUR
         val second = scheduler.extend(horrorDef, movies(6), first.state, first.entries.last().endMs, later)
-        assertEquals(gridFloor(later), second.entries.first().startMs)
+        assertEquals(gridFloor(later, zone), second.entries.first().startMs)
     }
 
     @Test

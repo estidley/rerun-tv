@@ -75,15 +75,12 @@ Local JVM benchmark medians from the first optimization pass:
 | 2,500-item lineup | 134.8 ms | 33.5 ms |
 
 These are synthetic local measurements with preserved output fingerprints, not TV performance figures.
-Use `PerformanceWorkloadTest` and its XML output to reproduce the workload; timings vary by machine.
+The local 15-minute grid intentionally updates the mixed-video scheduling fingerprint in 1.1.0;
+music and lineup fingerprints remain unchanged. Use `PerformanceWorkloadTest` and its XML output
+to reproduce the current local baseline; timings vary by machine and do not measure TV performance.
 
 ## Physical TV and live Plex acceptance still open
 
-- [ ] Shared-code pilot: two separately signed-in devices on the same Plex server
-  produce equal main-program IDs/times with equal inputs; cold join using an old
-  code, UTC cutover, changed episodes, independent ads/music and long-film cutoff
-  behave as documented. Verify remote code input, process-death ad reuse and TV
-  cold-start costs. This is not established by JVM checks.
 
 - [ ] Inspect Marvel/DC matching on the real Plex library, annotate unrecognized titles with Marvel/DC labels, and verify MCU seasons, legacy-universe transitions, missing files and restart continuation.
 - [ ] Check the integrated icon library's legibility at TV distance in all guide themes.

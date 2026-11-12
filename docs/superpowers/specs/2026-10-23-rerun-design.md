@@ -114,7 +114,7 @@ The full icon set is bundled in `app/src/main/res/drawable-nodpi`; only physical
 
 ## Scheduling and ads
 
-This section describes shipped behavior. An approved replacement (local quarter-hour grid, saved ad breaks, gap fillers, episode runs, time-zone setting) is specified in [scheduling v2](2026-10-26-scheduling-v2-design.md) and planned in [the v2 plan](../plans/2026-10-26-scheduling-v2.md).
+This section describes shipped behavior. The remaining approved scheduling changes (saved ad breaks, gap fillers, episode runs and a time-zone setting) are specified in [scheduling v2](2026-10-26-scheduling-v2-design.md) and planned in [the v2 plan](../plans/2026-10-26-scheduling-v2.md).
 
 - Ordinary active pools use the persisted Low/Medium/High minimum-content preset: 4, 12 or 24
   hours respectively, with Medium as the default. Channels can be built-in, generated, custom, or music.
@@ -140,7 +140,9 @@ This section describes shipped behavior. An approved replacement (local quarter-
   Recognized old names migrate by channel ID without changing rules, numbers or locked entries.
 - Schedules extend approximately 48 hours and top up below 24 hours. Epoch times are UTC; time blocks use the device zone.
 - Movies use a shuffled deck; shows preserve episode pointers. Music plays back to back.
-- Video padding ends at the next half-hour boundary and becomes a filler entry.
+- Video padding ends at the next device-local :00/:15/:30/:45 boundary and becomes a filler entry.
+  The retired schedule-sharing pilot has no effect; existing Room entries, including its former
+  schedules, stay locked until ordinary top-ups or intentional invalidation replace them.
 - Routine top-ups do not reshuffle existing entries. Changing included libraries rebuilds schedules;
   missing items and removed channels invalidate affected playback. Channel edits rebuild the future after the current entry.
 - Each channel owns one schedule; there are no regional delayed feeds. Room migration 2-to-3
@@ -157,28 +159,10 @@ This section describes shipped behavior. An approved replacement (local quarter-
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.
 - Program details retain the full scheduled start/end, including following filler; only grid geometry is clipped to the visible window, not the underlying program times.
-- Guide queries follow contiguous filler chains on either side of the query boundary, stopping at a program or gap, so split shared breaks retain their full range.
+- Guide queries follow contiguous filler chains on either side of the query boundary, stopping at a program or gap, so split breaks retain their full range.
 - Each guide opening selects the current station and wall-clock program after loading; subsequent browsing is not reset by schedule reloads.
 - The upper-right channel badge appears on channel changes or explicit program info, not on successive commercial or program transitions within the same channel.
 - Guide data is bounded to nearby rows and a nine-hour range around the three-hour view; only visible cells are composed. Horizontal movement within that range uses cached blocks and metadata. Revisions, clock jumps, retries and ten-minute top-ups refresh the cache, and distant rows/metadata are evicted.
-
-### Opt-in shared-code pilot
-
-The opt-in shared pilot is separate from ordinary scheduling and scheduling v2.
-Its [design](2026-10-26-shared-schedules-design.md) specifies predefined stock video channels
-configured at 100-199, fixed 3-hour UTC windows and a compact 24-symbol recipe. Custom,
-edited/unsupported policies, music and start-over stay independent. Core generation seeks
-directly through catalog-bounded episode transitions rather than replaying calendar history.
-Only main programs are shared; commercial selections remain local and cannot move program
-boundaries. Settings provides code generation, grouped copy/paste entry and disabling, plus
-per-channel cutovers and manually comparable input hints.
-Code text uses a larger monospace font with a digit-zero hint. Join opens a dedicated
-focused entry form with paste, validation, explicit confirmation and cancellation; generation
-is a separate action lower on the main shared-settings page.
-Changes preserve airing programs
-before a UTC-window cutover. Stale-library refresh requests are controller-owned and do not
-block playback; saved snapshots remain usable, with failures distinct from empty content.
-The ordinary scheduler remains the default. Physical two-device/TV acceptance remains open.
 
 ## Startup, updates and lifecycle
 

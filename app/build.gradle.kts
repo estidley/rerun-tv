@@ -32,8 +32,8 @@ android {
         applicationId = "com.rerun.tv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.0.4"
+        versionCode = 7
+        versionName = "1.1.0"
     }
 
     signingConfigs {
