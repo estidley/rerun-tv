@@ -73,7 +73,7 @@ import org.robolectric.annotation.GraphicsMode
 @Config(application = Application::class, sdk = [35], qualifiers = "w1920dp-h1080dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class GuideScreenTest {
-    // A fixed instant mid-grid-slot keeps tests from straddling a :00/:30 boundary.
+    // A fixed instant mid-grid-slot keeps tests from straddling a quarter-hour boundary.
     private val baseNow = Math.floorDiv(System.currentTimeMillis(), 3_600_000L) * 3_600_000L + 10 * 60_000L
 
     @get:Rule val compose = createComposeRule()
@@ -99,7 +99,6 @@ class GuideScreenTest {
         `when`(settings.flag(anyString(), anyBoolean())).thenReturn(flowOf(false))
         `when`(settings.isOn(anyString(), anyBoolean())).thenReturn(false)
         schedule = mock(ScheduleRepo::class.java)
-        `when`(schedule.sharedRefreshRequests).thenReturn(kotlinx.coroutines.flow.MutableSharedFlow())
         `when`(schedule.guideRevision).thenReturn(revision)
         `when`(app.settings).thenReturn(settings)
         `when`(app.schedule).thenReturn(schedule)
@@ -143,7 +142,7 @@ class GuideScreenTest {
             compose.waitForIdle()
         }
         verify(schedule, times(1)).entriesFor(anyCollection(), anyLong(), anyLong())
-        verify(schedule).entriesFor(listOf("test:0"), start - 6 * slot, start + 12 * slot)
+        verify(schedule).entriesFor(listOf("test:0"), start - 12 * slot, start + 24 * slot)
         verify(schedule, times(1)).item(movie.key)
         verify(schedule, times(1)).ensure(anyCollection(), anyLong())
         compose.onNode(hasAnyAncestor(hasTestTag("guide-row:test:0")) and isSelected()).assertExists()
@@ -152,7 +151,7 @@ class GuideScreenTest {
             compose.waitForIdle()
         }
         verify(schedule, times(1)).entriesFor(anyCollection(), anyLong(), anyLong())
-        repeat(12) {
+        repeat(24) {
             compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
             compose.waitForIdle()
         }
@@ -166,7 +165,7 @@ class GuideScreenTest {
         verify(schedule, times(2)).ensure(anyCollection(), anyLong())
         verify(schedule, times(3)).item(movie.key)
         val ranges = mockingDetails(schedule).invocations.filter { it.method.name == "entriesFor" }
-        assertTrue(ranges.all { (it.arguments[2] as Long) - (it.arguments[1] as Long) == 18 * slot })
+        assertTrue(ranges.all { (it.arguments[2] as Long) - (it.arguments[1] as Long) == 36 * slot })
         assertTrue(compose.onAllNodesWithText("Refreshed program").fetchSemanticsNodes().isNotEmpty())
     }
 
@@ -187,9 +186,11 @@ class GuideScreenTest {
                 ScheduleEntry("test:0", nextEnd, lastEnd, EntryKind.PROGRAM, null),
             ),
         ))
-        fun assertRange(from: Long, to: Long) {
-            val label = "A long channel name 0  ·  ${com.rerun.tv.ui.player.clockDate(from)}  " +
+        fun labelForRange(from: Long, to: Long) =
+            "A long channel name 0  ·  ${com.rerun.tv.ui.player.clockDate(from)}  " +
                 "${com.rerun.tv.ui.player.clockTime(from)} – ${com.rerun.tv.ui.player.clockTime(to)}"
+        fun assertRange(from: Long, to: Long) {
+            val label = labelForRange(from, to)
             compose.waitUntil(10_000) {
                 if (!compose.mainClock.autoAdvance) compose.mainClock.advanceTimeByFrame()
                 compose.onAllNodesWithText(label).fetchSemanticsNodes().isNotEmpty()
@@ -201,6 +202,17 @@ class GuideScreenTest {
             val row = compose.onNodeWithTag("guide-row:test:0").fetchSemanticsNode().boundsInRoot
             assertTrue(cell.left >= channel.right)
             assertTrue(cell.right <= row.right)
+        }
+        fun moveTimeUntil(forward: Boolean, from: Long, to: Long) {
+            repeat(((lastEnd - start) / com.rerun.core.schedule.GRID_MS).toInt()) {
+                compose.onRoot().performKeyInput {
+                    pressKey(if (forward) Key.DirectionRight else Key.DirectionLeft)
+                }
+                compose.mainClock.advanceTimeBy(100)
+                compose.mainClock.advanceTimeByFrame()
+                if (compose.onAllNodesWithText(labelForRange(from, to)).fetchSemanticsNodes().isNotEmpty()) return
+            }
+            assertRange(from, to)
         }
         compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
@@ -225,17 +237,8 @@ class GuideScreenTest {
         compose.onNodeWithTag("guide-channel:test:0").performTouchInput { click() }
         compose.mainClock.advanceTimeBy(100)
         assertRange(end, nextEnd)
-        compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
-        compose.mainClock.advanceTimeBy(100)
-        assertRange(nextEnd, lastEnd)
-        repeat(10) {
-            compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
-            compose.mainClock.advanceTimeBy(100)
-            assertRange(end, nextEnd)
-        }
-        compose.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
-        compose.mainClock.advanceTimeBy(100)
-        assertRange(start, end)
+        moveTimeUntil(forward = true, nextEnd, lastEnd)
+        moveTimeUntil(forward = false, start, end)
     }
 
     @Test
@@ -776,7 +779,7 @@ class GuideScreenTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
         val currentWindow = "guide-time:$start"
         compose.onNodeWithTag(currentWindow).assertExists()
-        repeat(7) {
+        repeat((3 * 3_600_000L / slot).toInt()) {
             compose.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
             compose.waitForIdle()
         }
@@ -790,6 +793,72 @@ class GuideScreenTest {
         compose.onRoot().performKeyInput { pressKey(Key.Enter) }
         compose.waitForIdle()
         compose.onNodeWithTag(currentWindow).assertExists()
+    }
+
+    @Test
+    fun headerSlotsStayOnLocalHalfHours() {
+        val chicago = java.time.ZoneId.of("America/Chicago")
+        val ten = java.time.Instant.parse("2026-10-23T15:00:00Z").toEpochMilli()
+        val window = 3 * 3_600_000L
+        val slots = headerLabelSlots(ten, window, chicago)
+        assertEquals(6, slots.size)
+        assertEquals(ten, slots.first().first)
+        assertTrue(slots.all { (mark, next) -> next - mark == 30 * 60_000L && mark >= ten && next <= ten + window })
+        val quarter = java.time.Instant.parse("2026-10-23T15:15:00Z").toEpochMilli()
+        val shifted = headerLabelSlots(quarter, window, chicago)
+        assertEquals(ten, shifted.first().first)
+        assertTrue(shifted.none { (mark, _) -> mark == quarter })
+        assertEquals(5, shifted.count { (mark, next) -> mark >= quarter && next <= quarter + window })
+        val kathmandu = java.time.ZoneId.of("Asia/Kathmandu")
+        val localTen = java.time.Instant.parse("2026-10-23T04:15:00Z").toEpochMilli()
+        assertEquals(localTen, headerLabelSlots(localTen, window, kathmandu).first().first)
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h720dp-mdpi")
+    fun halfHourHeaderLabelsFitAt720pInTwelveHourTime() = runBlocking<Unit> {
+        val context = RuntimeEnvironment.getApplication()
+        val originalContext = com.rerun.tv.ui.player.clockContext
+        val originalLocale = java.util.Locale.getDefault()
+        val originalZone = java.util.TimeZone.getDefault()
+        val originalHour = android.provider.Settings.System.getString(context.contentResolver, android.provider.Settings.System.TIME_12_24)
+        val fixedNow = java.time.Instant.parse("2026-10-26T10:07:00Z").toEpochMilli()
+        val start = com.rerun.core.schedule.gridFloor(fixedNow)
+        val halfHour = 30 * 60_000L
+        channels.value = listOf(channels.value.first())
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
+            "test:0" to listOf(ScheduleEntry("test:0", start, start + halfHour, EntryKind.PROGRAM, null)),
+        ))
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            com.rerun.tv.ui.player.clockContext = context
+            android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, "12")
+            compose.setContent { GuideScreen(controller, schedule, clock = { fixedNow }) }
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+            }
+            repeat(6) {
+                compose.onNodeWithTag("guide-hour:${start + it * halfHour}").assertExists()
+            }
+            compose.onNodeWithTag("guide-hour:${start + 15 * 60_000L}").assertDoesNotExist()
+            fun assertFits(ms: Long) {
+                val layouts = mutableListOf<TextLayoutResult>()
+                compose.onNodeWithText(com.rerun.tv.ui.player.clockTime(ms)).performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+                    it(layouts)
+                }
+                val layout = layouts.single()
+                assertEquals(1, layout.lineCount)
+                assertFalse(layout.isLineEllipsized(0))
+            }
+            assertFits(start)
+            assertFits(start + 2 * 3_600_000L)
+        } finally {
+            com.rerun.tv.ui.player.clockContext = originalContext
+            java.util.Locale.setDefault(originalLocale)
+            java.util.TimeZone.setDefault(originalZone)
+            android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, originalHour)
+        }
     }
 
     private fun assertGuideRendering() {

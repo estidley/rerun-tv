@@ -65,11 +65,11 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     var signingOut by remember { mutableStateOf(false) }
     val subtitlesOn by remember(app.settings) { app.settings.flag(Settings.SUBTITLES, false) }.collectAsState(false)
     val normalizeLoudness by remember(app.settings) { app.settings.flag(Settings.NORMALIZE_LOUDNESS, false) }.collectAsState(false)
-    val focusRows = remember { listOf(2, 4, 3, 5, 3, 4, 1, 3, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
+    val focusRows = remember { listOf(2, 4, 3, 5, 3, 4, 3, 4, 1, 3, 3).map { count -> List(count) { FocusRequester() } } }
     fun buttonFocus(row: Int, column: Int): Modifier {
         val current = focusRows[row][column]
         val availableRows = focusRows.mapIndexed { index, buttons ->
-            if (index == 8 && lineupBusy) buttons.drop(1) else buttons
+            if (index == 7 && lineupBusy) buttons.drop(1) else buttons
         }
         val order = availableRows.flatten()
         val index = order.indexOf(current)
@@ -194,10 +194,6 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                 style = Retro.Caption,
             )
             BasicText("LINEUP", style = Retro.GuideNumber)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Shared scheduling pilot", { controller.go(Screen.SharedPilot) },
-                    modifier = buttonFocus(6, 0), sub = "Share a schedule code")
-            }
             BasicText(
                 "Included Plex music libraries sync automatically, with a channel for each genre that meets the minimum programming setting. Deselect them in Manage libraries to remove stock music stations. Subtitles stay off until you turn them on.",
                 style = Retro.Caption,
@@ -211,7 +207,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             localStatus = null
                             controller.setMinimumContent(choice)
                         }
-                    }, modifier = buttonFocus(7, index), selected = minimumContent == choice)
+                    }, modifier = buttonFocus(6, index), selected = minimumContent == choice)
                 }
             }
             BasicText(
@@ -227,14 +223,14 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
             val shownLastSync = update.lastSyncMs ?: lastSync
             BasicText("Plex server: $server" + if (shownLastSync > 0) "   ·   last synced ${clockTime(shownLastSync)}" else "", style = Retro.Body)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Manage libraries", { controller.go(Screen.Libraries) }, modifier = buttonFocus(8, 0), enabled = !lineupBusy)
+                TvButton("Manage libraries", { controller.go(Screen.Libraries) }, modifier = buttonFocus(7, 0), enabled = !lineupBusy)
                 TvButton("Re-sync now", {
                     if (!lineupBusy) {
                         localStatus = null
                         controller.resyncLibrary()
                     }
-                }, modifier = buttonFocus(8, 1))
-                TvButton("Channels", { controller.go(Screen.Channels) }, modifier = buttonFocus(8, 2))
+                }, modifier = buttonFocus(7, 1))
+                TvButton("Channels", { controller.go(Screen.Channels) }, modifier = buttonFocus(7, 2))
                 TvButton("Sign out", {
                     if (!signingOut) {
                         signingOut = true
@@ -250,15 +246,15 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             }
                         }
                     }
-                }, modifier = buttonFocus(8, 3), sub = if (signingOut) "Signing out..." else null)
+                }, modifier = buttonFocus(7, 3), sub = if (signingOut) "Signing out..." else null)
             }
             syncStatus?.let { BasicText(it, style = Retro.Body.copy(color = Retro.Cyan)) }
-            TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(9, 0))
+            TvButton("Ad library", { controller.go(Screen.AdLibrary) }, modifier = buttonFocus(8, 0))
 
             BasicText("AUDIO", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TvButton("Audio language: ${languageName(audioLanguage)}", { controller.go(Screen.AudioLanguage) }, modifier = buttonFocus(10, 0))
-                TvButton("Current program audio tracks", { controller.go(Screen.AudioTracks) }, modifier = buttonFocus(10, 1))
+                TvButton("Audio language: ${languageName(audioLanguage)}", { controller.go(Screen.AudioLanguage) }, modifier = buttonFocus(9, 0))
+                TvButton("Current program audio tracks", { controller.go(Screen.AudioTracks) }, modifier = buttonFocus(9, 1))
                 TvButton("Normalize loudness", {
                     scope.launch {
                         try {
@@ -268,7 +264,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                             localStatus = "Couldn't change loudness normalization: ${e.message}"
                         }
                     }
-                }, modifier = buttonFocus(10, 2), selected = normalizeLoudness)
+                }, modifier = buttonFocus(9, 2), selected = normalizeLoudness)
             }
             BasicText(
                 "Level programs and ads using Plex audio transcoding. Requires Plex Pass, a recent server, and " +
@@ -289,7 +285,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
                                 localStatus = "Couldn't change HDR playback: ${e.message}"
                             }
                         }
-                    }, modifier = buttonFocus(11, index), selected = HdrMode.from(hdrMode) == mode)
+                    }, modifier = buttonFocus(10, index), selected = HdrMode.from(hdrMode) == mode)
                 }
             }
             BasicText(

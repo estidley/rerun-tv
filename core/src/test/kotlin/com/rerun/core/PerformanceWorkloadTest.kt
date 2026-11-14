@@ -34,7 +34,7 @@ class PerformanceWorkloadTest {
         val library = (0 until 5_000).map { episode("e$it", "Show ${it % 250}", episode = it) } +
             (0 until 500).map { movie("m$it") }
         val def = ChannelDef("mixed", 400, "Mixed", ChannelKind.CUSTOM, Rules())
-        measure("mixed-5500", "4f139395b86907fc62d5836df114207b5c46b9bc1a22bf60a5d22a478974677f") {
+        measure("mixed-5500", "779667df2e954f78827f444accc97aa298bd4aea315b99d6d72df5237be26fa8") {
             scheduler.extend(def, library, ChannelState(seed = 42), null, now)
         }
     }

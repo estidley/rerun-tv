@@ -1,21 +1,15 @@
 # Scheduling v2 design (approved decisions)
 
-Status: **approved by Ethan on 2026-10-26, not implemented.** This is the source of truth for the
-scheduling rewrite. The build order, tests and acceptance criteria are in the
+Status: **approved by Ethan on 2026-10-26, partially implemented.** The device-local
+quarter-hour grid shipped in 1.1.0; the remaining scheduling rewrite is still planned. The build
+order, tests and acceptance criteria are in the
 [implementation plan](../plans/2026-10-26-scheduling-v2.md). Current behavior is described in the
-[design reference](2026-10-23-rerun-design.md#scheduling-and-ads) until v2 ships; update that
+[design reference](2026-10-23-rerun-design.md#scheduling-and-ads); update that
 reference (and README, AGENTS.md, `docs/channel-lineup.md`) as each step lands.
 
 Items marked **(default)** are defaults chosen during review; Ethan didn't pick them explicitly.
 Keep them configurable or easy to change. Everything else is an explicit decision.
-
-Implemented separately: the opt-in
-[shared scheduling pilot using a sharing code](2026-10-26-shared-schedules-design.md).
-This supports the same Plex server with independently authenticated users when their effective
-media access matches. The pilot is implemented, but the scheduling-v2 rewrite described here
-remains unimplemented; the pilot is not part of its approved delivery sequence.
-It uses seekable, code-derived video blocks with device-local commercials and independent music,
-not a hosted publisher. Identical regular-video inputs and effective rules are still required.
+The retired sharing-code pilot is not part of this design or its delivery sequence.
 
 ## 1. Decisions
 
@@ -211,19 +205,19 @@ not a hosted publisher. Identical regular-video inputs and effective rules are s
 - Playback continues to follow wall-clock time (existing invariant). Ads never delay the next
   program.
 
-## 2. Current code facts (main at 638ac71, after PR #21; app version 1.0.2)
+## 2. Current code facts (app version 1.1.0)
 
 | Area | Today | Where |
 |---|---|---|
-| Grid | 30-minute grid computed in **UTC** epoch ms (`GRID_MS`, `gridFloor`, `gridCeil`); each video program padded to the next `:00/:30` with a `FILLER` entry | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
+| Grid | 15-minute grid computed in the scheduler's local wall-clock zone (`GRID_MS`, `gridFloor`, `gridCeil`); each video program is padded to the next `:00/:15/:30/:45` with a `FILLER` entry. A retained ending that is off a mark is bridged the same way before the next video program | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
 | Build model | `Scheduler.extend` appends from the last saved end (or the current grid floor) to 48 h ahead; never rewrites saved entries | `core/.../schedule/Scheduler.kt` |
 | Top-up | `ScheduleRepo.ensure` tops up channels with under 24 h left (`needsTopUp`). It's lazy. Tuning tops up one channel (`ensure(channelId)`, `TunerEngine`); a library sync tops up all (`ensure(now)`, `LibrarySync`). Since PR #11 the guide tops up **only the visible rows plus a margin** (`ensure(ids, now)`, `wantRange`), reads them with `entriesFor(ids, …)`, and repeats the top-up **every 10 minutes while open** (`ENSURE_INTERVAL_MS`). It prunes entries that ended over 6 h ago | `app/src/main/java/com/rerun/tv/data/ScheduleRepo.kt`, `app/.../ui/guide/GuideScreen.kt`, `core/.../schedule/Tune.kt` |
 | Randomness | Since PR #11 a channel with no saved state gets a **random seed** on its first build (`ChannelState(seed = Random.nextLong())` in `ScheduleRepo.topUp`); before that it was `row.id.hashCode()`. The seed and the rest of the scheduler state (deck, recent, episode pointers, `msSinceMovie`, `rngCalls`) are saved as JSON, so a channel is deterministic **from its saved state** but differs between installs and after a state reset | `ScheduleRepo.kt`, `Scheduler.kt`, `Schedule.kt` (`ChannelState`), `core/.../codec/Codecs.kt` (`StateCodec`) |
 | Picks | Shows: weighted random show, next episode in order, pointer advances on every pick. Movies: shuffled deck with a recent hold-back. Mixed: movie when `msSinceMovie >= movieEveryMs` (6 h). In order: round-robin shows; movies by year. Chronological: persisted ordered deck | `Scheduler.kt` |
 | Time blocks | `TimeBlock` checked only at each program's start, so programs can run into a block. Only built-in block: Cartoon Network weekdays 4–7 PM, Toonami titles | `core/.../model/Channels.kt`, `core/.../catalog/Catalog.kt` |
-| Ads | Chosen **at tune time** by `adFiller` (seeded by channel and break start), filling the whole FILLER back to back; Up Next card if none fits | `core/.../schedule/AdFiller.kt`, `app/.../player/TunerEngine.kt` |
+| Ads | Chosen **at tune time** by `adFiller` (seeded by channel and break start), filling the whole FILLER back to back; Up Next card if none fits. A bounded plan resumes a long break without replaying its prefix | `core/.../schedule/AdFiller.kt`, `app/.../player/TunerEngine.kt` |
 | Entries | Room `entries` table: `kind` stored as a **string** and decoded with `EntryKind.valueOf`; unique `(channelId, startMs)`; DB version 3 | `app/.../data/Db.kt` (`EntryRow`) |
-| Guide | 3-hour window; filler folded into the previous program; gaps are Off Air; music and Buy Me Maybe hourly. Since PR #11 the channel column shows a vertical number and a wordmark, and its width follows the row height (`iconDp * 400 / 270 + 54` dp, from about 125 dp in Compact to almost 300 dp in Large), so the timeline and every program cell get narrower. While updating it shows skeleton rows. Touch controls (PR #12) work on the rows and cells | `core/.../schedule/GuideBlocks.kt`, `app/.../ui/guide/GuideScreen.kt`, `GuideLayout.kt` |
+| Guide | 3-hour window; filler folded into the previous program; gaps are Off Air; music and Buy Me Maybe hourly. The ruler labels whole local half-hour slots; Left/Right still move by 15 minutes. Since PR #11 the channel column shows a vertical number and a wordmark, and its width follows the row height (`iconDp * 400 / 270 + 54` dp, from about 125 dp in Compact to almost 300 dp in Large), so the timeline and every program cell get narrower. While updating it shows skeleton rows. Touch controls (PR #12) work on the rows and cells | `core/.../schedule/GuideBlocks.kt`, `app/.../ui/guide/GuideScreen.kt`, `GuideLayout.kt` |
 | Tune | `locate` finds the entry covering now; 5 s end skip; Off Air waits for the next entry | `core/.../schedule/Tune.kt`, `TunerEngine.kt` |
 | Time zone | `Scheduler(ZoneId.systemDefault())` built once at app start. Since PR #11, `ClockWatch` notices a clock jump or a zone change on the guide's 30-second tick (wall vs. elapsed time and `TimeZone.getDefault().id`); the guide then re-floors its window and relabels times. It doesn't prompt or rebuild. `clockTime`/`clockDate` follow the device locale, 12/24-hour setting and zone | `app/.../RerunApp.kt`, `app/.../ui/ClockWatch.kt`, `app/.../ui/player/Overlays.kt` |
 | Library sync | **Manual only** (onboarding, Settings resync and libraries). App start only re-plans from the saved library (`refreshChannelsForAppVersion`) | `app/.../data/LibrarySync.kt`, `RerunApp.kt`, `app/.../ui/TvController.kt` |

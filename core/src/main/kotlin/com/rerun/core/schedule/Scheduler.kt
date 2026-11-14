@@ -14,11 +14,13 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
 
 /**
  * Writes a channel's schedule forward. Never touches entries that already exist: it only
- * appends from [lastEndMs] (or restarts at the current half-hour if that's in the past).
+ * appends from [lastEndMs] (or restarts at the current quarter-hour if that's in the past).
  *
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
  * shuffle (random show, weighted by episode count, episodes in order). Every program is
- * padded to the next :00/:30 with a FILLER entry. Music stations play back to back.
+ * padded to the next local :00/:15/:30/:45 with a FILLER entry. A retained ending that is
+ * already past the current grid floor but not itself on a mark gets the same filler before
+ * the next video program. Music stations play back to back.
  * Chronology channels use one ordered deck across movies and episodes instead of the movie rotation.
  */
 class Scheduler(private val zone: ZoneId) {
@@ -40,11 +42,19 @@ class Scheduler(private val zone: ZoneId) {
             Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) emptySet() else Resolver.networksOf(it)) }, music)
         }
 
-        val floor = gridFloor(nowMs)
+        val floor = gridFloor(nowMs, zone)
         var cursor = if (lastEndMs == null || lastEndMs < floor) floor else lastEndMs
         val end = nowMs + horizonMs
         val run = Run(state)
         val out = ArrayList<ScheduleEntry>()
+        if (!backToBack && cursor < end) {
+            val aligned = gridCeil(cursor, zone)
+            if (aligned > cursor) {
+                out += ScheduleEntry(def.id, cursor, aligned, EntryKind.FILLER, null)
+                run.msSinceMovie += aligned - cursor
+                cursor = aligned
+            }
+        }
 
         val poolKeys by lazy { items.mapTo(HashSet()) { it.key } }
         while (cursor < end) {
@@ -55,7 +65,7 @@ class Scheduler(private val zone: ZoneId) {
 
             val length = item.durationMs.coerceAtLeast(1L)
             val progEnd = cursor + length
-            val slotEnd = if (backToBack) progEnd else gridCeil(progEnd)
+            val slotEnd = if (backToBack) progEnd else gridCeil(progEnd, zone)
             out += ScheduleEntry(def.id, cursor, progEnd, EntryKind.PROGRAM, item.key)
             if (!backToBack && slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
 

@@ -45,7 +45,7 @@ fun hourlyGuideBlocks(entries: List<ScheduleEntry>, fromMs: Long, toMs: Long, ti
             spans += block.copy(itemKey = null, title = if (block.offAir) null else title)
         }
     }
-    val hourMs = 2 * GRID_MS
+    val hourMs = 3_600_000L
     return buildList {
         for (span in spans) {
             if (span.offAir) {

@@ -4,7 +4,7 @@ Old-school cable TV, built from your own Plex library. For Fire TV and Android T
 
 Turn it on and something's already playing. Flip channels and you land in the middle of whatever's on. There's a 90s cable guide, a CRT tube look, static between channels, and "technical difficulties" when your server naps.
 
-The current Android app version is 1.0.4 (versionCode 6); Settings > About displays the installed app version.
+The current Android app version is 1.1.0 (versionCode 7); Settings > About displays the installed app version.
 
 - **Network channels:** Dinky Channel, Dinky XD, Slimelodeon, Cartoon Notwork, Kaboomerang, Toonuki, PBJ Kids, Sigh-Fi Channel, USB Network, HMO, and more. The names on screen are parodies; each channel keeps its real network name behind the scenes. With TMDB lists (below), a show lands on every network it really aired on. Without them, shows land by the network and studio stored in Plex.
 - **Streaming originals follow the studio and the audience:**
@@ -30,7 +30,7 @@ The current Android app version is 1.0.4 (versionCode 6); Settings > About displ
 - **Audio tracks:** choose a preferred audio language in Settings. Automatic uses Plex's selected track; an unavailable language falls back to the default. Hold Right for 2 seconds while watching, or choose Current program audio tracks in Settings, to select a track for this airing only. Multi-track video uses a Plex playback session with an explicit audio stream ID; it does not change saved Plex track selections or watch history.
 - **Normalize loudness:** optional and off by default in Settings > Audio. Requests Plex audio normalization for both programs and ads whose selected audio stream supports it, using audio transcoding while allowing video copy. Requires a recent Plex server (1.43.4+), Plex Pass, and **Analyze audio tracks for loudness** under Plex Server > Library, including the commercials library. Music stations are unchanged. Unanalyzed tracks, Dolby Vision, video conversion (including HDR-to-SDR), and selected subtitles (including text) currently skip normalization and show a warning; volume consistency is not guaranteed when either source is ineligible. This third-party integration still needs live Plex/TV validation; it does not change Plex's saved track selections or initiate analysis.
 - **HDR compatibility:** Auto HDR checks the connected display and HDR decoder before direct playback. Select Convert HDR to SDR in Settings if your TV flashes or shows incorrect colors even when it reports HDR support; Prefer native HDR opts out of capability-based conversion. Conversion requests H.264 8-bit video with video remuxing disabled, and requires **Enable HDR tone mapping** in Plex Server > Transcoder and the server owner's Plex Pass. Server hardware must keep up; some Dolby Vision formats require an SDR version. Detected HDR playback errors retry once using SDR conversion. These settings apply to episodes, movies, and ad clips.
-- **Adaptive guide:** opening the guide selects the current station and its currently airing program after loading. Later row refreshes preserve the channel you selected rather than snapping back to the playing station. Hold Up/Down to page through channels and Left/Right to jump three hours; the **NOW** header button returns to the current time without changing stations. Whole rows fill the available guide area when there are enough channels. Larger displays can show more rows; shorter lineups keep readable row heights. Each channel cell shows a vertical channel number and the channel's illustrated wordmark, without duplicate name text. The focused channel's current name appears in the program panel, and alternating row colors make the grid easier to follow.
+- **Adaptive guide:** opening the guide selects the current station and its currently airing program after loading. Later row refreshes preserve the channel you selected rather than snapping back to the playing station. Hold Up/Down to page through channels and Left/Right to jump three hours; the **NOW** header button returns to the current time without changing stations. Left and Right still step by 15 minutes. The time ruler labels each whole half hour, so a 12-hour time such as 10:00 AM stays on one line. Whole rows fill the available guide area when there are enough channels. Larger displays can show more rows; shorter lineups keep readable row heights. Each channel cell shows a vertical channel number and the channel's illustrated wordmark, without duplicate name text. The focused channel's current name appears in the program panel, and alternating row colors make the grid easier to follow.
 - **Locale formats:** every time and date follows the device locale (12/24-hour clock, date order). The guide shows the date by the clock and in the header. The playback info banner shows Up Next right-aligned with its start time and a countdown.
 - **Theme colors:** Settings offers Default (classic cable blue), Lucy (1950s cherry and mint), Partridge (1970s harvest gold and avocado), Headroom (1980s neon and midnight), and Gak (1990s slime and grape), arranged in two readable rows. The choice applies immediately to the guide, menus, and overlays and is saved between sessions; existing saved theme choices keep working.
 - **Retro typography:** VT323 stays on display headings and channel-number overlays; Barlow Semi Condensed gives menus, guide listings, descriptions and help text a clearer broadcast-style companion.
@@ -43,7 +43,7 @@ The current Android app version is 1.0.4 (versionCode 6); Settings > About displ
 - **Playback descriptions:** the information banner shows a two-line Plex program description when available, using the guide's bounded credential/revision-scoped cache and existing timeout. Hidden banners make no description request, and music tracks stay unchanged.
 - **Start over:** hold Left for 2 seconds during an episode or movie (a message appears if the current program cannot be restarted). Movies ask you to confirm starting from the beginning, with **Start movie** and **Cancel** choices; they never offer episode queues. Episodes offer just this episode or all remaining available episodes of the same show, in season/episode order across seasons. Playback starts at zero on the device-local **From the Top** station; the original station keeps its schedule. Changing stations prompts **Pause until later**, **Remove station**, or **Cancel**; playback stays held through loading and retries until you decide. Opening the guide or menus does not prompt. Paused playback and its queue stay in the guide/channel list across app restarts, resuming from the saved media position. Retuning the same saved episode preserves its audio choice and HDR fallback. Progress is also checkpointed every five seconds; an abrupt process loss may replay those last few seconds. The station disappears when its queue finishes and returns to the original station if still active (or an active fallback). Starting another program warns before replacing a saved station. A short Left still jumps to the last channel. From the Top stays out of the channel editor and last-channel history; it uses channel 999 or the next free number.
 - **Minimum programming:** Settings > Lineup offers Low (4 hours), Medium (12 hours, the default), and High (24 hours). Special movie-overflow and decade thresholds remain when higher. Changing the preset rebuilds eligibility from the saved library without a Plex rescan. Renaming or editing a station does not waive its minimum. Channels > Edit > Minimum programming lets you explicitly choose a lower/higher minimum or restore the default; that override takes priority over the preset. Even "No minimum" needs playable content; music stations still need included music tracks. Empty/dormant channels stay out of the guide, and stock extra channels are not created until they qualify. Known old stock names update automatically; personal renames, rules and locked schedules remain intact.
-- **Locked 48-hour schedule.** Routine top-ups append without reshuffling stored entries. Changing included libraries intentionally rebuilds schedules; removing scheduled media or channels can also replace playback.
+- **Local 15-minute scheduling.** Movies and episodes start at :00, :15, :30 or :45 in your device's local time zone. Music and Buy Me Maybe continue back to back. Editing a channel keeps what is on now; if that entry ends off a quarter-hour mark, filler runs until the next mark and the following movie or episode starts there. Schedules are stored on the device; the schedule-sharing pilot has been removed. Existing saved schedules stay intact after upgrading, and routine top-ups append without reshuffling them for up to 48 hours ahead. Changing included libraries intentionally rebuilds schedules; removing scheduled media or channels can also replace playback.
 - **The Rest finds otherwise-unmatched video.** Only optional genre, movie-multiplex, decade and language stations that meet their minimum remove items from this catchall, so below-threshold collections still have somewhere to play.
 - **Read-only.** Nothing you watch is reported back to Plex. Your Continue Watching stays clean.
 - **Updates and sign-out:** database upgrades preserve server/library choices using explicit migrations, never a silent database reset. The first launch after an app update rebuilds saved channels (other launches skip it); startup shows loading meanwhile, not premature no-channel instructions; failures remain distinct from an empty lineup. Missing server configuration returns to setup. Sign out clears Plex credentials and the local library/lineup while keeping display preferences.
@@ -187,7 +187,7 @@ Set-RerunJdk
 if ($LASTEXITCODE -ne 0) { throw 'Validation failed' }
 ```
 
-Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design reference](docs/superpowers/specs/2026-10-23-rerun-design.md). Delivered scope and outstanding device checks: [PR readiness](docs/superpowers/plans/2026-10-23-rerun-phase1-core-tv.md). Planned scheduling v2 (not yet shipped): [design](docs/superpowers/specs/2026-10-26-scheduling-v2-design.md) and [plan/handoff](docs/superpowers/plans/2026-10-26-scheduling-v2.md).
+Contributor guidance: [AGENTS.md](AGENTS.md). Current architecture: [design reference](docs/superpowers/specs/2026-10-23-rerun-design.md). Delivered scope and outstanding device checks: [PR readiness](docs/superpowers/plans/2026-10-23-rerun-phase1-core-tv.md). Scheduling v2 (local 15-minute grid shipped; remaining work planned): [design](docs/superpowers/specs/2026-10-26-scheduling-v2-design.md) and [plan/handoff](docs/superpowers/plans/2026-10-26-scheduling-v2.md).
 
 ### Continuous integration
 
@@ -249,44 +249,6 @@ from `main`, the release is missing, or the signing certificate differs from the
 
 The existing manual build/sign process remains available as a fallback. Signing credentials are
 never available to CI or the Prepare release workflow.
-
-### Shared scheduling pilot
-
-Settings > Shared scheduling lets you generate, copy, enter or disable a **24-symbol code**.
-Codes use a larger monospace font; generated codes use digit 0, not letter O.
-Choose Join code to open a focused entry form, enter or paste the code, then Confirm join.
-Generation is a separate action lower on the page.
-Confirmation actions are vertically spaced for remotes. After confirming, the entered
-code and refresh status remain visible while joining; the code is not active until saved.
-Horizontal guide browsing reads booked schedules rather than rebuilding unchanged channels.
-The guide preloads three hours before and after the visible window for nearby rows,
-evicting distant rows and metadata as you browse. Shared input fingerprints are cached
-across joining, status reads and top-ups, and invalidated by library or programming changes.
-Enter the same code on another device signed into the same Plex server. Different Plex users
-can participate when they have matching video access. The code needs no hosted service and
-contains no Plex credentials. Clipboard paste supports hyphenated, case-insensitive codes;
-QR and platform share links are not implemented.
-
-The opt-in pilot covers predefined video channels configured at **100-199**, not custom
-channels. Edited or unsupported programming rules (including stock time-block channels)
-stay on ordinary local scheduling. The settings page lists participating channels and
-manually comparable input hints; it cannot automatically verify another TV's catalog.
-Refresh your libraries so both devices use matching content, durations and channel settings.
-
-Shared programs use fixed **3-hour UTC windows**, one show per TV window, with quarter-hour
-episode starts and ordered continuation. Each eligible show gets a window per shuffled round.
-Mixed channels alternate TV/movie windows; if one type is absent, use the other. Movies get
-one window each. Episodes over 3 hours and movies at or above 3:02:00 are excluded; movies
-between 3:00:00 and 3:02:00 stop at the 3-hour boundary, potentially omitting scenes or credits.
-The settings page explains these limits.
-
-Music, Buy Me Maybe and start-over remain independent. Commercials are randomly booked and
-saved locally; different ads or disabled ads do not move shared program starts. Existing
-programs finish safely before the displayed UTC cutover. Catalog changes can shift episode
-positions or repeat an episode; equal current inputs, rather than historical airings, define
-agreement. A new device generates current programming directly instead of replaying years.
-Two-device playback and Fire TV input/performance still require live validation.
-See the [design](docs/superpowers/specs/2026-10-26-shared-schedules-design.md) for precise limits.
 
 HDHomeRun/live TV, TMDb enrichment, automatic commercial splitting, ad content/age filtering, and an idle timeout are not implemented. Review all clips in your chosen ad library yourself; Rerun does not screen ads for children. No device CPU/RAM/frame-rate gains or live Plex loudness measurements are claimed by the JVM benchmarks.
 
