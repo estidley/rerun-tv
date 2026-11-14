@@ -83,6 +83,7 @@ import com.rerun.tv.ui.touch.guideTouchScroll
 import com.rerun.tv.ui.touch.guideTouchTap
 import com.rerun.tv.ui.touch.rememberTouchControlsEnabled
 import kotlin.math.abs
+import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -91,6 +92,8 @@ import kotlinx.coroutines.withContext
 
 private const val WINDOW_MS = 3 * 3_600_000L
 private const val ENSURE_INTERVAL_MS = 10 * 60_000L
+/** Half-hour ruler labels. Quarter-hour columns are too narrow for a 26sp 12-hour time. */
+private const val HEADER_LABEL_MINUTES = 30
 private val TIME_HEADER_H = 36.dp
 
 private fun gridFloorLocal(ms: Long): Long = gridFloor(ms, ZoneId.systemDefault())
@@ -161,7 +164,7 @@ private fun Modifier.vertical(): Modifier = layout { measurable, constraints ->
     }
 }
 
-/** 90s cable-guide grid: channels down the side, quarter-hours across, a cyan now-line. */
+/** 90s cable-guide grid: channels down the side, half-hour labels across, a cyan now-line. */
 @Composable
 fun GuideScreen(
     controller: TvController,
@@ -657,6 +660,28 @@ private fun HeaderButton(text: String, focused: Boolean, modifier: Modifier = Mo
     ) { BasicText(text, style = Retro.Body.copy(shadow = null)) }
 }
 
+/**
+ * Local half-hour slots overlapping [windowStart, windowStart + windowMs).
+ * Each pair is the slot start and the next half-hour, including a slot that begins before the window.
+ */
+internal fun headerLabelSlots(windowStart: Long, windowMs: Long, zone: ZoneId): List<Pair<Long, Long>> {
+    val windowEnd = windowStart + windowMs
+    val local = Instant.ofEpochMilli(windowStart).atZone(zone)
+    var mark = local.withMinute(local.minute - local.minute % HEADER_LABEL_MINUTES).withSecond(0).withNano(0)
+        .toInstant().toEpochMilli()
+    if (mark > windowStart) {
+        mark = Instant.ofEpochMilli(mark).atZone(zone).minusMinutes(HEADER_LABEL_MINUTES.toLong()).toInstant().toEpochMilli()
+    }
+    val slots = ArrayList<Pair<Long, Long>>()
+    while (mark < windowEnd) {
+        val next = Instant.ofEpochMilli(mark).atZone(zone).plusMinutes(HEADER_LABEL_MINUTES.toLong()).toInstant().toEpochMilli()
+        if (next <= mark) break
+        if (next > windowStart) slots += mark to next
+        mark = next
+    }
+    return slots
+}
+
 @Composable
 private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp, timeFormat: ClockFormatSettings) {
     Row(Modifier.height(TIME_HEADER_H).testTag("guide-time:$windowStart")) {
@@ -667,11 +692,36 @@ private fun TimeHeader(windowStart: Long, timelineW: Dp, channelW: Dp, timeForma
         ) {
             BasicText(clockDate(windowStart), style = Retro.GuideCell.copy(color = Retro.Cyan), maxLines = 1)
         }
-        val cols = (WINDOW_MS / GRID_MS).toInt()
-        val labels = remember(windowStart, timeFormat) { List(cols) { clockTime(windowStart + it * GRID_MS) } }
-        for (i in 0 until cols) {
-            Box(Modifier.width(timelineW / cols).fillMaxHeight().background(Retro.GuideBlueDeep).border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(start = 8.dp), contentAlignment = Alignment.CenterStart) {
-                BasicText(labels[i], style = Retro.GuideCell.copy(color = Retro.Yellow))
+        val zone = ZoneId.systemDefault()
+        val slots = remember(windowStart, timeFormat, zone.id) { headerLabelSlots(windowStart, WINDOW_MS, zone) }
+        val windowEnd = windowStart + WINDOW_MS
+        val pxPerMs = timelineW.value / WINDOW_MS
+        Box(Modifier.width(timelineW).fillMaxHeight()) {
+            for ((mark, next) in slots) {
+                val visibleStart = maxOf(mark, windowStart)
+                val visibleEnd = minOf(next, windowEnd)
+                if (visibleEnd <= visibleStart) continue
+                val showLabel = mark >= windowStart && next <= windowEnd
+                Box(
+                    Modifier.offset(x = ((visibleStart - windowStart) * pxPerMs).dp)
+                        .width(((visibleEnd - visibleStart) * pxPerMs).dp)
+                        .fillMaxHeight()
+                        .background(Retro.GuideBlueDeep)
+                        .border(1.dp, Retro.Border.copy(alpha = 0.4f))
+                        .padding(start = 8.dp)
+                        .then(if (showLabel) Modifier.testTag("guide-hour:$mark") else Modifier),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (showLabel) {
+                        BasicText(
+                            clockTime(mark),
+                            style = Retro.GuideCell.copy(color = Retro.Yellow),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
     }

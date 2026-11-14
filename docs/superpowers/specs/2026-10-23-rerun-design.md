@@ -143,6 +143,7 @@ This section describes shipped behavior. The remaining approved scheduling chang
 - Video padding ends at the next device-local :00/:15/:30/:45 boundary and becomes a filler entry.
   The retired schedule-sharing pilot has no effect; existing Room entries, including its former
   schedules, stay locked until ordinary top-ups or intentional invalidation replace them.
+  Rebuilding after a retained off-grid ending inserts filler up to the next quarter-hour before the next movie or episode. Music and Buy Me Maybe stay back to back.
 - Routine top-ups do not reshuffle existing entries. Changing included libraries rebuilds schedules;
   missing items and removed channels invalidate affected playback. Channel edits rebuild the future after the current entry.
 - Each channel owns one schedule; there are no regional delayed feeds. Room migration 2-to-3
@@ -150,6 +151,7 @@ This section describes shipped behavior. The remaining approved scheduling chang
   original channel, and normalizes old feed-name suffixes without rebuilding original schedules.
 - Ads are chosen deterministically at playback time from the persisted catalog, seek to the current
   break position, and never extend the program deadline. Short/unfillable remainders show Up Next.
+  A bounded plan for each break resumes long retained filler instead of replaying every preceding clip on rollover.
 - A nonempty enabled ad catalog also creates **Buy Me Maybe**, a generated commercials-only station.
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
   It shuffles clips back-to-back without the ordinary activation minimum, tail
@@ -158,6 +160,7 @@ This section describes shipped behavior. The remaining approved scheduling chang
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.
+  The time ruler labels whole local half-hour slots. Movement stays on the 15-minute grid.
 - Program details retain the full scheduled start/end, including following filler; only grid geometry is clipped to the visible window, not the underlying program times.
 - Guide queries follow contiguous filler chains on either side of the query boundary, stopping at a program or gap, so split breaks retain their full range.
 - Each guide opening selects the current station and wall-clock program after loading; subsequent browsing is not reset by schedule reloads.

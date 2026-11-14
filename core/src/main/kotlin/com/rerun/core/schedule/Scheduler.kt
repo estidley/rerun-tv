@@ -18,7 +18,9 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
  *
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
  * shuffle (random show, weighted by episode count, episodes in order). Every program is
- * padded to the next local :00/:15/:30/:45 with a FILLER entry. Music stations play back to back.
+ * padded to the next local :00/:15/:30/:45 with a FILLER entry. A retained ending that is
+ * already past the current grid floor but not itself on a mark gets the same filler before
+ * the next video program. Music stations play back to back.
  * Chronology channels use one ordered deck across movies and episodes instead of the movie rotation.
  */
 class Scheduler(private val zone: ZoneId) {
@@ -45,6 +47,14 @@ class Scheduler(private val zone: ZoneId) {
         val end = nowMs + horizonMs
         val run = Run(state)
         val out = ArrayList<ScheduleEntry>()
+        if (!backToBack && cursor < end) {
+            val aligned = gridCeil(cursor, zone)
+            if (aligned > cursor) {
+                out += ScheduleEntry(def.id, cursor, aligned, EntryKind.FILLER, null)
+                run.msSinceMovie += aligned - cursor
+                cursor = aligned
+            }
+        }
 
         val poolKeys by lazy { items.mapTo(HashSet()) { it.key } }
         while (cursor < end) {

@@ -795,6 +795,72 @@ class GuideScreenTest {
         compose.onNodeWithTag(currentWindow).assertExists()
     }
 
+    @Test
+    fun headerSlotsStayOnLocalHalfHours() {
+        val chicago = java.time.ZoneId.of("America/Chicago")
+        val ten = java.time.Instant.parse("2026-10-23T15:00:00Z").toEpochMilli()
+        val window = 3 * 3_600_000L
+        val slots = headerLabelSlots(ten, window, chicago)
+        assertEquals(6, slots.size)
+        assertEquals(ten, slots.first().first)
+        assertTrue(slots.all { (mark, next) -> next - mark == 30 * 60_000L && mark >= ten && next <= ten + window })
+        val quarter = java.time.Instant.parse("2026-10-23T15:15:00Z").toEpochMilli()
+        val shifted = headerLabelSlots(quarter, window, chicago)
+        assertEquals(ten, shifted.first().first)
+        assertTrue(shifted.none { (mark, _) -> mark == quarter })
+        assertEquals(5, shifted.count { (mark, next) -> mark >= quarter && next <= quarter + window })
+        val kathmandu = java.time.ZoneId.of("Asia/Kathmandu")
+        val localTen = java.time.Instant.parse("2026-10-23T04:15:00Z").toEpochMilli()
+        assertEquals(localTen, headerLabelSlots(localTen, window, kathmandu).first().first)
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h720dp-mdpi")
+    fun halfHourHeaderLabelsFitAt720pInTwelveHourTime() = runBlocking<Unit> {
+        val context = RuntimeEnvironment.getApplication()
+        val originalContext = com.rerun.tv.ui.player.clockContext
+        val originalLocale = java.util.Locale.getDefault()
+        val originalZone = java.util.TimeZone.getDefault()
+        val originalHour = android.provider.Settings.System.getString(context.contentResolver, android.provider.Settings.System.TIME_12_24)
+        val fixedNow = java.time.Instant.parse("2026-10-26T10:07:00Z").toEpochMilli()
+        val start = com.rerun.core.schedule.gridFloor(fixedNow)
+        val halfHour = 30 * 60_000L
+        channels.value = listOf(channels.value.first())
+        `when`(schedule.entriesFor(anyCollection(), anyLong(), anyLong())).thenReturn(mapOf(
+            "test:0" to listOf(ScheduleEntry("test:0", start, start + halfHour, EntryKind.PROGRAM, null)),
+        ))
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US)
+            java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"))
+            com.rerun.tv.ui.player.clockContext = context
+            android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, "12")
+            compose.setContent { GuideScreen(controller, schedule, clock = { fixedNow }) }
+            compose.waitUntil(10_000) {
+                compose.onAllNodes(hasTestTag("guide-grid")).fetchSemanticsNodes().isNotEmpty()
+            }
+            repeat(6) {
+                compose.onNodeWithTag("guide-hour:${start + it * halfHour}").assertExists()
+            }
+            compose.onNodeWithTag("guide-hour:${start + 15 * 60_000L}").assertDoesNotExist()
+            fun assertFits(ms: Long) {
+                val layouts = mutableListOf<TextLayoutResult>()
+                compose.onNodeWithText(com.rerun.tv.ui.player.clockTime(ms)).performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+                    it(layouts)
+                }
+                val layout = layouts.single()
+                assertEquals(1, layout.lineCount)
+                assertFalse(layout.isLineEllipsized(0))
+            }
+            assertFits(start)
+            assertFits(start + 2 * 3_600_000L)
+        } finally {
+            com.rerun.tv.ui.player.clockContext = originalContext
+            java.util.Locale.setDefault(originalLocale)
+            java.util.TimeZone.setDefault(originalZone)
+            android.provider.Settings.System.putString(context.contentResolver, android.provider.Settings.System.TIME_12_24, originalHour)
+        }
+    }
+
     private fun assertGuideRendering() {
         val theme = mutableStateOf(ColorTheme.STANDARD_BLUE)
         val metrics = RuntimeEnvironment.getApplication().resources.displayMetrics

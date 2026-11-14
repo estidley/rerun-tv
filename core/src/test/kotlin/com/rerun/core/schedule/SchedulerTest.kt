@@ -134,6 +134,7 @@ class SchedulerTest {
         val lastEnd = first.entries.last().endMs
         val second = scheduler.extend(horrorDef, movies(6), first.state, lastEnd, now + 30 * HOUR)
         assertEquals(lastEnd, second.entries.first().startMs)
+        assertEquals(EntryKind.PROGRAM, second.entries.first().kind)
         assertTrue(second.entries.all { it.startMs >= lastEnd })
         assertTrue(second.entries.last().endMs >= now + 30 * HOUR + 48 * HOUR)
     }
@@ -166,6 +167,57 @@ class SchedulerTest {
         val pool = listOf(movie("c", year = 2001), movie("a", year = 1985), movie("b", year = 1992))
         val keys = programs(scheduler.extend(def, pool, ChannelState(seed = 1), null, now).entries).map { it.itemKey }.take(6)
         assertEquals(listOf("a", "b", "c", "a", "b", "c"), keys)
+    }
+
+    @Test
+    fun offGridContinuationStartsTheNextVideoOnTheQuarterHour() {
+        val lastEnd = at("2026-10-23T15:22:00Z") // 10:22 CDT
+        val ext = scheduler.extend(horrorDef, movies(4), ChannelState(seed = 1), lastEnd, at("2026-10-23T15:10:00Z"), horizonMs = 3 * HOUR)
+        assertEquals(lastEnd, ext.entries.first().startMs)
+        assertEquals(EntryKind.FILLER, ext.entries.first().kind)
+        assertEquals(at("2026-10-23T15:30:00Z"), ext.entries.first().endMs)
+        assertEquals(ext.entries.first().endMs, programs(ext.entries).first().startMs)
+        programs(ext.entries).forEach {
+            val local = Instant.ofEpochMilli(it.startMs).atZone(zone)
+            assertEquals(0, local.minute % 15, "program at $local")
+            assertEquals(0, local.second, "program at $local")
+        }
+        ext.entries.zipWithNext().forEach { (a, b) -> assertEquals(a.endMs, b.startMs) }
+    }
+
+    @Test
+    fun offGridContinuationUsesTheLocalMarkAcrossFallBack() {
+        val lastEnd = at("2026-11-01T07:10:00Z")
+        val ext = scheduler.extend(horrorDef, movies(2), ChannelState(seed = 4), lastEnd, at("2026-11-01T07:05:00Z"), horizonMs = 2 * HOUR)
+        assertEquals(EntryKind.FILLER, ext.entries.first().kind)
+        assertEquals(at("2026-11-01T07:15:00Z"), ext.entries.first().endMs)
+        assertEquals(at("2026-11-01T07:15:00Z"), programs(ext.entries).first().startMs)
+    }
+
+    @Test
+    fun musicContinuesBackToBackFromAnOffGridEnding() {
+        val def = ChannelDef(
+            "music:jazz", 2000, "Jazz", ChannelKind.MUSIC,
+            Rules(genres = setOf("Jazz"), kinds = setOf(MediaKind.TRACK)),
+        )
+        val tracks = (1..4).map { track("t$it", genre = "Jazz", album = "Night", index = it, durationMs = 3 * MIN) }
+        val lastEnd = at("2026-10-23T15:22:00Z")
+        val ext = scheduler.extend(def, tracks, ChannelState(seed = 2), lastEnd, at("2026-10-23T15:10:00Z"), horizonMs = 20 * MIN)
+        assertEquals(lastEnd, ext.entries.first().startMs)
+        assertEquals(EntryKind.PROGRAM, ext.entries.first().kind)
+        assertTrue(ext.entries.none { it.kind == EntryKind.FILLER })
+    }
+
+    @Test
+    fun backToBackVideoIgnoresTheQuarterHourGrid() {
+        val lastEnd = at("2026-10-23T15:22:00Z")
+        val ext = scheduler.extend(
+            horrorDef, movies(2), ChannelState(seed = 1), lastEnd, at("2026-10-23T15:10:00Z"),
+            horizonMs = 30 * MIN, backToBack = true,
+        )
+        assertEquals(lastEnd, ext.entries.first().startMs)
+        assertEquals(EntryKind.PROGRAM, ext.entries.first().kind)
+        assertTrue(ext.entries.none { it.kind == EntryKind.FILLER })
     }
 
     @Test
