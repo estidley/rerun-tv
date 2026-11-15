@@ -124,6 +124,19 @@ class AdFillerTest {
         assertNull(adFiller(retained, catalog, 30_000, AdBreakLength.SHORT))
     }
 
+    @Test
+    fun overlongRejectionIsDeterministicAcrossRetunes() {
+        val catalog = listOf(movie("30-second", durationMs = 30_000), movie("90-second", durationMs = 90_000))
+        val channelId = (0..1_000).map { "retained-$it" }.first { id ->
+            val random = kotlin.random.Random(id.hashCode().toLong() xor 1_000L)
+            random.nextInt(2) == 1 && random.nextInt(2) == 0
+        }
+        val retained = ScheduleEntry(channelId, 1_000, 61_000, EntryKind.FILLER, null)
+
+        assertNull(adFiller(retained, catalog, 1_000, AdBreakLength.SHORT))
+        assertNull(adFiller(retained, catalog, 1_000, AdBreakLength.SHORT))
+    }
+
     private fun directWalk(entry: ScheduleEntry, catalog: List<MediaItem>, nowMs: Long): AdSlot? {
         if (entry.kind != EntryKind.FILLER || nowMs !in entry.startMs until entry.endMs) return null
         val choices = catalog.filter { it.durationMs > 0 }.sortedBy { it.key }

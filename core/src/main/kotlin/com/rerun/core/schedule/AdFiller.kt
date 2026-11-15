@@ -171,7 +171,10 @@ internal class AdBreakPlan(
         if (cursor >= entry.endMs || cursor >= selectionEndMs || clipCount >= maxAds) return null
         val pick = pick(selectionEndMs - cursor) ?: return null
         val end = cursor + pick.item.durationMs
-        if (end > entry.endMs) return null
+        if (end > entry.endMs) {
+            cursor = entry.endMs
+            return null
+        }
         val slot = AdSlot(pick.item, cursor, end)
         current = slot
         cursor = end

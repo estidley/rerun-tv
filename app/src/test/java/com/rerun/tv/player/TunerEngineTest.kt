@@ -1075,6 +1075,26 @@ class TunerEngineTest {
     }
 
     @Test
+    fun nonClockChannelDoesNotTailSkipIntoAFutureProgram() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 60_000)
+        prepare("east", item, ChannelDef(
+            "east", 1, "Test", ChannelKind.CUSTOM, Rules(), nonClockAligned = true, showAds = false,
+        ))
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 2_000, EntryKind.PROGRAM, item.key),
+            ScheduleEntry("east", now + 2_000, now + 600_000, EntryKind.PROGRAM, item.key),
+        ))
+
+        engine.tune("east")
+
+        await { sources.size == 1 }
+        assertEquals(now - 60_000, engine.state.value.located!!.entry.startMs)
+        assertEquals(now + 2_000, engine.state.value.located!!.entry.endMs)
+    }
+
+    @Test
     fun tuningJustBeforeFillerStartsRetriesAtTheBreakStart() = runBlocking<Unit> {
         val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 30_000)
         prepare("east", ad)

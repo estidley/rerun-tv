@@ -338,6 +338,36 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun failedScheduleRebuildRollsBackCatalogAndSource() = runBlocking {
+        val at = System.currentTimeMillis()
+        val oldAd = movie("old-ad").copy(durationMs = 30_000, partKey = "/library/parts/old/file.mp4")
+        repo.replaceAds("old-source", listOf(AdRow.of(oldAd)))
+        val def = com.rerun.core.model.ChannelDef(
+            "custom:rollback", 453, "Rollback", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(), nonClockAligned = true,
+        )
+        db.channels().upsert(ChannelRow.of(def, false, false))
+        db.entries().insertAll(listOf(EntryRow(
+            channelId = def.id, startMs = at - 60_000, endMs = at + 60_000,
+            kind = "INVALID", itemKey = "program",
+        )))
+        val before = db.entries().range(def.id, 0, Long.MAX_VALUE)
+        val newAd = movie("new-ad").copy(durationMs = 50_000, partKey = "/library/parts/new/file.mp4")
+
+        var failed = false
+        try {
+            repo.replaceAds("new-source", listOf(AdRow.of(newAd)))
+        } catch (_: IllegalArgumentException) {
+            failed = true
+        }
+
+        assertTrue(failed)
+        assertEquals("old-source", db.settings().get(Settings.AD_LIBRARY))
+        assertEquals(listOf("old-ad"), repo.adCatalog().map { it.key })
+        assertEquals(before, db.entries().range(def.id, 0, Long.MAX_VALUE))
+    }
+
+    @Test
     fun editingKeepsTheCurrentProgramAndRebuildsTheFuture() = runBlocking {
         val original = movie("1")
         repo.refreshChannels(items = listOf(original, movie("2")))

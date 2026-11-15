@@ -379,7 +379,7 @@ class TunerEngine(
                     } else repo.entries(channelId, now - 1, now + 6 * 3_600_000L)
                 }
                 val loc = locate(entries, now, skipTail = channelId != Lineup.ADS_ID &&
-                    channelId != Lineup.RESTART_ID)
+                    channelId != Lineup.RESTART_ID && !channel.def.nonClockAligned)
                 if (loc == null) {
                     if (channelId == Lineup.RESTART_ID) error("Saved start-over progress is outside this program.")
                     val upcoming = entries.firstOrNull { it.startMs > now }

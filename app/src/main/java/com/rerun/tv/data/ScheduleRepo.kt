@@ -87,9 +87,8 @@ class ScheduleRepo internal constructor(
     suspend fun adItem(key: String?): MediaItem? = key?.let { db.ads().byKey(it)?.toItem() }
 
     suspend fun replaceAds(source: String?, ads: List<AdRow>) = mutex.withLock {
-        var catalogChanged = false
         db.withTransaction {
-            catalogChanged = db.ads().all() != ads.sortedBy { it.key }
+            val changed = db.ads().all() != ads.sortedBy { it.key }
             db.ads().clear()
             db.ads().insertAll(ads)
             if (source == null) {
@@ -108,18 +107,19 @@ class ScheduleRepo internal constructor(
                 db.channels().upsert(ChannelRow.of(
                     Lineup.adsChannel.copy(number = number), true, false, ads.sumOf { it.durationMs },
                 ))
-                if (catalogChanged) {
+                if (changed) {
                     db.entries().deleteChannel(Lineup.ADS_ID)
                     db.states().delete(Lineup.ADS_ID)
                 }
             }
-        }
-        if (catalogChanged) db.withTransaction {
-            val nowMs = System.currentTimeMillis()
-            val catalog = ads.map { it.toItem() }
-            db.channels().all().filter { it.def.nonClockAligned && it.def.showAds }.forEach { row ->
-                rebuildAdBreaks(row, nowMs, catalog)
+            if (changed) {
+                val nowMs = System.currentTimeMillis()
+                val catalog = ads.map { it.toItem() }
+                db.channels().all().filter { it.def.nonClockAligned && it.def.showAds }.forEach { row ->
+                    rebuildAdBreaks(row, nowMs, catalog)
+                }
             }
+            changed
         }
         _guideRevision.value++
     }
