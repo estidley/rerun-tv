@@ -221,7 +221,9 @@ HDR Auto checks connected display and decoder support. Convert requests SDR tone
 Prefer native bypasses the capability-driven conversion choice. Native HDR errors retry SDR once.
 Normalization is off by default and requests Plex audio transcoding only for eligible selected tracks;
 HDR conversion, Dolby Vision and selected subtitles currently prevent normalization. Skipped normalization
-and playback failures are visible, not silent volume guarantees.
+and playback failures are visible, not silent volume guarantees. HDR conversion and normalization-status
+notices clear after five seconds; newer notices reset the timer and retunes/stops cancel stale callbacks.
+Actual playback-failure messages remain visible.
 
 Station changes retain configurable static/roll effects. Same-station clips fade to black before media
 replacement, hold black while loading, and fade in on the first frame (or music readiness).

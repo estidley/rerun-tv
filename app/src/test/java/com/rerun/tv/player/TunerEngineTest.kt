@@ -1254,6 +1254,68 @@ class TunerEngineTest {
         verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
     }
 
+    @Test
+    fun notificationsExpireAndReplacementMessagesGetTheFullTimeout() = runBlocking<Unit> {
+        engine.notify("First")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertEquals("First", engine.state.value.message)
+
+        engine.notify("Second")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertEquals("Second", engine.state.value.message)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertNull(engine.state.value.message)
+    }
+
+    @Test
+    fun hdrConversionMessageExpires() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.message!!.contains("Converting HDR to SDR"))
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertNotNull(engine.state.value.message)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertNull(engine.state.value.message)
+    }
+
+    @Test
+    fun normalizationUnavailableMessageExpires() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.NORMALIZE_LOUDNESS)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.message!!.contains("normalization unavailable"))
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertNotNull(engine.state.value.message)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertNull(engine.state.value.message)
+    }
+
+    @Test
+    fun playbackFailureMessageDoesNotUseTheTransientTimeout() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onPlayerError(PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_DECODING_FAILED))
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertNotNull(engine.state.value.message)
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6))
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertNotNull(engine.state.value.message)
+    }
+
     private suspend fun prepare(
         id: String,
         item: MediaItem,
