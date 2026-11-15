@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -25,7 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -67,7 +68,6 @@ fun TvButton(
     }
     Box(
         modifier
-            .scale(if (focused) 1.04f else 1f)
             .background(bg)
             .border(2.dp, if (focused) Retro.Yellow else if (selected) Retro.Cyan else Retro.Border.copy(alpha = 0.4f))
             .combinedClickable(interactionSource = source, indication = null, enabled = enabled,
@@ -166,6 +166,19 @@ fun TvFrame(title: String, hint: String, content: @Composable () -> Unit) {
             BasicText(hint, style = Retro.Caption)
         }
     }
+}
+
+/** Shared bordered container that keeps focused content inside the screen margins. */
+@Composable
+fun TvPanel(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier.widthIn(max = 1600.dp).fillMaxWidth()
+            .background(Retro.GuideBlueDeep.copy(alpha = 0.4f))
+            .border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(24.dp),
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        content = content,
+    )
 }
 
 /**

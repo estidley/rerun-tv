@@ -2,17 +2,27 @@ package com.rerun.tv.ui.channels
 
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.unit.dp
 import com.rerun.core.catalog.MinimumContentLevel
 import com.rerun.core.model.AdBreakLength
 import com.rerun.core.model.ChannelDef
@@ -34,9 +44,11 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [35], qualifiers = "w1920dp-h1080dp-mdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ChannelEditorTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
@@ -184,6 +196,29 @@ class ChannelEditorTest {
         ))
     }
 
+    @Test
+    fun chipControlsWrapInsideThePanelWithoutHorizontalScrolling() = runBlocking<Unit> {
+        val fixture = editorFixture()
+        showEditor(fixture, constrained = true)
+        scrollTo("48 hours")
+        val first = compose.onNodeWithText("No minimum").fetchSemanticsNode().boundsInRoot
+        val last = compose.onNodeWithText("48 hours").fetchSemanticsNode().boundsInRoot
+        val panel = compose.onNodeWithTag("channel-editor-panel").fetchSemanticsNode().boundsInRoot
+
+        val output = java.io.File("build/reports/channel-editor-wrapping.png")
+        output.parentFile.mkdirs()
+        output.outputStream().use {
+            compose.onRoot().captureToImage().asAndroidBitmap()
+                .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+        }
+        org.junit.Assert.assertTrue("first=$first last=$last panel=$panel", last.top > first.top)
+        org.junit.Assert.assertTrue(first.left >= panel.left && last.right <= panel.right)
+        compose.onAllNodesWithTag("chip-flow").fetchSemanticsNodes().forEach { node ->
+            org.junit.Assert.assertFalse(SemanticsActions.ScrollBy in node.config)
+            org.junit.Assert.assertFalse(SemanticsActions.ScrollToIndex in node.config)
+        }
+    }
+
     private suspend fun editorFixture(): EditorFixture {
         val app = mock(RerunApp::class.java)
         val schedule = mock(ScheduleRepo::class.java)
@@ -196,8 +231,11 @@ class ChannelEditorTest {
         return EditorFixture(app, schedule, controller, def)
     }
 
-    private fun showEditor(fixture: EditorFixture) {
-        compose.setContent { ChannelEditor(fixture.controller, "test", fixture.app) }
+    private fun showEditor(fixture: EditorFixture, constrained: Boolean = false) {
+        compose.setContent {
+            if (constrained) Box(Modifier.width(600.dp)) { ChannelEditor(fixture.controller, "test", fixture.app) }
+            else ChannelEditor(fixture.controller, "test", fixture.app)
+        }
         compose.waitUntil(10_000) {
             compose.onAllNodesWithText("Test channel").fetchSemanticsNodes().isNotEmpty()
         }

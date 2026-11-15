@@ -2,6 +2,7 @@ package com.rerun.tv.ui.channels
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
 import com.rerun.core.catalog.Lineup
@@ -23,6 +25,7 @@ import com.rerun.tv.ui.Screen
 import com.rerun.tv.ui.TvController
 import com.rerun.tv.ui.common.TvButton
 import com.rerun.tv.ui.common.TvFrame
+import com.rerun.tv.ui.common.TvPanel
 import com.rerun.tv.ui.common.ChannelIcon
 import com.rerun.tv.ui.theme.Retro
 
@@ -45,7 +48,8 @@ fun ChannelManager(controller: TvController, app: RerunApp = RerunApp.instance) 
         else ({ controller.setChannelHidden(ch.id, !ch.def.hidden) })
 
     TvFrame("Channels", "OK edit   HOLD OK disable/restore   BACK guide") {
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TvPanel(Modifier.fillMaxHeight().testTag("channels-panel")) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 TvButton("＋  New channel", onClick = { controller.go(Screen.Editor(null)) }, modifier = Modifier.focusRequester(first))
             }
@@ -76,6 +80,7 @@ fun ChannelManager(controller: TvController, app: RerunApp = RerunApp.instance) 
                         if (ch.def.kind == ChannelKind.MUSIC) "; include a Plex music library" else "")
             }
             update.error?.let { item { BasicText(it, style = Retro.Body.copy(color = Retro.Yellow)) } }
+            }
         }
     }
 }

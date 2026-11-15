@@ -8,6 +8,8 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 111 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music channels use generated name-specific art. Custom channels combine the approved custom logo with name initials in square icons and the full current name in wordmarks, without regenerating the bundled library.
 
+Channels, Settings and the channel editor share the bordered `TvPanel` container. Editor option rows use vertical wrapping rather than horizontal scrolling, and focused buttons keep stable bounds so their edges remain inside the panel.
+
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
 Rerun is a native Android/Fire TV player for a personal Plex library, not a virtual tuner server.

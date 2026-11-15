@@ -4,14 +4,16 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
@@ -31,6 +33,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -151,7 +154,8 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                 if (ms <= 0) "  (needs playable content)"
                 else if (ms < Lineup.minimumContentMs(d, minimumLevel)) "  (needs $minimum to go on the air)" else ""
         } ?: "Checking content..."
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        com.rerun.tv.ui.common.TvPanel(Modifier.fillMaxHeight().testTag("channel-editor-panel")) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Field("Name", d.name, Modifier.width(520.dp).focusRequester(first)) { draft = d.copy(name = it) }
@@ -304,6 +308,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                 }
             }
         }
+        }
     }
     if (showUnsavedChanges) {
         UnsavedChangesDialog(
@@ -353,7 +358,13 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 @Composable
 private fun <T> chipRow(values: List<T>, chip: @Composable (T) -> Unit) {
     if (values.isEmpty()) { BasicText("Nothing in your library yet", style = Retro.Caption); return }
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) { items(values) { chip(it) } }
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().testTag("chip-flow"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        values.forEach { value -> Box(Modifier.widthIn(max = 520.dp)) { chip(value) } }
+    }
 }
 
 @Composable
