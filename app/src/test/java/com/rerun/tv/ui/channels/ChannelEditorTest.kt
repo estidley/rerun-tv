@@ -27,6 +27,7 @@ import com.rerun.core.catalog.MinimumContentLevel
 import com.rerun.core.model.AdBreakLength
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
+import com.rerun.core.model.MediaItem
 import com.rerun.core.model.Rules
 import com.rerun.core.plex.PlexParse
 import com.rerun.tv.RerunApp
@@ -219,14 +220,66 @@ class ChannelEditorTest {
         }
     }
 
-    private suspend fun editorFixture(): EditorFixture {
+    @Test
+    fun largeFilterSectionsShowTwentyItemsBeforeExpandingAndCollapsing() = runBlocking<Unit> {
+        val items = (1..25).map { index ->
+            val show = com.rerun.core.model.ShowMeta(
+                key = "show-$index", title = "Show %02d".format(index), year = null, studio = null,
+                genres = setOf("Genre %02d".format(index)), contentRating = null, tmdbId = null,
+                labels = emptySet(), collections = setOf("Collection %02d".format(index)),
+            )
+            PlexParse.episodes(
+                """{"MediaContainer":{"Metadata":[{"ratingKey":"episode-$index","title":"Episode","grandparentRatingKey":"${show.key}","grandparentTitle":"${show.title}","duration":1800000}]}}""",
+                mapOf(show.key to show),
+            ).single()
+        }
+        assertEquals(25, com.rerun.core.catalog.Facets.from(items).collections.size)
+        assertEquals("Collection 21", com.rerun.core.catalog.Facets.from(items).collections[20])
+        val fixture = editorFixture(items)
+        showEditor(fixture)
+        scrollTo("Genre 20")
+        assertEquals(2, compose.onAllNodesWithText("Genre 20").fetchSemanticsNodes().size)
+        compose.onNodeWithText("Genre 21").assertDoesNotExist()
+        compose.onNodeWithText("Show 21").assertDoesNotExist()
+        compose.onNodeWithText("Collection 21").assertDoesNotExist()
+
+        val sections = listOf(
+            Triple("GENRES", "expand-genres", "Genre 21"),
+            Triple("LEAVE OUT GENRES", "expand-exclude-genres", "Genre 21"),
+            Triple("SHOWS", "expand-shows", "Show 21"),
+            Triple("COLLECTIONS", "expand-collections", "Collection 21"),
+        )
+        for ((section, tag, hiddenItem) in sections) {
+            scrollTo(section)
+            scrollTo("Show all (25)")
+            compose.onNodeWithTag(tag).performScrollTo().performClick()
+            compose.waitForIdle()
+            compose.onNodeWithText("Show fewer").assertExists()
+            if (section == "COLLECTIONS") {
+                val output = java.io.File("build/reports/collections-expanded.png")
+                output.parentFile.mkdirs()
+                output.outputStream().use {
+                    compose.onRoot().captureToImage().asAndroidBitmap()
+                        .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+            scrollTo(hiddenItem)
+            compose.onNodeWithText(hiddenItem).assertIsDisplayed()
+            scrollTo("Show fewer")
+            compose.onNodeWithTag(tag).performScrollTo().performClick()
+            compose.waitForIdle()
+            compose.onNodeWithText(hiddenItem).assertDoesNotExist()
+        }
+    }
+
+    private suspend fun editorFixture(items: List<MediaItem> = emptyList()): EditorFixture {
         val app = mock(RerunApp::class.java)
         val schedule = mock(ScheduleRepo::class.java)
         val controller = mock(TvController::class.java)
         val def = ChannelDef("test", 401, "Test channel", ChannelKind.CUSTOM, Rules(genres = emptySet()))
         `when`(app.schedule).thenReturn(schedule)
         `when`(schedule.allChannelRows()).thenReturn(listOf(ChannelRow.of(def, builtIn = false, dormant = true)))
-        `when`(schedule.libraryItems()).thenReturn(emptyList())
+        `when`(schedule.libraryItems()).thenReturn(items)
         `when`(controller.minimumContent).thenReturn(MutableStateFlow(MinimumContentLevel.MEDIUM))
         return EditorFixture(app, schedule, controller, def)
     }

@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -269,11 +270,11 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                     }
                 }
             }
-            item { Section("Genres") { chipRow(f.genres) { g -> TvButton(g, { update(d.rules.copy(genres = d.rules.genres.toggle(g))) }, selected = g in d.rules.genres) } } }
-            item { Section("Leave out genres") { chipRow(f.genres) { g -> TvButton(g, { update(d.rules.copy(excludeGenres = d.rules.excludeGenres.toggle(g))) }, selected = g in d.rules.excludeGenres) } } }
-            item { Section("Shows") { chipRow(f.shows) { s -> TvButton(s, { update(d.rules.copy(titles = d.rules.titles.toggle(s))) }, selected = s in d.rules.titles) } } }
+            item { Section("Genres") { chipRow(f.genres, COLLAPSED_CHIP_COUNT, "expand-genres") { g -> TvButton(g, { update(d.rules.copy(genres = d.rules.genres.toggle(g))) }, selected = g in d.rules.genres) } } }
+            item { Section("Leave out genres") { chipRow(f.genres, COLLAPSED_CHIP_COUNT, "expand-exclude-genres") { g -> TvButton(g, { update(d.rules.copy(excludeGenres = d.rules.excludeGenres.toggle(g))) }, selected = g in d.rules.excludeGenres) } } }
+            item { Section("Shows") { chipRow(f.shows, COLLAPSED_CHIP_COUNT, "expand-shows") { s -> TvButton(s, { update(d.rules.copy(titles = d.rules.titles.toggle(s))) }, selected = s in d.rules.titles) } } }
             if (f.collections.isNotEmpty()) item {
-                Section("Collections") { chipRow(f.collections) { c -> TvButton(c, { update(d.rules.copy(collections = d.rules.collections.toggle(c))) }, selected = c in d.rules.collections) } }
+                Section("Collections") { chipRow(f.collections, COLLAPSED_CHIP_COUNT, "expand-collections") { c -> TvButton(c, { update(d.rules.copy(collections = d.rules.collections.toggle(c))) }, selected = c in d.rules.collections) } }
             }
             if (f.labels.isNotEmpty()) item {
                 Section("Labels") { chipRow(f.labels) { l -> TvButton(l, { update(d.rules.copy(labels = d.rules.labels.toggle(l))) }, selected = l in d.rules.labels) } }
@@ -355,15 +356,31 @@ private fun Section(title: String, content: @Composable () -> Unit) {
     }
 }
 
+private const val COLLAPSED_CHIP_COUNT = 20
+
 @Composable
-private fun <T> chipRow(values: List<T>, chip: @Composable (T) -> Unit) {
+private fun <T> chipRow(
+    values: List<T>,
+    collapsedLimit: Int? = null,
+    expansionTag: String? = null,
+    chip: @Composable (T) -> Unit,
+) {
     if (values.isEmpty()) { BasicText("Nothing in your library yet", style = Retro.Caption); return }
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val visible = if (collapsedLimit == null || expanded) values else values.take(collapsedLimit)
     FlowRow(
         modifier = Modifier.fillMaxWidth().testTag("chip-flow"),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        values.forEach { value -> Box(Modifier.widthIn(max = 520.dp)) { chip(value) } }
+        visible.forEach { value -> Box(Modifier.widthIn(max = 520.dp)) { chip(value) } }
+        if (collapsedLimit != null && values.size > collapsedLimit) {
+            TvButton(
+                if (expanded) "Show fewer" else "Show all (${values.size})",
+                { expanded = !expanded },
+                modifier = expansionTag?.let { Modifier.testTag(it) } ?: Modifier,
+            )
+        }
     }
 }
 
