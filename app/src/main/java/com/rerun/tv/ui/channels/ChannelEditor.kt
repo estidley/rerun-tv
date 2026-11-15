@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,10 +33,13 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.rerun.core.catalog.Catalog
 import com.rerun.core.catalog.Facets
 import com.rerun.core.catalog.Lineup
 import com.rerun.core.catalog.validateDraft
+import com.rerun.core.model.AdBreakLength
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
@@ -59,15 +65,51 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
     val scope = rememberCoroutineScope()
     val minimumLevel by controller.minimumContent.collectAsState()
     var existing by remember { mutableStateOf<ChannelRow?>(null) }
+    var originalDraft by remember { mutableStateOf<ChannelDef?>(null) }
     var draft by remember { mutableStateOf<ChannelDef?>(null) }
     var facets by remember { mutableStateOf<Facets?>(null) }
     var library by remember { mutableStateOf<List<MediaItem>?>(null) }
     var numberText by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var poolMs by remember { mutableStateOf<Long?>(null) }
+    var showUnsavedChanges by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
 
-    BackHandler { controller.go(Screen.Channels) }
+    fun save() {
+        if (saving) return
+        saving = true
+        scope.launch {
+            try {
+                val toSave = draft ?: return@launch
+                val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
+                if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
+                app.schedule.saveChannel(
+                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false),
+                )
+                app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
+                controller.reconcileChannels()
+                controller.go(Screen.Channels)
+            } finally {
+                saving = false
+            }
+        }
+    }
+
+    fun requestLeave() {
+        if (saving) return
+        val current = draft
+        val original = originalDraft
+        if (current != null && original != null &&
+            (current != original || numberText != original.number.toString())
+        ) {
+            showUnsavedChanges = true
+        } else {
+            controller.go(Screen.Channels)
+        }
+    }
+
+    BackHandler { requestLeave() }
 
     LaunchedEffect(channelId) {
         val rows = app.schedule.allChannelRows()
@@ -84,6 +126,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         val contents = withContext(Dispatchers.IO) { app.schedule.libraryItems() }
         facets = withContext(Dispatchers.Default) { Facets.from(contents) }
         library = contents
+        originalDraft = d
         draft = d
         numberText = d.number.toString()
         runCatching { first.requestFocus() }
@@ -152,6 +195,50 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                     }
                 }
             }
+            if (d.kind != ChannelKind.MUSIC) item {
+                Section("Scheduling") {
+                    BasicText(
+                        if (d.nonClockAligned) {
+                            "Each video starts right after the previous program and any selected ad break."
+                        } else {
+                            "Video programs start on local 15-minute clock marks."
+                        },
+                        style = Retro.Caption,
+                    )
+                    chipRow(listOf(false, true)) { nonClock ->
+                        val label = if (nonClock) "Non-clock aligned" else "15-minute clock"
+                        TvButton(label, { draft = d.copy(nonClockAligned = nonClock) }, selected = d.nonClockAligned == nonClock)
+                    }
+                }
+            }
+            if (d.kind != ChannelKind.MUSIC) item {
+                Section("Advertising") {
+                    BasicText(
+                        when {
+                            !d.showAds && d.nonClockAligned -> "Programs play back-to-back without ad breaks."
+                            !d.showAds -> "Breaks show Up Next instead of ads."
+                            d.nonClockAligned -> "With an assigned Ad library, full clips determine each variable-length break."
+                            else -> "With an assigned Ad library, ads fill the break before the next clock-aligned program."
+                        },
+                        style = Retro.Caption,
+                    )
+                    chipRow(listOf(true, false)) { show ->
+                        val label = if (show) "Show ads" else "No ads"
+                        TvButton(label, { draft = d.copy(showAds = show) }, selected = d.showAds == show)
+                    }
+                    if (d.nonClockAligned && d.showAds) {
+                        chipRow(AdBreakLength.entries.toList()) { length ->
+                            val label = when (length) {
+                                AdBreakLength.SHORT -> "Short · about 2 min"
+                                AdBreakLength.MEDIUM -> "Medium · about 5 min"
+                                AdBreakLength.LONG -> "Long · about 10 min"
+                            }
+                            TvButton(label, { draft = d.copy(adBreakLength = length) },
+                                selected = d.adBreakLength == length, sub = "Up to ${length.maxAds} ads")
+                        }
+                    }
+                }
+            }
             item {
                 Section("Minimum programming") {
                     BasicText(
@@ -202,20 +289,8 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     error?.let { BasicText(it, style = Retro.Body.copy(color = Color(0xFFFF6B6B))) }
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        TvButton("Save", {
-                            scope.launch {
-                                val toSave = draft ?: return@launch
-                                val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
-                                if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
-                                app.schedule.saveChannel(
-                                    ChannelRow.of(toSave, builtIn = existing?.builtIn ?: false),
-                                )
-                                app.schedule.resetFuture(toSave.id, System.currentTimeMillis())
-                                controller.reconcileChannels()
-                                controller.go(Screen.Channels)
-                            }
-                        })
-                        TvButton("Cancel", { controller.go(Screen.Channels) })
+                        TvButton("Save", { save() }, enabled = !saving)
+                        TvButton("Cancel", { requestLeave() }, enabled = !saving)
                         if (existing != null && existing?.builtIn == false) {
                             TvButton("Delete channel", {
                                 scope.launch {
@@ -223,11 +298,44 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                                     controller.reconcileChannels()
                                     controller.go(Screen.Channels)
                                 }
-                            })
+                            }, enabled = !saving)
                         }
                     }
                 }
             }
+        }
+    }
+    if (showUnsavedChanges) {
+        UnsavedChangesDialog(
+            onSave = {
+                showUnsavedChanges = false
+                save()
+            },
+            onDiscard = {
+                showUnsavedChanges = false
+                controller.go(Screen.Channels)
+            },
+            onKeepEditing = { showUnsavedChanges = false },
+        )
+    }
+}
+
+@Composable
+private fun UnsavedChangesDialog(onSave: () -> Unit, onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
+    val keepEditing = remember { FocusRequester() }
+    val bodyStyle = Retro.Body.copy(fontSize = 24.sp)
+    Dialog(onDismissRequest = onKeepEditing) {
+        LaunchedEffect(Unit) { keepEditing.requestFocus() }
+        Column(
+            Modifier.widthIn(max = 720.dp).background(Retro.GuideBlueDeep).padding(28.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            BasicText("Unsaved changes", style = Retro.Title.copy(fontSize = 32.sp))
+            BasicText("Save your changes before leaving this screen?", style = bodyStyle)
+            TvButton("Save changes", onSave, textStyle = bodyStyle)
+            TvButton("Discard changes", onDiscard, textStyle = bodyStyle)
+            TvButton("Keep editing", onKeepEditing, Modifier.focusRequester(keepEditing), textStyle = bodyStyle)
         }
     }
 }

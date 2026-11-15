@@ -1,5 +1,6 @@
 package com.rerun.core.schedule
 
+import com.rerun.core.model.AdBreakLength
 import com.rerun.core.model.MediaItem
 import com.rerun.core.movie
 import kotlin.test.Test
@@ -75,6 +76,41 @@ class AdFillerTest {
         val rewound = adFiller(breakEntry, ads, 0)
         assertEquals(directWalk(breakEntry, ads, 0), rewound)
         assertEquals(1, cachedBreakLastSteps(breakEntry.channelId, breakEntry.startMs, breakEntry.endMs))
+    }
+
+    @Test
+    fun breakSizesReachTheirTargetsWithThirtySecondClips() {
+        val catalog = listOf(movie("ad", durationMs = 30_000))
+        for ((length, clips) in mapOf(
+            AdBreakLength.SHORT to 4,
+            AdBreakLength.MEDIUM to 10,
+            AdBreakLength.LONG to 20,
+        )) {
+            val planned = planAdBreak("sized", 1_000, length, catalog)
+            assertEquals(clips, planned.size, length.name)
+            assertEquals(length.targetMs, planned.last().endMs - 1_000, length.name)
+        }
+    }
+
+    @Test
+    fun clipCapCanMakeABreakShorterThanItsTarget() {
+        val planned = planAdBreak(
+            "capped", 1_000, AdBreakLength.SHORT, listOf(movie("ad", durationMs = 15_000)),
+        )
+        assertEquals(4, planned.size)
+        assertEquals(60_000, planned.last().endMs - 1_000)
+    }
+
+    @Test
+    fun variableBreakAndTuneInUseTheSameFullClips() {
+        val catalog = listOf(movie("ad", durationMs = 50_000))
+        val planned = planAdBreak("variable", 1_000, AdBreakLength.SHORT, catalog)
+        assertEquals(2, planned.size)
+        assertEquals(100_000, planned.last().endMs - 1_000)
+        val breakEntry = ScheduleEntry("variable", 1_000, planned.last().endMs, EntryKind.FILLER, null)
+        planned.forEach { slot ->
+            assertEquals(slot, adFiller(breakEntry, catalog, slot.startMs, AdBreakLength.SHORT))
+        }
     }
 
     private fun directWalk(entry: ScheduleEntry, catalog: List<MediaItem>, nowMs: Long): AdSlot? {

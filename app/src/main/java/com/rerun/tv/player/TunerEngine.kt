@@ -396,9 +396,14 @@ class TunerEngine(
                     scheduleRollover(channelId, upcoming.startMs)
                     return@launch
                 }
-                val ad = if (loc.entry.kind == EntryKind.FILLER) {
+                val ad = if (loc.entry.kind == EntryKind.FILLER && channel.def.showAds) {
                     withContext(Dispatchers.IO) {
-                        adFiller(loc.entry, repo.adCatalog().map { it.toItem() }, now)
+                        adFiller(
+                            loc.entry,
+                            repo.adCatalog().map { it.toItem() },
+                            now,
+                            breakLength = channel.def.adBreakLength.takeIf { channel.def.nonClockAligned },
+                        )
                     }
                 } else null
                 val item = if (loc.entry.kind == EntryKind.FILLER) ad?.item else channelItem(channelId, loc.entry.itemKey)

@@ -35,6 +35,7 @@ class CodecTest {
             order = PlayOrder.IN_ORDER,
             blocks = listOf(TimeBlock(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), LocalTime.of(21, 0), LocalTime.of(3, 0), Rules(ratings = setOf("R"), bucket = 2, bucketCount = 4))),
             kidsSafe = false, hidden = true, movieEveryMs = 3_600_000,
+            showAds = false, nonClockAligned = true, adBreakLength = com.rerun.core.model.AdBreakLength.LONG,
         )
         assertEquals(def, ChannelCodec.decode(ChannelCodec.encode(def)))
         for (hours in listOf(0, 1, 24, 168)) {
@@ -63,6 +64,10 @@ class CodecTest {
         assertEquals(false, ChannelCodec.decode(withoutLanguages).rules.unmatchedOnly)
         val withoutTitleKinds = encoded.replace(""","titleKinds":[]""", "")
         assertEquals(emptySet(), ChannelCodec.decode(withoutTitleKinds).rules.titleKinds)
+        val legacy = ChannelCodec.decode(encoded)
+        assertEquals(true, legacy.showAds)
+        assertEquals(false, legacy.nonClockAligned)
+        assertEquals(com.rerun.core.model.AdBreakLength.MEDIUM, legacy.adBreakLength)
     }
 
     @Test

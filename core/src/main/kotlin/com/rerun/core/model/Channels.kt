@@ -8,6 +8,12 @@ enum class ChannelKind { NETWORK, CURATED, THEME, CUSTOM, MUSIC }
 
 enum class PlayOrder { SHUFFLE, IN_ORDER, CHRONOLOGICAL }
 
+enum class AdBreakLength(val targetMs: Long, val maxAds: Int) {
+    SHORT(2 * 60_000L, 4),
+    MEDIUM(5 * 60_000L, 10),
+    LONG(10 * 60_000L, 20),
+}
+
 private fun norm(s: String) = s.trim().lowercase()
 private fun Set<String>.normed() = mapTo(HashSet()) { norm(it) }
 
@@ -136,4 +142,7 @@ data class ChannelDef(
     val hidden: Boolean = false,
     val movieEveryMs: Long = 6 * 3_600_000L,
     val minimumContentHours: Int? = null,
+    val showAds: Boolean = true,
+    val nonClockAligned: Boolean = false,
+    val adBreakLength: AdBreakLength = AdBreakLength.MEDIUM,
 )

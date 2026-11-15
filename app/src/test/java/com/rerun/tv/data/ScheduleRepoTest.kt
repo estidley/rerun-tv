@@ -270,6 +270,45 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun adCatalogRefreshRebuildsOnlyNonClockFutures() = runBlocking {
+        val at = System.currentTimeMillis()
+        val program = movie("one")
+        db.items().replaceAll(listOf(program).map(ItemRow::of))
+        val nonClock = com.rerun.core.model.ChannelDef(
+            "custom:nonclock", 450, "Non-clock", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(), nonClockAligned = true,
+            adBreakLength = com.rerun.core.model.AdBreakLength.SHORT,
+        )
+        val clock = com.rerun.core.model.ChannelDef(
+            "custom:clock", 451, "Clock", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(),
+        )
+        db.channels().upsert(ChannelRow.of(nonClock, false, false))
+        db.channels().upsert(ChannelRow.of(clock, false, false))
+        val current = ScheduleEntry(nonClock.id, at - 60_000, at + 60_000, EntryKind.PROGRAM, program.key)
+        db.entries().insertAll(listOf(current).map(EntryRow::of))
+        repo.ensure(clock.id, at)
+        val clockBefore = repo.entries(clock.id, at - DAY, at + DAY)
+        val ad = movie("ad").copy(durationMs = 40_000, partKey = "/library/parts/ad/file.mp4")
+
+        repo.replaceAds("commercials", listOf(AdRow.of(ad)))
+
+        val rebuilt = repo.entries(nonClock.id, at, at + 10 * 60_000)
+        assertEquals(current, rebuilt.first())
+        val firstBreak = rebuilt.drop(1).first()
+        assertEquals(EntryKind.FILLER, firstBreak.kind)
+        assertEquals(current.endMs, firstBreak.startMs)
+        assertEquals(120_000, firstBreak.endMs - firstBreak.startMs)
+        assertEquals(clockBefore, repo.entries(clock.id, at - DAY, at + DAY))
+
+        repo.replaceAds(null, emptyList())
+
+        val withoutAds = repo.entries(nonClock.id, current.endMs, current.endMs + 10 * 60_000)
+        assertTrue(withoutAds.none { it.kind == EntryKind.FILLER })
+        assertEquals(clockBefore, repo.entries(clock.id, at - DAY, at + DAY))
+    }
+
+    @Test
     fun editingKeepsTheCurrentProgramAndRebuildsTheFuture() = runBlocking {
         val original = movie("1")
         repo.refreshChannels(items = listOf(original, movie("2")))

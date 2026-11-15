@@ -44,8 +44,8 @@ class PerformanceWorkloadTest {
         val library: List<MediaItem> = (0 until 2_000).map {
             episode("e$it", "Show ${it % 100}", episode = it, genres = setOf("Comedy", "Drama"), network = "Netflix")
         } + (0 until 500).map { movie("m$it", genres = setOf("Action", "Drama"), studio = "Walt Disney Pictures") }
-        // Updated for curated PBS pools and broadcaster studio routing; still excludes decade additions below.
-        measure("lineup-2500", "f04c21706381d117a85e58253ba1954e9c9382d11ea51b2124a5e19ed05b5ffb") {
+        // ChannelDef's new scheduling/ads fields change this structural string, not the lineup or schedules.
+        measure("lineup-2500", "f535a5b1ebb206467b96b6f3381f2bce5b76b993cc0997c8e320b572a82c32ce") {
             val plan = Lineup.plan(library, emptyList(), music = false)
             // Keep decade additions outside this original workload.
             plan.copy(channels = plan.channels.filterNot { it.def.id.startsWith("decade:") })

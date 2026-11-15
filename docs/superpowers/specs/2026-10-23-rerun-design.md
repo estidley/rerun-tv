@@ -6,7 +6,7 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
-Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 111 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music/custom channels use explicit fallback art.
+Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 111 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music channels use generated name-specific art. Custom channels combine the approved custom logo with name initials in square icons and the full current name in wordmarks, without regenerating the bundled library.
 
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
@@ -140,23 +140,33 @@ This section describes shipped behavior. The remaining approved scheduling chang
   Recognized old names migrate by channel ID without changing rules, numbers or locked entries.
 - Schedules extend approximately 48 hours and top up below 24 hours. Epoch times are UTC; time blocks use the device zone.
 - Movies use a shuffled deck; shows preserve episode pointers. Music plays back to back.
-- Video padding ends at the next device-local :00/:15/:30/:45 boundary and becomes a filler entry.
-  The retired schedule-sharing pilot has no effect; existing Room entries, including its former
-  schedules, stay locked until ordinary top-ups or intentional invalidation replace them.
-  Rebuilding after a retained off-grid ending inserts filler up to the next quarter-hour before the next movie or episode. Music and Buy Me Maybe stay back to back.
+- By default, video padding ends at the next device-local :00/:15/:30/:45 boundary and becomes a
+  filler entry. The retired schedule-sharing pilot has no effect; existing Room entries, including
+  its former schedules, stay locked until ordinary top-ups or intentional invalidation replace them.
+  Rebuilding a clock-aligned retained off-grid ending inserts filler up to the next quarter-hour.
+  Music and Buy Me Maybe stay back to back.
+- A video channel can persist `nonClockAligned`, `showAds` and `adBreakLength` in its existing
+  channel JSON, with no Room migration. Missing fields mean clock-aligned, Show ads and Medium.
+  Non-clock channels with No ads have no filler between programs. With Show ads, Short/Medium/Long
+  target about 2/5/10 minutes with at most 4/10/20 full clips. The actual clip total determines
+  the break end, which need not be a clock boundary.
 - Routine top-ups do not reshuffle existing entries. Changing included libraries rebuilds schedules;
-  missing items and removed channels invalidate affected playback. Channel edits rebuild the future after the current entry.
+  missing items and removed channels invalidate affected playback. Channel edits preserve the current
+  entry, rebuild its following selected break when applicable, and rebuild the future after that.
 - Each channel owns one schedule; there are no regional delayed feeds. Room migration 2-to-3
   removes legacy West channels/entries/state and their setting, maps the last-tuned feed to its
   original channel, and normalizes old feed-name suffixes without rebuilding original schedules.
-- Ads are chosen deterministically at playback time from the persisted catalog, seek to the current
-  break position, and never extend the program deadline. Short/unfillable remainders show Up Next.
-  A bounded plan for each break resumes long retained filler instead of replaying every preceding clip on rollover.
+- Video channels default to Show ads when the catalog is nonempty. No ads leaves Up Next in a
+  clock-aligned gap or no filler on a non-clock channel. Ads are chosen deterministically by the
+  shared scheduler/playback planner from the persisted catalog, seek to the current break position,
+  and never extend the stored program deadline. Short/unfillable remainders show Up Next. A bounded
+  plan for each break resumes long retained filler instead of replaying every preceding clip on rollover.
 - A nonempty enabled ad catalog also creates **Buy Me Maybe**, a generated commercials-only station.
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
   It shuffles clips back-to-back without the ordinary activation minimum, tail
   skipping or padding. Items stay in the ad table, not the main library. Catalog
-  changes invalidate only its schedule; disabling ads or emptying the catalog removes it.
+  changes invalidate its schedule and ad-enabled non-clock futures, but not clock-aligned schedules;
+  disabling ads or emptying the catalog removes the station.
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.

@@ -804,6 +804,24 @@ class TunerEngineTest {
     }
 
     @Test
+    fun channelWithAdsDisabledShowsUpNextEvenWithAnAdCatalog() = runBlocking<Unit> {
+        val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 30_000)
+        prepare("east", ad, ChannelDef("east", 1, "Test", ChannelKind.CUSTOM, Rules(), showAds = false))
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 10_000, now + 50_000, EntryKind.FILLER, null),
+        ))
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+
+        engine.tune("east")
+
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        assertTrue(sources.isEmpty())
+        verify(repo, never()).adCatalog()
+    }
+
+    @Test
     fun failedAdDoesNotCancelTheNextProgramsDeadline() = runBlocking {
         val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 10_000)
         val now = System.currentTimeMillis()
@@ -1216,8 +1234,12 @@ class TunerEngineTest {
         verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
     }
 
-    private suspend fun prepare(id: String, item: MediaItem) {
-        val row = ChannelRow.of(ChannelDef(id, 1, "Test", ChannelKind.CUSTOM, Rules()), false, false)
+    private suspend fun prepare(
+        id: String,
+        item: MediaItem,
+        def: ChannelDef = ChannelDef(id, 1, "Test", ChannelKind.CUSTOM, Rules()),
+    ) {
+        val row = ChannelRow.of(def, false, false)
         val now = System.currentTimeMillis()
         `when`(repo.channel(id)).thenReturn(row)
         `when`(repo.item(item.key)).thenReturn(item)

@@ -4,6 +4,7 @@ import com.rerun.core.HOUR
 import com.rerun.core.MIN
 import com.rerun.core.catalog.Catalog
 import com.rerun.core.episode
+import com.rerun.core.model.AdBreakLength
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
@@ -218,6 +219,92 @@ class SchedulerTest {
         assertEquals(lastEnd, ext.entries.first().startMs)
         assertEquals(EntryKind.PROGRAM, ext.entries.first().kind)
         assertTrue(ext.entries.none { it.kind == EntryKind.FILLER })
+    }
+
+    @Test
+    fun nonClockVideoWithoutAvailableAdsPlaysBackToBack() {
+        val withoutAds = horrorDef.copy(nonClockAligned = true, showAds = false)
+        val fresh = scheduler.extend(withoutAds, movies(2), ChannelState(seed = 1), null, now, horizonMs = 3 * HOUR)
+        assertEquals(now, fresh.entries.first().startMs)
+        assertTrue(fresh.entries.none { it.kind == EntryKind.FILLER })
+        programs(fresh.entries).zipWithNext().forEach { (a, b) -> assertEquals(a.endMs, b.startMs) }
+
+        val emptyCatalog = horrorDef.copy(nonClockAligned = true)
+        val continuedAt = now + 22 * MIN
+        val continued = scheduler.extend(
+            emptyCatalog, movies(2), ChannelState(seed = 1), continuedAt, now,
+            horizonMs = 3 * HOUR, adCatalog = emptyList(),
+        )
+        assertEquals(continuedAt, continued.entries.first().startMs)
+        assertEquals(EntryKind.PROGRAM, continued.entries.first().kind)
+        assertTrue(continued.entries.none { it.kind == EntryKind.FILLER })
+    }
+
+    @Test
+    fun nonClockVideoUsesTheSelectedClipLengthInsteadOfTheGrid() {
+        val def = horrorDef.copy(nonClockAligned = true, adBreakLength = AdBreakLength.SHORT)
+        val catalog = listOf(movie("ad", durationMs = 40_000))
+        val ext = scheduler.extend(
+            def, movies(2), ChannelState(seed = 1), null, now,
+            horizonMs = 3 * HOUR, adCatalog = catalog,
+        )
+        val firstProgram = programs(ext.entries).first()
+        val firstBreak = ext.entries.first { it.kind == EntryKind.FILLER }
+        val planned = planAdBreak(def.id, firstProgram.endMs, AdBreakLength.SHORT, catalog)
+        assertEquals(firstProgram.endMs, firstBreak.startMs)
+        assertEquals(planned.last().endMs, firstBreak.endMs)
+        assertEquals(120_000, firstBreak.endMs - firstBreak.startMs)
+        val nextStart = Instant.ofEpochMilli(firstBreak.endMs).atZone(zone)
+        assertEquals(13, nextStart.second)
+        assertEquals(firstBreak.endMs, programs(ext.entries)[1].startMs)
+    }
+
+    @Test
+    fun nonClockContinuationAfterARetainedProgramRebuildsItsAdBreak() {
+        val def = horrorDef.copy(nonClockAligned = true, adBreakLength = AdBreakLength.SHORT)
+        val catalog = listOf(movie("ad", durationMs = 40_000))
+        val retainedEnd = now + 22 * MIN
+        val ext = scheduler.extend(
+            def, movies(2), ChannelState(seed = 1), retainedEnd, now,
+            horizonMs = 3 * HOUR, adCatalog = catalog, lastEntryKind = EntryKind.PROGRAM,
+        )
+        val firstBreak = ext.entries.first()
+        assertEquals(EntryKind.FILLER, firstBreak.kind)
+        assertEquals(retainedEnd, firstBreak.startMs)
+        assertEquals(120_000, firstBreak.endMs - firstBreak.startMs)
+        assertEquals(firstBreak.endMs, programs(ext.entries).first().startMs)
+    }
+
+    @Test
+    fun disablingAdsDoesNotRemoveClockAlignmentPadding() {
+        val def = horrorDef.copy(showAds = false)
+        val ext = scheduler.extend(def, movies(2), ChannelState(seed = 1), null, now, horizonMs = 3 * HOUR)
+        assertTrue(ext.entries.any { it.kind == EntryKind.FILLER })
+        programs(ext.entries).forEach {
+            assertEquals(0, Instant.ofEpochMilli(it.startMs).atZone(zone).minute % 15)
+        }
+    }
+
+    @Test
+    fun nonClockPlanningSharesCatalogPreprocessingAcrossPrograms() {
+        var reads = 0
+        val catalog = object : AbstractList<MediaItem>() {
+            override val size = 25
+            override fun get(index: Int) = movie("ad$index", durationMs = 30_000)
+            override fun iterator(): Iterator<MediaItem> {
+                reads++
+                return super.iterator()
+            }
+        }
+        val def = horrorDef.copy(nonClockAligned = true)
+
+        val ext = scheduler.extend(
+            def, movies(20), ChannelState(seed = 1), null, now,
+            horizonMs = 12 * HOUR, adCatalog = catalog,
+        )
+
+        assertTrue(programs(ext.entries).size > 5)
+        assertTrue(reads <= 5, "Catalog preprocessing ran $reads times for ${programs(ext.entries).size} programs")
     }
 
     @Test

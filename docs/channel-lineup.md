@@ -30,6 +30,12 @@ comes from the user's included Plex libraries. A nostalgic name alone never clas
 - Unqualified stock generated stations disappear. Edited ones retain their configuration
   but remain dormant until their effective minimum is met. Built-in network/theme entries
   remain available in Channels while waiting for content.
+- Custom-channel square icons combine the approved custom logo with name initials; guide and
+  playback wordmarks show the full current user-defined name. Renames need no new image assets.
+- Every video channel defaults to clock-aligned programs and Show ads when a nonempty ad catalog
+  exists. No ads leaves an Up Next wait on clock-aligned channels. Non-clock mode plays back-to-back
+  with No ads, or uses Short (about 2 minutes/up to 4 clips), Medium (about 5/up to 10) or Long
+  (about 10/up to 20) breaks. Full clips determine the actual break end, not a clock boundary.
 - Buy Me Maybe intentionally requires only one valid synced ad, including clips under one
   minute. From the Top is a hidden single-episode start-over exception.
 

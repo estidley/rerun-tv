@@ -86,8 +86,9 @@ class ScheduleRepo internal constructor(
     suspend fun adItem(key: String?): MediaItem? = key?.let { db.ads().byKey(it)?.toItem() }
 
     suspend fun replaceAds(source: String?, ads: List<AdRow>) = mutex.withLock {
+        var catalogChanged = false
         db.withTransaction {
-            val changed = db.ads().all() != ads.sortedBy { it.key }
+            catalogChanged = db.ads().all() != ads.sortedBy { it.key }
             db.ads().clear()
             db.ads().insertAll(ads)
             if (source == null) {
@@ -106,10 +107,16 @@ class ScheduleRepo internal constructor(
                 db.channels().upsert(ChannelRow.of(
                     Lineup.adsChannel.copy(number = number), true, false, ads.sumOf { it.durationMs },
                 ))
-                if (changed) {
+                if (catalogChanged) {
                     db.entries().deleteChannel(Lineup.ADS_ID)
                     db.states().delete(Lineup.ADS_ID)
                 }
+            }
+        }
+        if (catalogChanged) db.withTransaction {
+            val nowMs = System.currentTimeMillis()
+            db.channels().all().filter { it.def.nonClockAligned && it.def.showAds }.forEach { row ->
+                rebuildFuture(row, nowMs)
             }
         }
         _guideRevision.value++
@@ -312,15 +319,19 @@ class ScheduleRepo internal constructor(
     private suspend fun topUp(row: ChannelRow, nowMs: Long) {
         if (row.dormant || row.hidden) return
         if (row.id == Lineup.RESTART_ID) return
-        val last = db.entries().lastEnd(row.id)
+        val lastEntry = db.entries().last(row.id)
+        val last = lastEntry?.endMs
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
         val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
         val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
             else Resolver.pool(def, lib().items, minimum)
+        val adCatalog = if (def.nonClockAligned && def.showAds) db.ads().all().map { it.toItem() } else emptyList()
         val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = kotlin.random.Random.nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs,
-            backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
+            backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC,
+            adCatalog = adCatalog,
+            lastEntryKind = lastEntry?.kind?.let(EntryKind::valueOf))
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
         db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
     }
@@ -354,13 +365,16 @@ class ScheduleRepo internal constructor(
     suspend fun resetFuture(channelId: String, nowMs: Long) {
         mutex.withLock {
             db.withTransaction {
-                val row = db.channels().byId(channelId)
-                val current = db.entries().range(channelId, nowMs, nowMs + 1).firstOrNull()
-                db.entries().deleteFrom(channelId, current?.endMs ?: nowMs)
-                row?.let { topUp(it, nowMs) }
+                db.channels().byId(channelId)?.let { row -> rebuildFuture(row, nowMs) }
             }
             _guideRevision.value++
         }
+    }
+
+    private suspend fun rebuildFuture(row: ChannelRow, nowMs: Long) {
+        val current = db.entries().range(row.id, nowMs, nowMs + 1).firstOrNull()
+        db.entries().deleteFrom(row.id, current?.endMs ?: nowMs)
+        topUp(row, nowMs)
     }
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {

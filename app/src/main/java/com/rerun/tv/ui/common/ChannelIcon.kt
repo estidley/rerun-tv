@@ -14,12 +14,14 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun ChannelIcon(channelId: String, name: String, modifier: Modifier = Modifier, size: Dp = 32.dp) {
     if (channelId.startsWith("music:")) MusicGenreIcon(channelId, name, modifier.size(size))
+    else if (channelId.startsWith("custom:")) CustomChannelIcon(name, modifier.size(size))
     else Image(painterResource(channelIconResource(channelId)), contentDescription = null, modifier = modifier.size(size))
 }
 
 @Composable
 fun ChannelWordmark(channelId: String, name: String, modifier: Modifier = Modifier) {
     if (channelId.startsWith("music:")) MusicGenreWordmark(channelId, name, modifier)
+    else if (channelId.startsWith("custom:")) CustomChannelWordmark(name, modifier)
     else Image(
         painterResource(channelWordmarkResource(channelId)),
         contentDescription = name,
