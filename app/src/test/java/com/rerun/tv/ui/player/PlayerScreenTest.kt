@@ -59,6 +59,16 @@ class PlayerScreenTest {
     }
 
     @Test
+    fun loadingCardShowsVersionAndBuildOnlyDuringLoading() {
+        val startup = mutableStateOf(StartupState(loading = true))
+        compose.setContent { StartupMessage(startup.value, LineupUpdate(), channelsEmpty = true) }
+        compose.onNodeWithText("Version 1.2.0 · build 8").assertIsDisplayed()
+
+        compose.runOnIdle { startup.value = StartupState(empty = true) }
+        compose.onNodeWithText("Version 1.2.0 · build 8").assertDoesNotExist()
+    }
+
+    @Test
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun loadingSpinnerRotatesWhileTheLogoRemainsVisible() {
         compose.mainClock.autoAdvance = false

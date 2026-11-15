@@ -188,7 +188,7 @@ This section describes shipped behavior. The remaining approved scheduling chang
 Startup starts in loading state for an existing sign-in, awaits the automatic saved-lineup refresh,
 then queries active channels. Only a successful settled empty result displays no-channel guidance.
 The RERUN wordmark draws its red beret in front of the RE letter tops, with bounded overlap that leaves the letter faces readable.
-The loading card uses the existing beret wordmark and an indeterminate animated spinner.
+The loading card uses the existing beret wordmark and an indeterminate animated spinner. Loading and guide updates also show the app version and build number in small caption text; failure and empty-lineup cards omit it.
 Failures and confirmed empty states retain the wordmark but not the spinner. Missing
 connection/initial-sync configuration returns to onboarding.
 

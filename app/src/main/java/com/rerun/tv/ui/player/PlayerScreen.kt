@@ -165,6 +165,12 @@ internal fun StartupMessage(startup: StartupState, update: LineupUpdate, channel
                 RerunWordmark()
                 if (startup.loading || update.busy) StartupSpinner()
                 BasicText(message, style = Retro.Body.copy(textAlign = TextAlign.Center))
+                if (startup.loading || update.busy) {
+                    BasicText(
+                        "Version ${com.rerun.tv.BuildConfig.VERSION_NAME} · build ${com.rerun.tv.BuildConfig.VERSION_CODE}",
+                        style = Retro.Caption.copy(textAlign = TextAlign.Center),
+                    )
+                }
             }
         }
     }
