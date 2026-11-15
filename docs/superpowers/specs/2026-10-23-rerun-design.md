@@ -165,8 +165,9 @@ This section describes shipped behavior. The remaining approved scheduling chang
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
   It shuffles clips back-to-back without the ordinary activation minimum, tail
   skipping or padding. Items stay in the ad table, not the main library. Catalog
-  changes invalidate its schedule and ad-enabled non-clock futures, but not clock-aligned schedules;
-  disabling ads or emptying the catalog removes the station.
+  changes invalidate its schedule and ad-enabled non-clock breaks and timing, but not clock-aligned
+  schedules or queued non-clock program order and saved scheduler state. Disabling ads or emptying
+  the catalog removes the station.
 - Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.

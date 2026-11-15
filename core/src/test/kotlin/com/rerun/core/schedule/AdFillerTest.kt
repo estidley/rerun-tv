@@ -113,6 +113,17 @@ class AdFillerTest {
         }
     }
 
+    @Test
+    fun changedClipCannotOverrunARetainedBreakDeadline() {
+        val retained = ScheduleEntry("retained", 1_000, 61_000, EntryKind.FILLER, null)
+        val catalog = listOf(movie("longer-ad", durationMs = 90_000))
+        assertEquals(90_000, planAdBreak("retained", 1_000, AdBreakLength.SHORT, catalog).single().let {
+            it.endMs - it.startMs
+        })
+        assertNull(adFiller(retained, catalog, 1_000, AdBreakLength.SHORT))
+        assertNull(adFiller(retained, catalog, 30_000, AdBreakLength.SHORT))
+    }
+
     private fun directWalk(entry: ScheduleEntry, catalog: List<MediaItem>, nowMs: Long): AdSlot? {
         if (entry.kind != EntryKind.FILLER || nowMs !in entry.startMs until entry.endMs) return null
         val choices = catalog.filter { it.durationMs > 0 }.sortedBy { it.key }

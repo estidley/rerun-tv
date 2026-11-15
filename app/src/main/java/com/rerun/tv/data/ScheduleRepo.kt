@@ -17,6 +17,7 @@ import com.rerun.core.schedule.EntryKind
 import com.rerun.core.schedule.ScheduleEntry
 import com.rerun.core.schedule.Scheduler
 import com.rerun.core.schedule.needsTopUp
+import com.rerun.core.schedule.rebuildNonClockAdBreaks
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -115,8 +116,9 @@ class ScheduleRepo internal constructor(
         }
         if (catalogChanged) db.withTransaction {
             val nowMs = System.currentTimeMillis()
+            val catalog = ads.map { it.toItem() }
             db.channels().all().filter { it.def.nonClockAligned && it.def.showAds }.forEach { row ->
-                rebuildFuture(row, nowMs)
+                rebuildAdBreaks(row, nowMs, catalog)
             }
         }
         _guideRevision.value++
@@ -374,6 +376,18 @@ class ScheduleRepo internal constructor(
     private suspend fun rebuildFuture(row: ChannelRow, nowMs: Long) {
         val current = db.entries().range(row.id, nowMs, nowMs + 1).firstOrNull()
         db.entries().deleteFrom(row.id, current?.endMs ?: nowMs)
+        topUp(row, nowMs)
+    }
+
+    private suspend fun rebuildAdBreaks(row: ChannelRow, nowMs: Long, catalog: List<MediaItem>) {
+        val current = db.entries().range(row.id, nowMs, nowMs + 1).firstOrNull()
+        val cutoff = current?.endMs ?: nowMs
+        val queued = db.entries().range(row.id, cutoff, Long.MAX_VALUE).map { it.toEntry() }
+        val rebuilt = rebuildNonClockAdBreaks(
+            row.def, queued, cutoff, current?.kind?.let(EntryKind::valueOf), catalog,
+        )
+        db.entries().deleteFrom(row.id, cutoff)
+        if (rebuilt.isNotEmpty()) db.entries().insertAll(rebuilt.map(EntryRow::of))
         topUp(row, nowMs)
     }
 

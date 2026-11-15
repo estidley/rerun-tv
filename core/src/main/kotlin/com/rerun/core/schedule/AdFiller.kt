@@ -1,6 +1,7 @@
 package com.rerun.core.schedule
 
 import com.rerun.core.model.AdBreakLength
+import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.MediaItem
 import kotlin.random.Random
 
@@ -52,6 +53,35 @@ fun planAdBreak(
     length: AdBreakLength,
     catalog: List<MediaItem>,
 ): List<AdSlot> = AdBreakCatalog(catalog).plan(channelId, startMs, length)
+
+/** Rebuilds breaks without changing queued program order, durations, or scheduler state. */
+fun rebuildNonClockAdBreaks(
+    def: ChannelDef,
+    queuedEntries: List<ScheduleEntry>,
+    startMs: Long,
+    previousEntryKind: EntryKind?,
+    catalog: List<MediaItem>,
+): List<ScheduleEntry> {
+    val breakCatalog = AdBreakCatalog(catalog)
+    val rebuilt = ArrayList<ScheduleEntry>(queuedEntries.size * 2)
+    var cursor = startMs
+    var includeBreak = previousEntryKind == EntryKind.PROGRAM
+    for (program in queuedEntries.filter { it.kind == EntryKind.PROGRAM && it.startMs >= startMs }.sortedBy { it.startMs }) {
+        if (includeBreak && def.showAds) {
+            val adBreak = breakCatalog.plan(def.id, cursor, def.adBreakLength)
+            val breakEnd = adBreak.lastOrNull()?.endMs ?: cursor
+            if (breakEnd > cursor) {
+                rebuilt += ScheduleEntry(def.id, cursor, breakEnd, EntryKind.FILLER, null)
+                cursor = breakEnd
+            }
+        }
+        val duration = (program.endMs - program.startMs).coerceAtLeast(1L)
+        rebuilt += ScheduleEntry(def.id, cursor, cursor + duration, EntryKind.PROGRAM, program.itemKey)
+        cursor += duration
+        includeBreak = true
+    }
+    return rebuilt
+}
 
 /** Steps taken by the most recent cached lookup for this break, or null when nothing is cached. */
 internal fun cachedBreakLastSteps(channelId: String, startMs: Long, endMs: Long): Int? =
@@ -141,6 +171,7 @@ internal class AdBreakPlan(
         if (cursor >= entry.endMs || cursor >= selectionEndMs || clipCount >= maxAds) return null
         val pick = pick(selectionEndMs - cursor) ?: return null
         val end = cursor + pick.item.durationMs
+        if (end > entry.endMs) return null
         val slot = AdSlot(pick.item, cursor, end)
         current = slot
         cursor = end

@@ -309,6 +309,35 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun adCatalogRefreshPreservesQueuedProgramOrderAndSchedulerState() = runBlocking {
+        val at = System.currentTimeMillis()
+        val programs = (1..3).map { movie("movie-$it").copy(year = 2000 + it) }
+        db.items().replaceAll(programs.map(ItemRow::of))
+        val def = com.rerun.core.model.ChannelDef(
+            "custom:ordered", 452, "Ordered", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(), order = com.rerun.core.model.PlayOrder.IN_ORDER,
+            nonClockAligned = true, adBreakLength = com.rerun.core.model.AdBreakLength.SHORT,
+        )
+        db.channels().upsert(ChannelRow.of(def, false, false))
+        val firstAd = movie("first-ad").copy(durationMs = 30_000, partKey = "/library/parts/first/file.mp4")
+        repo.replaceAds("commercials", listOf(AdRow.of(firstAd)))
+        repo.ensure(def.id, at)
+        val before = repo.entries(def.id, at, Long.MAX_VALUE).filter { it.kind == EntryKind.PROGRAM }
+        val stateBefore = db.states().get(def.id)?.json
+        assertTrue(before.size > 3)
+        val longerAd = movie("longer-ad").copy(durationMs = 50_000, partKey = "/library/parts/longer/file.mp4")
+
+        repo.replaceAds("commercials", listOf(AdRow.of(longerAd)))
+
+        val after = repo.entries(def.id, at, Long.MAX_VALUE)
+        assertEquals(before.map { it.itemKey }, after.filter { it.kind == EntryKind.PROGRAM }.map { it.itemKey })
+        assertEquals(before.first(), after.first())
+        assertEquals(stateBefore, db.states().get(def.id)?.json)
+        val firstBreak = after.first { it.kind == EntryKind.FILLER }
+        assertEquals(100_000, firstBreak.endMs - firstBreak.startMs)
+    }
+
+    @Test
     fun editingKeepsTheCurrentProgramAndRebuildsTheFuture() = runBlocking {
         val original = movie("1")
         repo.refreshChannels(items = listOf(original, movie("2")))
