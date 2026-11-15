@@ -368,7 +368,7 @@ private fun <T> chipRow(
     if (values.isEmpty()) { BasicText("Nothing in your library yet", style = Retro.Caption); return }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var page by rememberSaveable { mutableStateOf(0) }
-    val lastPage = ((values.size + collapsedLimit - 1) / collapsedLimit - 1).coerceAtLeast(0)
+    val lastPage = ((values.size - 1) / collapsedLimit - 1).coerceAtLeast(0)
     val currentPage = page.coerceIn(0, lastPage)
     val visible = if (!expanded || values.size <= collapsedLimit) {
         values.take(collapsedLimit)

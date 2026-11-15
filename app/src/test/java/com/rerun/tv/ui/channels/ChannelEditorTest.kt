@@ -245,6 +245,7 @@ class ChannelEditorTest {
             compose.onNodeWithTag(tag).performScrollTo().performClick()
             compose.waitForIdle()
             compose.onNodeWithText("Show fewer").assertExists()
+            compose.onNodeWithText("Next 20").assertDoesNotExist()
             if (section == "COLLECTIONS") {
                 val output = java.io.File("build/reports/collections-expanded.png")
                 output.parentFile.mkdirs()
@@ -278,6 +279,7 @@ class ChannelEditorTest {
         compose.onNodeWithText("Genre 41").assertIsDisplayed()
         compose.onNodeWithText("Genre 45").assertIsDisplayed()
         compose.onNodeWithText("Genre 40").assertDoesNotExist()
+        compose.onNodeWithText("Next 20").assertDoesNotExist()
         compose.onNodeWithText("Previous 20").performScrollTo().performClick()
         compose.onNodeWithText("Genre 21").assertIsDisplayed()
         compose.onNodeWithText("Genre 41").assertDoesNotExist()
