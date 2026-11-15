@@ -227,6 +227,7 @@ class ChannelEditorTest {
         assertEquals("Collection 21", com.rerun.core.catalog.Facets.from(items).collections[20])
         val fixture = editorFixture(items)
         showEditor(fixture)
+        compose.onNodeWithText("Show all", substring = true).assertDoesNotExist()
         scrollTo("Genre 20")
         assertEquals(2, compose.onAllNodesWithText("Genre 20").fetchSemanticsNodes().size)
         compose.onNodeWithText("Genre 21").assertDoesNotExist()
@@ -241,11 +242,11 @@ class ChannelEditorTest {
         )
         for ((section, tag, hiddenItem) in sections) {
             scrollTo(section)
-            scrollTo("Show all (25)")
+            scrollTo("Show next")
             compose.onNodeWithTag(tag).performScrollTo().performClick()
             compose.waitForIdle()
             compose.onNodeWithText("Show fewer").assertExists()
-            compose.onNodeWithText("Next 20").assertDoesNotExist()
+            compose.onNodeWithTag("next-page").assertDoesNotExist()
             if (section == "COLLECTIONS") {
                 val output = java.io.File("build/reports/collections-expanded.png")
                 output.parentFile.mkdirs()
@@ -275,12 +276,12 @@ class ChannelEditorTest {
             org.junit.Assert.assertTrue(node.children.size <= 23)
         }
 
-        compose.onNodeWithText("Next 20").performScrollTo().performClick()
+        compose.onNodeWithTag("next-page").performScrollTo().performClick()
         compose.onNodeWithText("Genre 41").assertIsDisplayed()
         compose.onNodeWithText("Genre 45").assertIsDisplayed()
         compose.onNodeWithText("Genre 40").assertDoesNotExist()
-        compose.onNodeWithText("Next 20").assertDoesNotExist()
-        compose.onNodeWithText("Previous 20").performScrollTo().performClick()
+        compose.onNodeWithTag("next-page").assertDoesNotExist()
+        compose.onNodeWithTag("previous-page").performScrollTo().performClick()
         compose.onNodeWithText("Genre 21").assertIsDisplayed()
         compose.onNodeWithText("Genre 41").assertDoesNotExist()
         compose.onNodeWithText("Show fewer").performScrollTo().performClick()

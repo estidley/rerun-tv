@@ -384,11 +384,11 @@ private fun <T> chipRow(
         if (values.size > collapsedLimit) {
             val tagModifier = expansionTag?.let { Modifier.testTag(it) } ?: Modifier
             if (expanded) {
-                if (currentPage > 0) TvButton("Previous 20", { page = currentPage - 1 })
-                if (currentPage < lastPage) TvButton("Next 20", { page = currentPage + 1 })
+                if (currentPage > 0) TvButton("Show previous", { page = currentPage - 1 }, modifier = Modifier.testTag("previous-page"))
+                if (currentPage < lastPage) TvButton("Show next", { page = currentPage + 1 }, modifier = Modifier.testTag("next-page"))
                 TvButton("Show fewer", { expanded = false; page = 0 }, modifier = tagModifier)
             } else {
-                TvButton("Show all (${values.size})", { expanded = true; page = 0 }, modifier = tagModifier)
+                TvButton("Show next", { expanded = true; page = 0 }, modifier = tagModifier)
             }
         }
     }
