@@ -222,17 +222,7 @@ class ChannelEditorTest {
 
     @Test
     fun largeFilterSectionsShowTwentyItemsBeforeExpandingAndCollapsing() = runBlocking<Unit> {
-        val items = (1..25).map { index ->
-            val show = com.rerun.core.model.ShowMeta(
-                key = "show-$index", title = "Show %02d".format(index), year = null, studio = null,
-                genres = setOf("Genre %02d".format(index)), contentRating = null, tmdbId = null,
-                labels = emptySet(), collections = setOf("Collection %02d".format(index)),
-            )
-            PlexParse.episodes(
-                """{"MediaContainer":{"Metadata":[{"ratingKey":"episode-$index","title":"Episode","grandparentRatingKey":"${show.key}","grandparentTitle":"${show.title}","duration":1800000}]}}""",
-                mapOf(show.key to show),
-            ).single()
-        }
+        val items = filterItems(25)
         assertEquals(25, com.rerun.core.catalog.Facets.from(items).collections.size)
         assertEquals("Collection 21", com.rerun.core.catalog.Facets.from(items).collections[20])
         val fixture = editorFixture(items)
@@ -270,6 +260,41 @@ class ChannelEditorTest {
             compose.waitForIdle()
             compose.onNodeWithText(hiddenItem).assertDoesNotExist()
         }
+    }
+
+    @Test
+    fun expandedFiltersPageThroughLargeLibrariesInChunksOfTwenty() = runBlocking<Unit> {
+        val fixture = editorFixture(filterItems(45))
+        showEditor(fixture)
+        scrollTo("GENRES")
+        compose.onNodeWithTag("expand-genres").performScrollTo().performClick()
+        compose.onNodeWithText("Genre 40").assertIsDisplayed()
+        compose.onNodeWithText("Genre 41").assertDoesNotExist()
+        compose.onAllNodesWithTag("chip-flow").fetchSemanticsNodes().forEach { node ->
+            org.junit.Assert.assertTrue(node.children.size <= 23)
+        }
+
+        compose.onNodeWithText("Next 20").performScrollTo().performClick()
+        compose.onNodeWithText("Genre 41").assertIsDisplayed()
+        compose.onNodeWithText("Genre 45").assertIsDisplayed()
+        compose.onNodeWithText("Genre 40").assertDoesNotExist()
+        compose.onNodeWithText("Previous 20").performScrollTo().performClick()
+        compose.onNodeWithText("Genre 21").assertIsDisplayed()
+        compose.onNodeWithText("Genre 41").assertDoesNotExist()
+        compose.onNodeWithText("Show fewer").performScrollTo().performClick()
+        compose.onNodeWithText("Genre 21").assertDoesNotExist()
+    }
+
+    private fun filterItems(count: Int): List<MediaItem> = (1..count).map { index ->
+        val show = com.rerun.core.model.ShowMeta(
+            key = "show-$index", title = "Show %02d".format(index), year = null, studio = null,
+            genres = setOf("Genre %02d".format(index)), contentRating = null, tmdbId = null,
+            labels = emptySet(), collections = setOf("Collection %02d".format(index)),
+        )
+        PlexParse.episodes(
+            """{"MediaContainer":{"Metadata":[{"ratingKey":"episode-$index","title":"Episode","grandparentRatingKey":"${show.key}","grandparentTitle":"${show.title}","duration":1800000}]}}""",
+            mapOf(show.key to show),
+        ).single()
     }
 
     private suspend fun editorFixture(items: List<MediaItem> = emptyList()): EditorFixture {

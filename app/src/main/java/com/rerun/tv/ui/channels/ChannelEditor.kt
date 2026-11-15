@@ -361,25 +361,35 @@ private const val COLLAPSED_CHIP_COUNT = 20
 @Composable
 private fun <T> chipRow(
     values: List<T>,
-    collapsedLimit: Int? = null,
+    collapsedLimit: Int = COLLAPSED_CHIP_COUNT,
     expansionTag: String? = null,
     chip: @Composable (T) -> Unit,
 ) {
     if (values.isEmpty()) { BasicText("Nothing in your library yet", style = Retro.Caption); return }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val visible = if (collapsedLimit == null || expanded) values else values.take(collapsedLimit)
+    var page by rememberSaveable { mutableStateOf(0) }
+    val lastPage = ((values.size + collapsedLimit - 1) / collapsedLimit - 1).coerceAtLeast(0)
+    val currentPage = page.coerceIn(0, lastPage)
+    val visible = if (!expanded || values.size <= collapsedLimit) {
+        values.take(collapsedLimit)
+    } else {
+        values.drop((currentPage + 1) * collapsedLimit).take(collapsedLimit)
+    }
     FlowRow(
         modifier = Modifier.fillMaxWidth().testTag("chip-flow"),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         visible.forEach { value -> Box(Modifier.widthIn(max = 520.dp)) { chip(value) } }
-        if (collapsedLimit != null && values.size > collapsedLimit) {
-            TvButton(
-                if (expanded) "Show fewer" else "Show all (${values.size})",
-                { expanded = !expanded },
-                modifier = expansionTag?.let { Modifier.testTag(it) } ?: Modifier,
-            )
+        if (values.size > collapsedLimit) {
+            val tagModifier = expansionTag?.let { Modifier.testTag(it) } ?: Modifier
+            if (expanded) {
+                if (currentPage > 0) TvButton("Previous 20", { page = currentPage - 1 })
+                if (currentPage < lastPage) TvButton("Next 20", { page = currentPage + 1 })
+                TvButton("Show fewer", { expanded = false; page = 0 }, modifier = tagModifier)
+            } else {
+                TvButton("Show all (${values.size})", { expanded = true; page = 0 }, modifier = tagModifier)
+            }
         }
     }
 }
