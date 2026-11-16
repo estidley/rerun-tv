@@ -86,6 +86,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         scope.launch {
             try {
                 val toSave = draft ?: return@launch
+                error = null
                 val errs = validateDraft(toSave, app.schedule.allChannelRows().map { it.def })
                 if (errs.isNotEmpty()) { error = errs.joinToString("   "); return@launch }
                 app.schedule.saveChannel(
@@ -313,10 +314,9 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
     }
     if (showUnsavedChanges) {
         UnsavedChangesDialog(
-            onSave = {
-                showUnsavedChanges = false
-                save()
-            },
+            busy = saving,
+            error = error,
+            onSave = { save() },
             onDiscard = {
                 showUnsavedChanges = false
                 controller.go(Screen.Channels)
@@ -327,10 +327,16 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
 }
 
 @Composable
-private fun UnsavedChangesDialog(onSave: () -> Unit, onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
+private fun UnsavedChangesDialog(
+    busy: Boolean,
+    error: String?,
+    onSave: () -> Unit,
+    onDiscard: () -> Unit,
+    onKeepEditing: () -> Unit,
+) {
     val keepEditing = remember { FocusRequester() }
     val bodyStyle = Retro.Body.copy(fontSize = 24.sp)
-    Dialog(onDismissRequest = onKeepEditing) {
+    Dialog(onDismissRequest = { if (!busy) onKeepEditing() }) {
         LaunchedEffect(Unit) { keepEditing.requestFocus() }
         Column(
             Modifier.widthIn(max = 720.dp).background(Retro.GuideBlueDeep).padding(28.dp)
@@ -339,9 +345,11 @@ private fun UnsavedChangesDialog(onSave: () -> Unit, onDiscard: () -> Unit, onKe
         ) {
             BasicText("Unsaved changes", style = Retro.Title.copy(fontSize = 32.sp))
             BasicText("Save your changes before leaving this screen?", style = bodyStyle)
-            TvButton("Save changes", onSave, textStyle = bodyStyle)
-            TvButton("Discard changes", onDiscard, textStyle = bodyStyle)
-            TvButton("Keep editing", onKeepEditing, Modifier.focusRequester(keepEditing), textStyle = bodyStyle)
+            error?.let { BasicText(it, style = bodyStyle.copy(color = Color(0xFFFF6B6B))) }
+            if (busy) BasicText("Saving...", style = bodyStyle)
+            TvButton("Save changes", onSave, enabled = !busy, textStyle = bodyStyle)
+            TvButton("Discard changes", onDiscard, enabled = !busy, textStyle = bodyStyle)
+            TvButton("Keep editing", onKeepEditing, Modifier.focusRequester(keepEditing), enabled = !busy, textStyle = bodyStyle)
         }
     }
 }

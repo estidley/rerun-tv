@@ -140,6 +140,25 @@ class ChannelEditorTest {
     }
 
     @Test
+    fun invalidSaveFromBackPromptKeepsDialogAndShowsValidationError() = runBlocking<Unit> {
+        val fixture = editorFixture()
+        showEditor(fixture)
+        compose.onNodeWithText("Test channel").performTextReplacement("")
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Save changes").performClick()
+        compose.waitForIdle()
+
+        compose.onNodeWithText("Unsaved changes").assertIsDisplayed()
+        compose.onNodeWithText("Give the channel a name").assertIsDisplayed()
+        verify(fixture.schedule, never()).saveChannel(
+            org.mockito.ArgumentMatchers.any(ChannelRow::class.java) ?: ChannelRow.of(fixture.def, builtIn = false),
+        )
+        verify(fixture.controller, never()).go(Screen.Channels)
+    }
+
+    @Test
     fun discardChangesLeavesWithoutSaving() = runBlocking<Unit> {
         val fixture = editorFixture()
         showEditor(fixture)
