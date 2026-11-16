@@ -6,7 +6,9 @@ contribution rules and validation commands live in [AGENTS.md](../../../AGENTS.m
 
 ## Scope
 
-Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 111 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music/custom channels use explicit fallback art.
+Channel identities use stable IDs, independent of user-renamed display text. Guide rows use `ChannelWordmark` with 400 x 270 lossless renders of the wordmark SVGs, preserving aspect ratio beside the vertical number without duplicate name text. The selected channel's current name remains in the program panel. The top-right playback OSD uses `ChannelWordmark` fitted within 180 x 122 dp above the number, with its complete artwork and original proportions preserved. `ChannelIcon` retains square artwork in channel management and the bottom playback info banner. The 111 SVG icon/wordmark pairs live under `design/channel-icons`; a pinned Sharp generator produces both sets of transparent Android drawables and static resource maps. Unknown music channels use generated name-specific art. Custom channels combine the approved custom logo with name initials in square icons and the full current name in wordmarks, wrapping long names instead of truncating them, without regenerating the bundled library.
+
+Channels, Settings and the channel editor share the bordered `TvPanel` container. Editor option rows use vertical wrapping rather than horizontal scrolling, and focused buttons keep stable bounds so their edges remain inside the panel. Collections, Shows, Genres and Leave out genres show 20 items initially, with Show next/Show fewer controls for the remainder. Expanded lists use Show next/Show previous controls to page through 20 items at a time, bounding composition work for large libraries. The unsaved-changes dialog stays open during save, shows validation errors inline, and disables its actions while saving.
 
 The tracked `data/tmdb/rerun/tmdb-networks.json` provides network/company membership to builds without credentials. A gitignored local refresh takes precedence. Maintainers run `:tmdb:publishSnapshot` after refreshing to validate and publish only the public reference schema; `:tmdb:check` verifies the shared file and publisher behavior in CI. Tokens never enter either JSON or the APK.
 
@@ -140,24 +142,38 @@ This section describes shipped behavior. The remaining approved scheduling chang
   Recognized old names migrate by channel ID without changing rules, numbers or locked entries.
 - Schedules extend approximately 48 hours and top up below 24 hours. Epoch times are UTC; time blocks use the device zone.
 - Movies use a shuffled deck; shows preserve episode pointers. Music plays back to back.
-- Video padding ends at the next device-local :00/:15/:30/:45 boundary and becomes a filler entry.
-  The retired schedule-sharing pilot has no effect; existing Room entries, including its former
-  schedules, stay locked until ordinary top-ups or intentional invalidation replace them.
-  Rebuilding after a retained off-grid ending inserts filler up to the next quarter-hour before the next movie or episode. Music and Buy Me Maybe stay back to back.
+- By default, video padding ends at the next device-local :00/:15/:30/:45 boundary and becomes a
+  filler entry. The retired schedule-sharing pilot has no effect; existing Room entries, including
+  its former schedules, stay locked until ordinary top-ups or intentional invalidation replace them.
+  Rebuilding a clock-aligned retained off-grid ending inserts filler up to the next quarter-hour.
+  Music and Buy Me Maybe stay back to back.
+- A video channel can persist `nonClockAligned`, `showAds` and `adBreakLength` in its existing
+  channel JSON, with no Room migration. Missing fields mean clock-aligned, Show ads and Medium.
+  Non-clock channels with No ads have no filler between programs. With Show ads, Short/Medium/Long
+  target about 2/5/10 minutes with at most 4/10/20 full clips. The actual clip total determines
+  the break end, which need not be a clock boundary.
 - Routine top-ups do not reshuffle existing entries. Changing included libraries rebuilds schedules;
-  missing items and removed channels invalidate affected playback. Channel edits rebuild the future after the current entry.
+  missing items and removed channels invalidate affected playback. Channel edits preserve the current
+  entry, rebuild its following selected break when applicable, and rebuild the future after that.
 - Each channel owns one schedule; there are no regional delayed feeds. Room migration 2-to-3
   removes legacy West channels/entries/state and their setting, maps the last-tuned feed to its
   original channel, and normalizes old feed-name suffixes without rebuilding original schedules.
-- Ads are chosen deterministically at playback time from the persisted catalog, seek to the current
-  break position, and never extend the program deadline. Short/unfillable remainders show Up Next.
-  A bounded plan for each break resumes long retained filler instead of replaying every preceding clip on rollover.
+- Video channels default to Show ads when the catalog is nonempty. No ads leaves Up Next in a
+  clock-aligned gap or no filler on a non-clock channel. Ads are chosen deterministically by the
+  shared scheduler/playback planner from the persisted catalog, seek to the current break position,
+  and never extend the stored program deadline. Short/unfillable remainders show Up Next. A bounded
+  plan for each break resumes long retained filler instead of replaying every preceding clip on rollover.
+  A clip that crosses the stored deadline is rejected and exhausts the cached plan, so retuning cannot
+  change an Up Next remainder into an ad. Catalog replacement and dependent schedule changes commit atomically.
 - A nonempty enabled ad catalog also creates **Buy Me Maybe**, a generated commercials-only station.
   Its preferred number is 998; collisions advance to a free number, skipping reserved numbers.
   It shuffles clips back-to-back without the ordinary activation minimum, tail
   skipping or padding. Items stay in the ad table, not the main library. Catalog
-  changes invalidate only its schedule; disabling ads or emptying the catalog removes it.
-- Tuning in the last five seconds of a program skips its tail. A future filler entry waits until its
+  changes invalidate its schedule and ad-enabled non-clock breaks and timing, but not clock-aligned
+  schedules or queued non-clock program order and saved scheduler state. Disabling ads or emptying
+  the catalog removes the station.
+- Tuning in the last five seconds of a clock-aligned program skips its tail. Non-clock programs do
+  not tail-skip into a future program before its stored start. A future filler entry waits until its
   start before retrying ad selection, rather than sleeping through the break.
 - The guide merges program and following filler into one cell. Music and Buy Me Maybe use hourly station blocks rather than individual songs or ads; Off Air gaps remain visible.
   The time ruler labels whole local half-hour slots. Movement stays on the 15-minute grid.
@@ -172,7 +188,7 @@ This section describes shipped behavior. The remaining approved scheduling chang
 Startup starts in loading state for an existing sign-in, awaits the automatic saved-lineup refresh,
 then queries active channels. Only a successful settled empty result displays no-channel guidance.
 The RERUN wordmark draws its red beret in front of the RE letter tops, with bounded overlap that leaves the letter faces readable.
-The loading card uses the existing beret wordmark and an indeterminate animated spinner.
+The loading card uses the existing beret wordmark and an indeterminate animated spinner. Loading and guide updates also show the app version and build number in small caption text; failure and empty-lineup cards omit it.
 Failures and confirmed empty states retain the wordmark but not the spinner. Missing
 connection/initial-sync configuration returns to onboarding.
 
@@ -205,7 +221,9 @@ HDR Auto checks connected display and decoder support. Convert requests SDR tone
 Prefer native bypasses the capability-driven conversion choice. Native HDR errors retry SDR once.
 Normalization is off by default and requests Plex audio transcoding only for eligible selected tracks;
 HDR conversion, Dolby Vision and selected subtitles currently prevent normalization. Skipped normalization
-and playback failures are visible, not silent volume guarantees.
+and playback failures are visible, not silent volume guarantees. HDR conversion and normalization-status
+notices clear after five seconds; newer notices reset the timer and retunes/stops cancel stale callbacks.
+Actual playback-failure messages remain visible.
 
 Station changes retain configurable static/roll effects. Same-station clips fade to black before media
 replacement, hold black while loading, and fade in on the first frame (or music readiness).

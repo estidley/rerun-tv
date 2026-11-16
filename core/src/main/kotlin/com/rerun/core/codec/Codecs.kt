@@ -1,5 +1,6 @@
 package com.rerun.core.codec
 
+import com.rerun.core.model.AdBreakLength
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
@@ -54,6 +55,9 @@ object ChannelCodec {
         })
         put("kidsSafe", def.kidsSafe); put("hidden", def.hidden); put("movieEveryMs", def.movieEveryMs)
         def.minimumContentHours?.let { put("minimumContentHours", it) }
+        if (!def.showAds) put("showAds", false)
+        if (def.nonClockAligned) put("nonClockAligned", true)
+        if (def.adBreakLength != AdBreakLength.MEDIUM) put("adBreakLength", def.adBreakLength.name)
     }.toString()
 
     fun decode(text: String): ChannelDef {
@@ -78,6 +82,10 @@ object ChannelCodec {
             hidden = o["hidden"]?.jsonPrimitive?.boolean ?: false,
             movieEveryMs = o["movieEveryMs"]?.jsonPrimitive?.long ?: 6 * 3_600_000L,
             minimumContentHours = o["minimumContentHours"]?.jsonPrimitive?.int,
+            showAds = o["showAds"]?.jsonPrimitive?.boolean ?: true,
+            nonClockAligned = o["nonClockAligned"]?.jsonPrimitive?.boolean ?: false,
+            adBreakLength = o["adBreakLength"]?.jsonPrimitive?.content?.let(AdBreakLength::valueOf)
+                ?: AdBreakLength.MEDIUM,
         )
     }
 

@@ -245,7 +245,9 @@ class GuideScreenTest {
     fun stationaryGuideStillRefreshesItsPrefetchedDataAfterTenMinutes() = runBlocking<Unit> {
         var testNow = baseNow
         compose.setContent { GuideScreen(controller, schedule, clock = { testNow }) }
-        compose.waitForIdle()
+        compose.waitUntil(10_000) {
+            mockingDetails(schedule).invocations.count { it.method.name == "ensure" } >= 1
+        }
         verify(schedule, times(1)).ensure(anyCollection(), anyLong())
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { testNow += 10 * 60_000L }
@@ -741,6 +743,7 @@ class GuideScreenTest {
         compose.setContent { GuideScreen(controller, schedule, clock = { baseNow }) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("guide-grid").fetchSemanticsNodes().isNotEmpty() }
         compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitForIdle()
         val selected31 = hasAnyAncestor(hasTestTag("guide-row:test:31")) and isSelected()
         compose.waitUntil(5_000) { compose.onAllNodes(selected31).fetchSemanticsNodes().isNotEmpty() }
         val extra = ChannelRow.of(

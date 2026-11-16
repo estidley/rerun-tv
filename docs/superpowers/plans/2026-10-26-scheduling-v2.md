@@ -2,8 +2,9 @@
 
 Status: **partially implemented**. The design is approved in the
 [scheduling v2 design spec](../specs/2026-10-26-scheduling-v2-design.md); read it first, since
-section numbers below (§) refer to it. The device-local quarter-hour grid is implemented in 1.1.0,
-but the time-zone setting/reset flow and all other steps below remain unimplemented.
+section numbers below (§) refer to it. The device-local quarter-hour grid is implemented in 1.1.0.
+Per-channel non-clock scheduling, ads-off and sized deterministic breaks have also shipped, but
+the time-zone setting/reset flow, saved AD/WAIT entries and all other steps below remain unimplemented.
 The retired sharing-code pilot was removed in the same release; its algorithms are not part of
 this plan or a baseline for future sharing.
 
@@ -17,8 +18,9 @@ this plan or a baseline for future sharing.
 - **Defaults Ethan didn't explicitly pick:** run slot times (4 PM and 8 PM), next-season
   continuation, and movie-only channel handling. Keep them configurable and call them out in PR
   descriptions.
-- **Marvelous Timeline (decided):** same quarter-hour grid and ad fill as every channel, with
-  strict order and no fillers (§1.6). The earlier fixed-2-ads rule is superseded.
+- **Marvelous Timeline (decided):** quarter-hour grid and ad fill by default, with strict order
+  and no fillers (§1.6). The earlier fixed-2-ads rule is superseded. The later explicit per-channel
+  non-clock option applies here as on other video channels.
 
 ## Repository rules (from AGENTS.md and owner instructions)
 
@@ -88,17 +90,21 @@ CI (`.github/workflows/ci.yml`) runs on every PR. Cursor Bugbot reviews PRs; add
 
 ### Step 2: Ad breaks as saved entries with gap fill
 
+- **Already landed:** `ChannelDef.showAds`, `nonClockAligned` and `adBreakLength`, backward-compatible
+  JSON, editor controls, deterministic clip-sized FILLER for non-clock channels, per-channel ads-off
+  playback, and catalog-triggered future rebuilds. Preserve these policies; do not add a separate
+  Fixed N setting. The remaining work converts the selected clips and waits into saved AD/WAIT entries.
 - **Files:**
   - `core/.../schedule/Schedule.kt`: add `EntryKind.AD` (the clip key in `itemKey`) and `EntryKind.WAIT` (Up Next). Keep `FILLER` for legacy entries.
-  - `core/.../schedule/Scheduler.kt`: an ad planner that fills each gap to the next mark (preferred 3–8 min, 23 min cap). The ad catalog is passed into `extend`, picked deterministically from the channel's saved RNG, with no immediate repeats. Whatever can't be filled becomes WAIT.
-  - `core/.../model/Channels.kt` + `core/.../codec/Codecs.kt`: add `AdsPolicy` (Normal / Off / Fixed N) to `ChannelDef`; the codec reads a missing value as Normal.
-  - `app/.../ui/channels/ChannelEditor.kt`: Ads control.
+  - `core/.../schedule/Scheduler.kt`: an ad planner that fills each gap to the next mark (preferred 3–8 min, 23 min cap). The ad catalog is passed into `extend`, picked deterministically from the channel's saved RNG, with no immediate repeats. Whatever can't be filled becomes WAIT. Preserve the existing non-clock Short/Medium/Long targets and clip caps.
+  - `core/.../model/Channels.kt` + `core/.../codec/Codecs.kt`: keep the shipped `showAds`, `nonClockAligned` and `adBreakLength` fields and their legacy defaults.
+  - `app/.../ui/channels/ChannelEditor.kt`: keep the shipped Scheduling and Advertising controls.
   - `core/.../schedule/GuideBlocks.kt`: fold AD and WAIT into the previous program.
   - `app/.../player/TunerEngine.kt`: play AD entries at the offset and show the Up Next card for WAIT. Keep `adFiller` only for legacy FILLER entries.
-  - `ScheduleRepo.topUp`: pass the ad catalog.
+  - `ScheduleRepo.topUp`: pass the ad catalog and preserve affected-future invalidation.
   - `app/.../data/Db.kt`: no schema change (kind is a string), but make `EntryRow.toEntry` tolerate unknown kinds for downgrade safety.
 - **Tests:**
-  - Planner: same inputs give the same output; the break ends exactly on the mark when clips fit; the cap holds; an empty catalog gives WAIT; Off and Fixed N.
+  - Planner: same inputs give the same output; the break ends exactly on the mark when clips fit; the cap holds; an empty catalog gives WAIT; No ads and every non-clock break size.
   - GuideBlocks folding.
   - TunerEngineTest: tune in mid-AD seeks within the clip; WAIT shows Up Next.
   - Codec round-trip with and without the policy.

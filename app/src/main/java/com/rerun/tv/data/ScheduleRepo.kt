@@ -17,6 +17,7 @@ import com.rerun.core.schedule.EntryKind
 import com.rerun.core.schedule.ScheduleEntry
 import com.rerun.core.schedule.Scheduler
 import com.rerun.core.schedule.needsTopUp
+import com.rerun.core.schedule.rebuildNonClockAdBreaks
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -111,6 +112,14 @@ class ScheduleRepo internal constructor(
                     db.states().delete(Lineup.ADS_ID)
                 }
             }
+            if (changed) {
+                val nowMs = System.currentTimeMillis()
+                val catalog = ads.map { it.toItem() }
+                db.channels().all().filter { it.def.nonClockAligned && it.def.showAds }.forEach { row ->
+                    rebuildAdBreaks(row, nowMs, catalog)
+                }
+            }
+            changed
         }
         _guideRevision.value++
     }
@@ -312,15 +321,19 @@ class ScheduleRepo internal constructor(
     private suspend fun topUp(row: ChannelRow, nowMs: Long) {
         if (row.dormant || row.hidden) return
         if (row.id == Lineup.RESTART_ID) return
-        val last = db.entries().lastEnd(row.id)
+        val lastEntry = db.entries().last(row.id)
+        val last = lastEntry?.endMs
         if (!needsTopUp(last, nowMs)) return
         val def = row.def
         val minimum = com.rerun.core.catalog.MinimumContentLevel.from(db.settings().get(Settings.MINIMUM_CONTENT))
         val pool = if (row.id == Lineup.ADS_ID) db.ads().all().map { it.toItem() }
             else Resolver.pool(def, lib().items, minimum)
+        val adCatalog = if (def.nonClockAligned && def.showAds) db.ads().all().map { it.toItem() } else emptyList()
         val state = db.states().get(row.id)?.let { StateCodec.decode(it.json) } ?: ChannelState(seed = kotlin.random.Random.nextLong())
         val ext = scheduler.extend(def, pool, state, last, nowMs,
-            backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC)
+            backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC,
+            adCatalog = adCatalog,
+            lastEntryKind = lastEntry?.kind?.let(EntryKind::valueOf))
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
         db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
     }
@@ -354,13 +367,28 @@ class ScheduleRepo internal constructor(
     suspend fun resetFuture(channelId: String, nowMs: Long) {
         mutex.withLock {
             db.withTransaction {
-                val row = db.channels().byId(channelId)
-                val current = db.entries().range(channelId, nowMs, nowMs + 1).firstOrNull()
-                db.entries().deleteFrom(channelId, current?.endMs ?: nowMs)
-                row?.let { topUp(it, nowMs) }
+                db.channels().byId(channelId)?.let { row -> rebuildFuture(row, nowMs) }
             }
             _guideRevision.value++
         }
+    }
+
+    private suspend fun rebuildFuture(row: ChannelRow, nowMs: Long) {
+        val current = db.entries().range(row.id, nowMs, nowMs + 1).firstOrNull()
+        db.entries().deleteFrom(row.id, current?.endMs ?: nowMs)
+        topUp(row, nowMs)
+    }
+
+    private suspend fun rebuildAdBreaks(row: ChannelRow, nowMs: Long, catalog: List<MediaItem>) {
+        val current = db.entries().range(row.id, nowMs, nowMs + 1).firstOrNull()
+        val cutoff = current?.endMs ?: nowMs
+        val queued = db.entries().range(row.id, cutoff, Long.MAX_VALUE).map { it.toEntry() }
+        val rebuilt = rebuildNonClockAdBreaks(
+            row.def, queued, cutoff, current?.kind?.let(EntryKind::valueOf), catalog,
+        )
+        db.entries().deleteFrom(row.id, cutoff)
+        if (rebuilt.isNotEmpty()) db.entries().insertAll(rebuilt.map(EntryRow::of))
+        topUp(row, nowMs)
     }
 
     suspend fun saveChannel(row: ChannelRow) = mutex.withLock {

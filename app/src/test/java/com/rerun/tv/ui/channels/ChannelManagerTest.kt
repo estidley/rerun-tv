@@ -1,10 +1,15 @@
 package com.rerun.tv.ui.channels
 
 import android.app.Application
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pressKey
 import com.rerun.core.catalog.MinimumContentLevel
 import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
@@ -53,5 +58,30 @@ class ChannelManagerTest {
         verify(controller).setChannelHidden("custom:comedy", true)
         compose.onNodeWithText("2000   Jazz").performTouchInput { longClick() }
         verify(controller).setChannelHidden("custom:jazz", false)
+    }
+
+    @Test
+    fun panelKeepsFocusedContentInsideTheScreenMargins() {
+        val app = mock(RerunApp::class.java)
+        val schedule = mock(ScheduleRepo::class.java)
+        val controller = mock(TvController::class.java)
+        val active = ChannelRow.of(
+            ChannelDef("custom:comedy", 420, "Comedy", ChannelKind.CUSTOM, Rules()),
+            builtIn = false, dormant = false, poolMs = 3_600_000,
+        )
+        `when`(app.schedule).thenReturn(schedule)
+        `when`(schedule.allChannels()).thenReturn(flowOf(listOf(active)))
+        `when`(controller.minimumContent).thenReturn(MutableStateFlow(MinimumContentLevel.MEDIUM))
+        `when`(controller.lineupUpdate).thenReturn(MutableStateFlow(LineupUpdate()))
+        compose.setContent { ChannelManager(controller, app) }
+
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val panel = compose.onNodeWithTag("channels-panel").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(panel.left > screen.left)
+        org.junit.Assert.assertTrue(panel.right < screen.right)
+        compose.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        compose.waitForIdle()
+        val button = compose.onNodeWithText("420   Comedy").fetchSemanticsNode().boundsInRoot
+        org.junit.Assert.assertTrue(button.left >= panel.left && button.right <= panel.right)
     }
 }

@@ -270,6 +270,104 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun adCatalogRefreshRebuildsOnlyNonClockFutures() = runBlocking {
+        val at = System.currentTimeMillis()
+        val program = movie("one")
+        db.items().replaceAll(listOf(program).map(ItemRow::of))
+        val nonClock = com.rerun.core.model.ChannelDef(
+            "custom:nonclock", 450, "Non-clock", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(), nonClockAligned = true,
+            adBreakLength = com.rerun.core.model.AdBreakLength.SHORT,
+        )
+        val clock = com.rerun.core.model.ChannelDef(
+            "custom:clock", 451, "Clock", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(),
+        )
+        db.channels().upsert(ChannelRow.of(nonClock, false, false))
+        db.channels().upsert(ChannelRow.of(clock, false, false))
+        val current = ScheduleEntry(nonClock.id, at - 60_000, at + 60_000, EntryKind.PROGRAM, program.key)
+        db.entries().insertAll(listOf(current).map(EntryRow::of))
+        repo.ensure(clock.id, at)
+        val clockBefore = repo.entries(clock.id, at - DAY, at + DAY)
+        val ad = movie("ad").copy(durationMs = 40_000, partKey = "/library/parts/ad/file.mp4")
+
+        repo.replaceAds("commercials", listOf(AdRow.of(ad)))
+
+        val rebuilt = repo.entries(nonClock.id, at, at + 10 * 60_000)
+        assertEquals(current, rebuilt.first())
+        val firstBreak = rebuilt.drop(1).first()
+        assertEquals(EntryKind.FILLER, firstBreak.kind)
+        assertEquals(current.endMs, firstBreak.startMs)
+        assertEquals(120_000, firstBreak.endMs - firstBreak.startMs)
+        assertEquals(clockBefore, repo.entries(clock.id, at - DAY, at + DAY))
+
+        repo.replaceAds(null, emptyList())
+
+        val withoutAds = repo.entries(nonClock.id, current.endMs, current.endMs + 10 * 60_000)
+        assertTrue(withoutAds.none { it.kind == EntryKind.FILLER })
+        assertEquals(clockBefore, repo.entries(clock.id, at - DAY, at + DAY))
+    }
+
+    @Test
+    fun adCatalogRefreshPreservesQueuedProgramOrderAndSchedulerState() = runBlocking {
+        val at = System.currentTimeMillis()
+        val programs = (1..3).map { movie("movie-$it").copy(year = 2000 + it) }
+        db.items().replaceAll(programs.map(ItemRow::of))
+        val def = com.rerun.core.model.ChannelDef(
+            "custom:ordered", 452, "Ordered", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(), order = com.rerun.core.model.PlayOrder.IN_ORDER,
+            nonClockAligned = true, adBreakLength = com.rerun.core.model.AdBreakLength.SHORT,
+        )
+        db.channels().upsert(ChannelRow.of(def, false, false))
+        val firstAd = movie("first-ad").copy(durationMs = 30_000, partKey = "/library/parts/first/file.mp4")
+        repo.replaceAds("commercials", listOf(AdRow.of(firstAd)))
+        repo.ensure(def.id, at)
+        val before = repo.entries(def.id, at, Long.MAX_VALUE).filter { it.kind == EntryKind.PROGRAM }
+        val stateBefore = db.states().get(def.id)?.json
+        assertTrue(before.size > 3)
+        val longerAd = movie("longer-ad").copy(durationMs = 50_000, partKey = "/library/parts/longer/file.mp4")
+
+        repo.replaceAds("commercials", listOf(AdRow.of(longerAd)))
+
+        val after = repo.entries(def.id, at, Long.MAX_VALUE)
+        assertEquals(before.map { it.itemKey }, after.filter { it.kind == EntryKind.PROGRAM }.map { it.itemKey })
+        assertEquals(before.first(), after.first())
+        assertEquals(stateBefore, db.states().get(def.id)?.json)
+        val firstBreak = after.first { it.kind == EntryKind.FILLER }
+        assertEquals(100_000, firstBreak.endMs - firstBreak.startMs)
+    }
+
+    @Test
+    fun failedScheduleRebuildRollsBackCatalogAndSource() = runBlocking {
+        val at = System.currentTimeMillis()
+        val oldAd = movie("old-ad").copy(durationMs = 30_000, partKey = "/library/parts/old/file.mp4")
+        repo.replaceAds("old-source", listOf(AdRow.of(oldAd)))
+        val def = com.rerun.core.model.ChannelDef(
+            "custom:rollback", 453, "Rollback", com.rerun.core.model.ChannelKind.CUSTOM,
+            com.rerun.core.model.Rules(), nonClockAligned = true,
+        )
+        db.channels().upsert(ChannelRow.of(def, false, false))
+        db.entries().insertAll(listOf(EntryRow(
+            channelId = def.id, startMs = at - 60_000, endMs = at + 60_000,
+            kind = "INVALID", itemKey = "program",
+        )))
+        val before = db.entries().range(def.id, 0, Long.MAX_VALUE)
+        val newAd = movie("new-ad").copy(durationMs = 50_000, partKey = "/library/parts/new/file.mp4")
+
+        var failed = false
+        try {
+            repo.replaceAds("new-source", listOf(AdRow.of(newAd)))
+        } catch (_: IllegalArgumentException) {
+            failed = true
+        }
+
+        assertTrue(failed)
+        assertEquals("old-source", db.settings().get(Settings.AD_LIBRARY))
+        assertEquals(listOf("old-ad"), repo.adCatalog().map { it.key })
+        assertEquals(before, db.entries().range(def.id, 0, Long.MAX_VALUE))
+    }
+
+    @Test
     fun editingKeepsTheCurrentProgramAndRebuildsTheFuture() = runBlocking {
         val original = movie("1")
         repo.refreshChannels(items = listOf(original, movie("2")))

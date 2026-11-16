@@ -1,7 +1,8 @@
 # Scheduling v2 design (approved decisions)
 
 Status: **approved by Ethan on 2026-10-26, partially implemented.** The device-local
-quarter-hour grid shipped in 1.1.0; the remaining scheduling rewrite is still planned. The build
+quarter-hour grid shipped in 1.1.0. Per-channel non-clock scheduling, ads-off and sized deterministic
+breaks have also shipped; the remaining scheduling rewrite is still planned. The build
 order, tests and acceptance criteria are in the
 [implementation plan](../plans/2026-10-26-scheduling-v2.md). Current behavior is described in the
 [design reference](2026-10-23-rerun-design.md#scheduling-and-ads); update that
@@ -13,39 +14,49 @@ The retired sharing-code pilot is not part of this design or its delivery sequen
 
 ## 1. Decisions
 
-### 1.1 Grid: local quarter hour for every channel
+### 1.1 Grid: local quarter hour by default
 
-- Every scheduled channel uses a **quarter-hour grid**. Each program starts at the first local
-  `:00`, `:15`, `:30` or `:45` mark at or after the moment the previous program plus its ad break
-  ends. If the previous program ends exactly on a mark, the next one starts there.
+- By default, every scheduled video channel uses a **quarter-hour grid**. Each program starts at the
+  first local `:00`, `:15`, `:30` or `:45` mark at or after the moment the previous program plus its
+  ad break ends. If the previous program ends exactly on a mark, the next one starts there.
+- A video channel can instead enable **non-clock aligned** scheduling. With ads off, programs play
+  back-to-back. With ads on, the actual full clips in the selected break determine the next start;
+  neither the break nor the next program is aligned to a clock boundary.
 - Marks are computed in the **schedule time zone's local wall-clock time** (see 1.10), not UTC.
   That fixes zones with 30- and 45-minute offsets (India +5:30, Nepal +5:45, Chatham +12:45) and
   keeps marks correct across daylight-saving changes.
   - Spring forward: the skipped wall-clock hour simply has no marks.
   - Fall back: the repeated hour has marks in both offsets.
-- This includes **Marvelous Timeline and other chronological (fixed-order) channels** (1.6).
+- This default includes **Marvelous Timeline and other chronological (fixed-order) channels** (1.6),
+  unless the user explicitly enables non-clock scheduling on one.
 - **Exceptions (unchanged):** music stations and Buy Me Maybe keep playing back to back with no
   grid and no ad breaks (1.11).
-- Gaps between a program's end and the next mark are therefore always under 15 minutes.
+- Gaps between a gridded program's end and the next mark are therefore always under 15 minutes.
 
-### 1.2 Ad breaks fill the gap to the next quarter hour
+### 1.2 Ad breaks
 
+- **Current shipped implementation:** deterministic clip selection fills scheduled `FILLER` at tune
+  time. The saved-at-build-time AD/WAIT entries below remain planned and must preserve the shipped
+  per-channel policies when they land.
 - After every program on a gridded channel, the time up to the next quarter-hour mark is
   filled. The goal is that the next program starts exactly on the mark.
-- Preferred ad break length is **3 to 8 minutes**.
+- Preferred gridded ad break length is **3 to 8 minutes**.
 - **Gap over 8 minutes:** first try a **gap filler** (1.3). If one fits, place it, then fill
   the remaining time to the next mark the same way. With no filler, fill the whole gap with ads.
-- **Hard cap:** a single ad break never exceeds **about 23 minutes**. On a 15-minute grid this
-  is effectively never reached, but keep the guard.
+- **Hard cap:** a single gridded ad break never exceeds **about 23 minutes**. On a 15-minute grid
+  this is effectively never reached, but keep the guard.
 - **Ads can't fill the gap** (no ad catalog, ads off for the channel, or no combination of clips
   fits): the remaining time becomes a wait that shows the existing **Up Next card**. "If it
   doesn't work, it doesn't work." Never delay the next program to make ads fit.
-- **Saved at build time:** ad clips are chosen when the schedule is built and **saved as schedule
-  entries**, not computed at tune time. The same build inputs give the same clips.
-- **Tune-in mid-break:** tuning in during a break plays the saved clip at the right offset.
-- **Per-channel ads setting:** **Normal** (fill as above), **Off** (no ads; the gap becomes an Up
-  Next wait, though fillers may still be used), or **Fixed N** (exactly N clips per break where
-  possible, any remainder becomes an Up Next wait).
+- **Saved at build time (planned):** ad clips will be chosen when the schedule is built and **saved
+  as schedule entries**, rather than recomputed at tune time. The same build inputs give the same clips.
+- **Tune-in mid-break:** tuning in during a break plays the selected clip at the right offset.
+- **Per-channel ads setting:** every video channel defaults to **Show ads** when the catalog is
+  nonempty and can select **No ads**. On a gridded channel, No ads leaves an Up Next wait. On a
+  non-clock channel, No ads is back-to-back. Non-clock channels with Show ads select **Short**
+  (about 2 minutes, at most 4 clips), **Medium** (about 5 minutes, at most 10) or **Long** (about
+  10 minutes, at most 20). The actual break can be shorter; these are targets and clip caps, not
+  exact-clip-count settings or time boundaries.
 - Ads still come only from the separately synced ad catalog (Settings > Ad library).
 
 ### 1.3 Gap fillers
@@ -99,21 +110,22 @@ The retired sharing-code pilot is not part of this design or its delivery sequen
 - **Chronological** (`PlayOrder.CHRONOLOGICAL`, e.g. Marvelous Timeline):
   - Strict, exact order. Never skip, reorder or shorten.
   - **Ignores time blocks** (the editor should disable blocks for this order, or they're ignored).
-  - **Starts each item on the next quarter-hour mark** after the previous item plus its ad break.
-  - **Ads use exactly the same quarter-hour fill as every other channel** (1.2), "so that it's
-    not different". The ads setting defaults to Normal; Off and Fixed N work as on other
-    channels. The preferred break is 3 to 8 minutes. Fillers would break the strict order, so a
-    gap over 8 minutes is **filled with ads up to the cap**. If ads can't fill it, the rest is
-    an Up Next wait.
+  - **Starts each item using the channel's scheduling policy:** the next quarter-hour mark by
+    default, or the actual ad-break end when the user explicitly selects non-clock scheduling.
+  - **Ads use the same per-channel policy as every other video channel** (1.2): Show ads by default,
+    with No ads and non-clock break sizes available. The preferred gridded break is 3 to 8 minutes.
+    Fillers would break the strict order, so a gridded gap over 8 minutes is **filled with ads up
+    to the cap**. If ads can't fill it, the rest is an Up Next wait.
   - Fully deterministic from the saved deck.
   - No runs, no fillers.
 
   **Decision history:** Ethan's earlier "no grid, start whenever, 2 fixed ads between items" and
-  the interim "2 fixed ads, then Up Next wait" rule are **superseded**. His latest decision is that
-  the Timeline uses the same quarter-hour grid and ad fill as every channel.
+  the interim "2 fixed ads, then Up Next wait" rule are **superseded**. The Timeline defaults to
+  the same quarter-hour grid and ad fill as other channels; the later explicit per-channel non-clock
+  option does not restore either fixed-2-ads rule.
 - **In order** (`PlayOrder.IN_ORDER`): keeps its order (shows rotate in order; movies play by
-  year). It's **exempt from shortening (1.7) and from runs (1.5)**, uses the quarter-hour grid
-  with Normal ad fill, and gets no fillers.
+  year). It's **exempt from shortening (1.7) and from runs (1.5)**, uses the channel's selected
+  scheduling and ads policy, and gets no fillers.
 
 ### 1.7 Time-block overrun rule
 
@@ -205,24 +217,24 @@ The retired sharing-code pilot is not part of this design or its delivery sequen
 - Playback continues to follow wall-clock time (existing invariant). Ads never delay the next
   program.
 
-## 2. Current code facts (app version 1.1.0)
+## 2. Current code facts (app version 1.2.0)
 
 | Area | Today | Where |
 |---|---|---|
-| Grid | 15-minute grid computed in the scheduler's local wall-clock zone (`GRID_MS`, `gridFloor`, `gridCeil`); each video program is padded to the next `:00/:15/:30/:45` with a `FILLER` entry. A retained ending that is off a mark is bridged the same way before the next video program | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
-| Build model | `Scheduler.extend` appends from the last saved end (or the current grid floor) to 48 h ahead; never rewrites saved entries | `core/.../schedule/Scheduler.kt` |
+| Grid | By default, a 15-minute grid computed in the scheduler's local wall-clock zone (`GRID_MS`, `gridFloor`, `gridCeil`) pads each video program to the next `:00/:15/:30/:45` with a `FILLER` entry. Non-clock video instead uses the actual selected break end, or plays back-to-back with no ads | `core/src/main/kotlin/com/rerun/core/schedule/Schedule.kt`, `Scheduler.kt` |
+| Build model | `Scheduler.extend` appends from the last saved end (or the current grid floor/current time for non-clock) to 48 h ahead; never rewrites saved entries. A retained non-clock program gets its newly selected break before the rebuilt future | `core/.../schedule/Scheduler.kt` |
 | Top-up | `ScheduleRepo.ensure` tops up channels with under 24 h left (`needsTopUp`). It's lazy. Tuning tops up one channel (`ensure(channelId)`, `TunerEngine`); a library sync tops up all (`ensure(now)`, `LibrarySync`). Since PR #11 the guide tops up **only the visible rows plus a margin** (`ensure(ids, now)`, `wantRange`), reads them with `entriesFor(ids, …)`, and repeats the top-up **every 10 minutes while open** (`ENSURE_INTERVAL_MS`). It prunes entries that ended over 6 h ago | `app/src/main/java/com/rerun/tv/data/ScheduleRepo.kt`, `app/.../ui/guide/GuideScreen.kt`, `core/.../schedule/Tune.kt` |
 | Randomness | Since PR #11 a channel with no saved state gets a **random seed** on its first build (`ChannelState(seed = Random.nextLong())` in `ScheduleRepo.topUp`); before that it was `row.id.hashCode()`. The seed and the rest of the scheduler state (deck, recent, episode pointers, `msSinceMovie`, `rngCalls`) are saved as JSON, so a channel is deterministic **from its saved state** but differs between installs and after a state reset | `ScheduleRepo.kt`, `Scheduler.kt`, `Schedule.kt` (`ChannelState`), `core/.../codec/Codecs.kt` (`StateCodec`) |
 | Picks | Shows: weighted random show, next episode in order, pointer advances on every pick. Movies: shuffled deck with a recent hold-back. Mixed: movie when `msSinceMovie >= movieEveryMs` (6 h). In order: round-robin shows; movies by year. Chronological: persisted ordered deck | `Scheduler.kt` |
 | Time blocks | `TimeBlock` checked only at each program's start, so programs can run into a block. Only built-in block: Cartoon Network weekdays 4–7 PM, Toonami titles | `core/.../model/Channels.kt`, `core/.../catalog/Catalog.kt` |
-| Ads | Chosen **at tune time** by `adFiller` (seeded by channel and break start), filling the whole FILLER back to back; Up Next card if none fits. A bounded plan resumes a long break without replaying its prefix | `core/.../schedule/AdFiller.kt`, `app/.../player/TunerEngine.kt` |
+| Ads | Chosen deterministically by the shared planner (seeded by channel and break start). Gridded FILLER plays to its stored end; non-clock FILLER lasts for the selected Short/Medium/Long clips up to 4/10/20 clips. No ads leaves Up Next on gridded channels and no filler on non-clock channels. Catalog preprocessing is shared per schedule extension, and a bounded playback cache resumes long retained breaks | `core/.../schedule/AdFiller.kt`, `Scheduler.kt`, `app/.../player/TunerEngine.kt` |
 | Entries | Room `entries` table: `kind` stored as a **string** and decoded with `EntryKind.valueOf`; unique `(channelId, startMs)`; DB version 3 | `app/.../data/Db.kt` (`EntryRow`) |
 | Guide | 3-hour window; filler folded into the previous program; gaps are Off Air; music and Buy Me Maybe hourly. The ruler labels whole local half-hour slots; Left/Right still move by 15 minutes. Since PR #11 the channel column shows a vertical number and a wordmark, and its width follows the row height (`iconDp * 400 / 270 + 54` dp, from about 125 dp in Compact to almost 300 dp in Large), so the timeline and every program cell get narrower. While updating it shows skeleton rows. Touch controls (PR #12) work on the rows and cells | `core/.../schedule/GuideBlocks.kt`, `app/.../ui/guide/GuideScreen.kt`, `GuideLayout.kt` |
 | Tune | `locate` finds the entry covering now; 5 s end skip; Off Air waits for the next entry | `core/.../schedule/Tune.kt`, `TunerEngine.kt` |
 | Time zone | `Scheduler(ZoneId.systemDefault())` built once at app start. Since PR #11, `ClockWatch` notices a clock jump or a zone change on the guide's 30-second tick (wall vs. elapsed time and `TimeZone.getDefault().id`); the guide then re-floors its window and relabels times. It doesn't prompt or rebuild. `clockTime`/`clockDate` follow the device locale, 12/24-hour setting and zone | `app/.../RerunApp.kt`, `app/.../ui/ClockWatch.kt`, `app/.../ui/player/Overlays.kt` |
 | Library sync | **Manual only** (onboarding, Settings resync and libraries). App start only re-plans from the saved library (`refreshChannelsForAppVersion`) | `app/.../data/LibrarySync.kt`, `RerunApp.kt`, `app/.../ui/TvController.kt` |
 | Item removal | Since PR #11, `refreshChannels` keeps the airing entry and later entries up to the first entry whose item is missing (`EntryDao.firstMissingStart`), deletes from there (`deleteFrom`) and **keeps the channel's state**; the next top-up refills. The hidden From the Top channel is still deleted outright. The saved deck and pointers can still name missing keys | `ScheduleRepo.refreshChannels`, `app/.../data/Db.kt` |
-| Edits | Channel edits keep the current entry and rebuild the future (`resetFuture`) | `ScheduleRepo.kt`, `app/.../ui/channels/ChannelEditor.kt` |
+| Edits | Channel edits keep the current entry, rebuild any following selected break, and rebuild the future (`resetFuture`). Ad catalog replacement and dependent schedule changes commit atomically. They preserve gridded schedules and rebuild only breaks and timing in ad-enabled non-clock futures, without advancing queued program order or saved scheduler state. Non-clock programs never start early through tail skipping | `ScheduleRepo.kt`, `app/.../ui/channels/ChannelEditor.kt` |
 
 ## 3. Red-team findings and resolutions
 
@@ -237,7 +249,7 @@ The retired sharing-code pilot is not part of this design or its delivery sequen
 | 7 | Runs broken by grid padding or fillers | Runs never split; only ad fill between episodes (1.5) |
 | 8 | Run slot vs. preceding long program, due movie, time blocks | Zero-tolerance end before the slot; movie waits; blocked day skipped without losing position (1.5) |
 | 9 | Fixed order vs. shortening, blocks and fillers | Chronological and In order exempt from shortening and fillers; chronological ignores blocks (1.6) |
-| 10 | Marvelous Timeline "start whenever" vs. "every channel on the quarter hour" | Ethan decided: same quarter-hour grid and ad fill as every channel; ads fill gaps over 8 min (no fillers); earlier fixed-2-ads rule superseded (1.6) |
+| 10 | Marvelous Timeline "start whenever" vs. "every channel on the quarter hour" | Default to the same quarter-hour grid and ad fill as other channels; explicit per-channel non-clock mode remains available, and the earlier fixed-2-ads rules stay superseded (1.6) |
 | 11 | Movie-only channels can't use episode fillers | Grid plus ad fill (gaps under 15 min); Up Next if no ads (1.4) |
 | 12 | Nothing fits a gap | Filler, then ads, then Up Next wait; never delay the next program (1.2) |
 | 13 | Guide clutter from ads and fillers | Fold ads and waits into the previous cell; fillers get their own cells (1.12) |
@@ -255,10 +267,11 @@ The retired sharing-code pilot is not part of this design or its delivery sequen
 | Setting | Value | Scope |
 |---|---|---|
 | Grid | Local quarter hour | All gridded channels |
-| Preferred ad break | 3–8 min | Global constant |
-| Filler threshold | Gap over 8 min | Global constant |
-| Ad break hard cap | 23 min | Global constant |
-| Ads policy | Normal / Off / Fixed N | Per channel (default Normal on every channel, Timeline included) |
+| Preferred ad break | 3–8 min | Gridded channels |
+| Filler threshold | Gap over 8 min | Gridded channels |
+| Ad break hard cap | 23 min | Gridded channels |
+| Ads policy | Show ads / No ads | Per video channel (default Show ads, Timeline included) |
+| Non-clock break | Short: about 2 min / 4 clips; Medium: 5 / 10; Long: 10 / 20 | Per non-clock channel (default Medium) |
 | Block overrun tolerance | 20 min | Per channel (default 20) |
 | Episodes per run | 3 | Per channel (default 3) |
 | Run slots | 4:00 PM and 8:00 PM local **(default)** | Per channel |

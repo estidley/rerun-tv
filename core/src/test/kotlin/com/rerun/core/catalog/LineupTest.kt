@@ -442,6 +442,23 @@ class LineupTest {
     }
 
     @Test
+    fun schedulingAndAdvertisingEditsKeepUnqualifiedStockStationsDormant() {
+        val drama = Lineup.optionalThemes().first { it.id == "opt:drama" }
+        val edits = listOf(
+            drama.copy(showAds = false),
+            drama.copy(nonClockAligned = true),
+            drama.copy(adBreakLength = com.rerun.core.model.AdBreakLength.LONG),
+        )
+        for (edited in edits) {
+            val plan = Lineup.plan(emptyList(), listOf(StoredChannel(edited, true)), music = false)
+            val kept = plan.channels.single { it.def.id == drama.id }
+            assertEquals(edited, kept.def)
+            assertTrue(kept.dormant)
+            assertFalse(drama.id in plan.deleteIds)
+        }
+    }
+
+    @Test
     fun musicSwitchDropsStockStations() {
         val songs = List(24) { track("j$it", genre = "Jazz", durationMs = 30 * MIN) }
         val station = Lineup.musicTemplates(songs).single()

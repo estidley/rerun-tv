@@ -1,14 +1,8 @@
 package com.rerun.tv.ui.settings
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,13 +12,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import com.rerun.tv.RerunApp
 import com.rerun.tv.data.Settings
 import com.rerun.tv.ui.Effects
@@ -101,13 +94,7 @@ fun SettingsScreen(controller: TvController, app: RerunApp = RerunApp.instance) 
     }
 
     TvStage("BACK guide") {
-        Column(
-            modifier = Modifier.widthIn(max = 1600.dp).fillMaxWidth().testTag("settings-panel")
-                .background(Retro.GuideBlueDeep.copy(alpha = 0.4f))
-                .border(1.dp, Retro.Border.copy(alpha = 0.4f)).padding(24.dp),
-            horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
+        com.rerun.tv.ui.common.TvPanel(Modifier.testTag("settings-panel")) {
             BasicText("EFFECTS", style = Retro.GuideNumber)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton("All effects on", { controller.setAllEffects(true) }, modifier = buttonFocus(0, 0))

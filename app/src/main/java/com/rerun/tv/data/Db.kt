@@ -212,8 +212,8 @@ interface EntryDao {
     @Query("DELETE FROM entries")
     suspend fun clear()
 
-    @Query("SELECT MAX(endMs) FROM entries WHERE channelId = :channelId")
-    suspend fun lastEnd(channelId: String): Long?
+    @Query("SELECT * FROM entries WHERE channelId = :channelId ORDER BY endMs DESC LIMIT 1")
+    suspend fun last(channelId: String): EntryRow?
 
     @Query("SELECT * FROM entries WHERE channelId = :channelId AND endMs > :fromMs AND startMs < :toMs ORDER BY startMs")
     suspend fun range(channelId: String, fromMs: Long, toMs: Long): List<EntryRow>

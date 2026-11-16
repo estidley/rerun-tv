@@ -804,6 +804,24 @@ class TunerEngineTest {
     }
 
     @Test
+    fun channelWithAdsDisabledShowsUpNextEvenWithAnAdCatalog() = runBlocking<Unit> {
+        val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 30_000)
+        prepare("east", ad, ChannelDef("east", 1, "Test", ChannelKind.CUSTOM, Rules(), showAds = false))
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 10_000, now + 50_000, EntryKind.FILLER, null),
+        ))
+        `when`(repo.adCatalog()).thenReturn(listOf(AdRow.of(ad)))
+
+        engine.tune("east")
+
+        await { engine.state.value.phase == Phase.UP_NEXT }
+        assertTrue(sources.isEmpty())
+        verify(repo, never()).adCatalog()
+    }
+
+    @Test
     fun failedAdDoesNotCancelTheNextProgramsDeadline() = runBlocking {
         val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(key = "ad", durationMs = 10_000)
         val now = System.currentTimeMillis()
@@ -1057,6 +1075,26 @@ class TunerEngineTest {
     }
 
     @Test
+    fun nonClockChannelDoesNotTailSkipIntoAFutureProgram() = runBlocking<Unit> {
+        val item = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 60_000)
+        prepare("east", item, ChannelDef(
+            "east", 1, "Test", ChannelKind.CUSTOM, Rules(), nonClockAligned = true, showAds = false,
+        ))
+        val now = System.currentTimeMillis()
+        wallTime = now
+        `when`(repo.entries(anyString(), anyLong(), anyLong())).thenReturn(listOf(
+            ScheduleEntry("east", now - 60_000, now + 2_000, EntryKind.PROGRAM, item.key),
+            ScheduleEntry("east", now + 2_000, now + 600_000, EntryKind.PROGRAM, item.key),
+        ))
+
+        engine.tune("east")
+
+        await { sources.size == 1 }
+        assertEquals(now - 60_000, engine.state.value.located!!.entry.startMs)
+        assertEquals(now + 2_000, engine.state.value.located!!.entry.endMs)
+    }
+
+    @Test
     fun tuningJustBeforeFillerStartsRetriesAtTheBreakStart() = runBlocking<Unit> {
         val ad = PlexParse.movies(videoWithSubtitle("srt")).single().copy(durationMs = 30_000)
         prepare("east", ad)
@@ -1216,8 +1254,74 @@ class TunerEngineTest {
         verify(api, times(1)).get("http://127.0.0.1:32400", "/library/metadata/next", "test-only-placeholder")
     }
 
-    private suspend fun prepare(id: String, item: MediaItem) {
-        val row = ChannelRow.of(ChannelDef(id, 1, "Test", ChannelKind.CUSTOM, Rules()), false, false)
+    @Test
+    fun notificationsExpireAndReplacementMessagesGetTheFullTimeout() = runBlocking<Unit> {
+        engine.notify("First")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertEquals("First", engine.state.value.message)
+
+        engine.notify("Second")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertEquals("Second", engine.state.value.message)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertNull(engine.state.value.message)
+    }
+
+    @Test
+    fun hdrConversionMessageExpires() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt").replace(
+            """"id":7,"streamType":3""", """"id":8,"streamType":1,"colorTrc":"smpte2084"},{"id":7,"streamType":3""",
+        )
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.message!!.contains("Converting HDR to SDR"))
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertNotNull(engine.state.value.message)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertNull(engine.state.value.message)
+    }
+
+    @Test
+    fun normalizationUnavailableMessageExpires() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(settings.isOn(Settings.NORMALIZE_LOUDNESS)).thenReturn(true)
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        assertTrue(engine.state.value.message!!.contains("normalization unavailable"))
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(4))
+        assertNotNull(engine.state.value.message)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
+        assertNull(engine.state.value.message)
+    }
+
+    @Test
+    fun playbackFailureMessageDoesNotUseTheTransientTimeout() = runBlocking<Unit> {
+        val metadata = videoWithSubtitle("srt")
+        prepare("east", PlexParse.movies(metadata).single())
+        `when`(api.get("http://127.0.0.1:32400", "/library/metadata/1", "test-only-placeholder")).thenReturn(metadata)
+        engine.tune("east")
+        await { sources.size == 1 }
+        listener.onPlayerError(PlaybackException("Test failure", null, PlaybackException.ERROR_CODE_DECODING_FAILED))
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertNotNull(engine.state.value.message)
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(6))
+        assertEquals(Phase.DIFFICULTIES, engine.state.value.phase)
+        assertNotNull(engine.state.value.message)
+    }
+
+    private suspend fun prepare(
+        id: String,
+        item: MediaItem,
+        def: ChannelDef = ChannelDef(id, 1, "Test", ChannelKind.CUSTOM, Rules()),
+    ) {
+        val row = ChannelRow.of(def, false, false)
         val now = System.currentTimeMillis()
         `when`(repo.channel(id)).thenReturn(row)
         `when`(repo.item(item.key)).thenReturn(item)

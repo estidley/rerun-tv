@@ -119,6 +119,7 @@ class TunerEngine(
     private var rollover: Runnable? = null
     private var retry: Runnable? = null
     private var prefetch: Runnable? = null
+    private var messageClear: Runnable? = null
     private var prefetchJob: Job? = null
     private var prefetchIdentity: Pair<Long, String>? = null
     private var rolloverAtMs = 0L
@@ -251,9 +252,10 @@ class TunerEngine(
         _state.value.channel?.id?.let(::tune)
     }
 
-    /** Surfaces a one-off message on the current tune; the next tune clears it. */
+    /** Surfaces a brief one-off message on the current tune. */
     fun notify(text: String) {
         _state.value = _state.value.copy(message = text)
+        scheduleMessageClear()
     }
 
     private fun saveRestart(paused: Boolean) {
@@ -379,7 +381,7 @@ class TunerEngine(
                     } else repo.entries(channelId, now - 1, now + 6 * 3_600_000L)
                 }
                 val loc = locate(entries, now, skipTail = channelId != Lineup.ADS_ID &&
-                    channelId != Lineup.RESTART_ID)
+                    channelId != Lineup.RESTART_ID && !channel.def.nonClockAligned)
                 if (loc == null) {
                     if (channelId == Lineup.RESTART_ID) error("Saved start-over progress is outside this program.")
                     val upcoming = entries.firstOrNull { it.startMs > now }
@@ -396,9 +398,14 @@ class TunerEngine(
                     scheduleRollover(channelId, upcoming.startMs)
                     return@launch
                 }
-                val ad = if (loc.entry.kind == EntryKind.FILLER) {
+                val ad = if (loc.entry.kind == EntryKind.FILLER && channel.def.showAds) {
                     withContext(Dispatchers.IO) {
-                        adFiller(loc.entry, repo.adCatalog().map { it.toItem() }, now)
+                        adFiller(
+                            loc.entry,
+                            repo.adCatalog().map { it.toItem() },
+                            now,
+                            breakLength = channel.def.adBreakLength.takeIf { channel.def.nonClockAligned },
+                        )
                     }
                 } else null
                 val item = if (loc.entry.kind == EntryKind.FILLER) ad?.item else channelItem(channelId, loc.entry.itemKey)
@@ -475,6 +482,7 @@ class TunerEngine(
                         else null,
                     ).joinToString(" ").ifEmpty { null },
                 )
+                scheduleMessageClear()
                 selectedSubtitle = subtitle
                 embeddedSubtitleIndex = subtitleStreams.filter { it.key == null && it.mimeType != null }
                     .indexOfFirst { it.id == subtitle?.id }
@@ -707,14 +715,28 @@ class TunerEngine(
         handler.postDelayed(r, RETRY_MS)
     }
 
+    private fun scheduleMessageClear() {
+        messageClear?.let(handler::removeCallbacks)
+        messageClear = null
+        val message = _state.value.message ?: return
+        val clear = Runnable {
+            if (_state.value.message == message) _state.value = _state.value.copy(message = null)
+            messageClear = null
+        }
+        messageClear = clear
+        handler.postDelayed(clear, MESSAGE_MS)
+    }
+
     private fun clearTimers() {
         rollover?.let(handler::removeCallbacks)
         retry?.let(handler::removeCallbacks)
         prefetch?.let(handler::removeCallbacks)
+        messageClear?.let(handler::removeCallbacks)
         prefetchJob?.cancel()
         rollover = null
         retry = null
         prefetch = null
+        messageClear = null
         prefetchIdentity = null
     }
 
@@ -752,6 +774,7 @@ class TunerEngine(
 
     private companion object {
         const val RETRY_MS = 15_000L
+        const val MESSAGE_MS = 5_000L
         const val PREFETCH_LEAD_MS = 45_000L
         val DIRECT_TEXT_MIME_TYPES = setOf(
             "application/x-subrip", "text/x-ssa", "text/vtt", "application/ttml+xml", "application/x-quicktime-tx3g",

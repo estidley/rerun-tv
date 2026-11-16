@@ -17,10 +17,10 @@ data class Extension(val entries: List<ScheduleEntry>, val state: ChannelState)
  * appends from [lastEndMs] (or restarts at the current quarter-hour if that's in the past).
  *
  * Movies are dealt from a shuffled deck (no repeats within a deck); shows use a cyclic
- * shuffle (random show, weighted by episode count, episodes in order). Every program is
- * padded to the next local :00/:15/:30/:45 with a FILLER entry. A retained ending that is
- * already past the current grid floor but not itself on a mark gets the same filler before
- * the next video program. Music stations play back to back.
+ * shuffle (random show, weighted by episode count, episodes in order). Ordinary video programs
+ * are padded to the next local :00/:15/:30/:45 with a FILLER entry. Non-clock video channels
+ * instead use their selected ad clips to determine the break, or no break when ads are off or
+ * unavailable. Music stations play back to back.
  * Chronology channels use one ordered deck across movies and episodes instead of the movie rotation.
  */
 class Scheduler(private val zone: ZoneId) {
@@ -33,21 +33,37 @@ class Scheduler(private val zone: ZoneId) {
         nowMs: Long,
         horizonMs: Long = 48 * 3_600_000L,
         backToBack: Boolean = def.kind == ChannelKind.MUSIC,
+        adCatalog: List<MediaItem> = emptyList(),
+        lastEntryKind: EntryKind? = null,
     ): Extension {
         if (pool.isEmpty()) return Extension(emptyList(), state)
         val items = pool.sortedBy { it.key } // input order must not change the schedule
         val music = def.kind == ChannelKind.MUSIC
+        val nonClockVideo = def.nonClockAligned && !backToBack && !music
+        val ungridded = backToBack || nonClockVideo
+        val breakCatalog = if (nonClockVideo && def.showAds) AdBreakCatalog(adCatalog) else null
         val base = Candidates(items.filter { Resolver.inBase(def, it) }.ifEmpty { items }, music)
         val blockSets = def.blocks.map { b ->
             Candidates(items.filter { b.rules.matches(it, if (b.rules.networks.isEmpty()) emptySet() else Resolver.networksOf(it)) }, music)
         }
 
-        val floor = gridFloor(nowMs, zone)
+        val floor = if (nonClockVideo) nowMs else gridFloor(nowMs, zone)
         var cursor = if (lastEndMs == null || lastEndMs < floor) floor else lastEndMs
         val end = nowMs + horizonMs
         val run = Run(state)
         val out = ArrayList<ScheduleEntry>()
-        if (!backToBack && cursor < end) {
+        if (nonClockVideo && def.showAds && lastEntryKind == EntryKind.PROGRAM &&
+            lastEndMs != null && lastEndMs >= nowMs && cursor < end
+        ) {
+            val adBreak = breakCatalog?.plan(def.id, cursor, def.adBreakLength).orEmpty()
+            val breakEnd = adBreak.lastOrNull()?.endMs ?: cursor
+            if (breakEnd > cursor) {
+                out += ScheduleEntry(def.id, cursor, breakEnd, EntryKind.FILLER, null)
+                run.msSinceMovie += breakEnd - cursor
+                cursor = breakEnd
+            }
+        }
+        if (!ungridded && cursor < end) {
             val aligned = gridCeil(cursor, zone)
             if (aligned > cursor) {
                 out += ScheduleEntry(def.id, cursor, aligned, EntryKind.FILLER, null)
@@ -65,9 +81,16 @@ class Scheduler(private val zone: ZoneId) {
 
             val length = item.durationMs.coerceAtLeast(1L)
             val progEnd = cursor + length
-            val slotEnd = if (backToBack) progEnd else gridCeil(progEnd, zone)
+            val adBreak = breakCatalog?.plan(def.id, progEnd, def.adBreakLength).orEmpty()
+            val slotEnd = when {
+                nonClockVideo -> adBreak.lastOrNull()?.endMs ?: progEnd
+                backToBack -> progEnd
+                else -> gridCeil(progEnd, zone)
+            }
             out += ScheduleEntry(def.id, cursor, progEnd, EntryKind.PROGRAM, item.key)
-            if (!backToBack && slotEnd > progEnd) out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
+            if ((!ungridded || adBreak.isNotEmpty()) && slotEnd > progEnd) {
+                out += ScheduleEntry(def.id, progEnd, slotEnd, EntryKind.FILLER, null)
+            }
 
             run.recent = (run.recent + item.key).takeLast(RECENT_CAP)
             if (!backToBack) {

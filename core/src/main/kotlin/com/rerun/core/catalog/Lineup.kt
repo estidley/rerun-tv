@@ -316,7 +316,10 @@ object Lineup {
             stored.hidden == template.hidden &&
             stored.minimumContentHours == template.minimumContentHours &&
             stored.kidsSafe == template.kidsSafe &&
-            stored.movieEveryMs == template.movieEveryMs
+            stored.movieEveryMs == template.movieEveryMs &&
+            stored.showAds == template.showAds &&
+            stored.nonClockAligned == template.nonClockAligned &&
+            stored.adBreakLength == template.adBreakLength
     }
 
     private fun looksStockMusic(stored: ChannelDef): Boolean {
