@@ -15,11 +15,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertFalse
@@ -64,6 +67,31 @@ class CustomChannelArtTest {
         output.parentFile.mkdirs()
         output.outputStream().use {
             compose.onNodeWithTag("custom-gallery").captureToImage().asAndroidBitmap()
+                .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+        }
+    }
+
+    @Test
+    fun longCustomNamesAreNotTruncated() {
+        val longName = "A custom channel with a very long user defined name that keeps going"
+        compose.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                Box(Modifier.width(400.dp).height(120.dp).testTag("long-wordmark")) {
+                    ChannelWordmark("custom:long", longName)
+                }
+            }
+        }
+        val expected = longName.uppercase()
+        compose.onNodeWithText(expected).assertIsDisplayed()
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(expected).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        org.junit.Assert.assertTrue("Long name used ${layout.lineCount} lines", layout.lineCount <= 2)
+        assertFalse("Long name was visually truncated", layout.hasVisualOverflow)
+        val output = java.io.File("build/reports/custom-channel-long-name.png")
+        output.parentFile.mkdirs()
+        output.outputStream().use {
+            compose.onNodeWithTag("long-wordmark").captureToImage().asAndroidBitmap()
                 .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
         }
     }

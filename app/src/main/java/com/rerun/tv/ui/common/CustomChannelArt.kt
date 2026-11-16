@@ -70,8 +70,7 @@ internal fun CustomChannelWordmark(name: String, modifier: Modifier = Modifier) 
             contentScale = ContentScale.Fit,
             modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth(0.32f).aspectRatio(1f),
         )
-        val fontSize = minOf(maxHeight.value * 0.19f, maxWidth.value * 0.78f / (label.length * 0.60f))
-            .coerceAtLeast(10f)
+        val fontSize = minOf(maxHeight.value * 0.19f, maxWidth.value * 0.78f / (label.length * 0.30f))
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
@@ -91,7 +90,7 @@ internal fun CustomChannelWordmark(name: String, modifier: Modifier = Modifier) 
                 .padding(horizontal = maxWidth * 0.07f).padding(bottom = maxHeight * 0.15f),
             style = Retro.Body.copy(color = CustomInk, fontWeight = FontWeight.Medium,
                 fontSize = fontSize.sp, textAlign = TextAlign.Center, shadow = null),
-            maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false,
+            maxLines = 2, overflow = TextOverflow.Clip, softWrap = true,
         )
     }
 }
