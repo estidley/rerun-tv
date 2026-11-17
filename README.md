@@ -33,9 +33,17 @@ Rerun does not report watch progress or history back to Plex.
 
 ### Install
 
-Download an APK from the repository's **Releases** page and sideload it, or build and install directly from source:
+#### Phones and tablets
 
-1. Enable developer options and ADB debugging on your device, then find its IP address.
+1. Download an APK from the repository's **Releases** page directly onto your device, or copy the APK to it.
+2. Open the APK from your browser's downloads or a file manager.
+3. If prompted, allow that browser or file manager to **install unknown apps**, then confirm **Install**. No PC or ADB connection is needed.
+
+#### TVs
+
+Download and open an APK with a file manager, or build and install it from a Windows PC over network ADB:
+
+1. On the TV, enable developer options and network ADB debugging, then find its IP address.
 2. Run this command from the repository root, replacing the example address:
 
 ```powershell
