@@ -6,7 +6,8 @@ import java.time.ZonedDateTime
 
 enum class ChannelKind { NETWORK, CURATED, THEME, CUSTOM, MUSIC }
 
-enum class PlayOrder { SHUFFLE, IN_ORDER, CHRONOLOGICAL }
+/** [MARATHON]: one series (or a few) start to finish, specials then movies last, then loop. */
+enum class PlayOrder { SHUFFLE, IN_ORDER, CHRONOLOGICAL, MARATHON }
 
 enum class AdBreakLength(val targetMs: Long, val maxAds: Int) {
     SHORT(2 * 60_000L, 4),
@@ -20,6 +21,13 @@ private fun Set<String>.normed() = mapTo(HashSet()) { norm(it) }
 /** Title key that ignores case, punctuation and a leading "The" ("Tenchi Muyo!" == "tenchi muyo"). */
 fun titleKey(s: String): String =
     s.trim().lowercase().removePrefix("the ").filter { it.isLetterOrDigit() }
+
+/**
+ * [titleKey] with accents folded ("Shippūden" == "Shippuden"), for rule matching and search only.
+ * [bucketOf] keeps [titleKey] so existing MOVIES 1/2 slices don't move.
+ */
+fun matchKey(s: String): String =
+    titleKey(java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD))
 
 /**
  * Deterministic content slice for split channels (MOVIES 1/2/…). Hashing the title keeps an
@@ -60,7 +68,7 @@ data class Rules(
     val unmatchedOnly: Boolean = false,
 ) {
     private val nNetworks by lazy { networks.normed() }
-    private val nTitles by lazy { titles.mapTo(HashSet()) { titleKey(it) } }
+    private val nTitles by lazy { titles.mapTo(HashSet()) { matchKey(it) } }
     private val nTmdb by lazy { tmdbIds.normed() }
     private val nLabels by lazy { labels.normed() }
     private val nCollections by lazy { collections.normed() }
@@ -99,7 +107,7 @@ data class Rules(
 
         if (nNetworks.isNotEmpty() && networkHit()) return true
         val title = if (item.kind == MediaKind.EPISODE) item.showTitle else item.title
-        if (nTitles.isNotEmpty() && title != null && titleKey(title) in nTitles &&
+        if (nTitles.isNotEmpty() && title != null && matchKey(title) in nTitles &&
             (titleKinds.isEmpty() || item.kind in titleKinds)) return true
         if (nTmdb.isNotEmpty() && item.tmdbId != null && norm(item.tmdbId) in nTmdb) return true
         if (nLabels.isNotEmpty() && item.labels.any { norm(it) in nLabels }) return true

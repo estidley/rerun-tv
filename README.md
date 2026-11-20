@@ -17,6 +17,7 @@ Rerun turns the movies, episodes, and music already on **your own Plex server** 
 - **Retro presentation:** browse a three-hour guide, pick a color theme, and enable optional CRT and tuning effects.
 - **Playback your way:** choose subtitles and audio tracks, start a program over, or save an episode queue for later.
 - **Music stations:** listen by genre or decade with album artwork and a moving display designed to reduce static-image burn-in.
+- **Series marathons:** Naruto and Shippuden stations play every episode in order, back to back, then repeat; set any custom channel to Marathon and pick its shows with **Find related**.
 - **Optional ad breaks:** fill breaks with short clips from your own separate library, or turn ads off per channel.
 
 Browse the [complete built-in channel guide](docs/channels.md) for default numbers, programming descriptions, and generated channel families.

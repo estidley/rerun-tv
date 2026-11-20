@@ -49,6 +49,10 @@ import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.PlayOrder
+import com.rerun.core.catalog.Related
+import com.rerun.core.catalog.has
+import com.rerun.core.catalog.related
+import com.rerun.core.catalog.toggle
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import com.rerun.tv.RerunApp
@@ -78,6 +82,8 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
     var poolMs by remember { mutableStateOf<Long?>(null) }
     var showUnsavedChanges by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var relatedWord by remember { mutableStateOf("") }
+    var related by remember { mutableStateOf<Related?>(null) }
     val first = remember { FocusRequester() }
 
     fun save() {
@@ -133,6 +139,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         library = contents
         originalDraft = d
         draft = d
+        relatedWord = d.rules.titles.minOrNull().orEmpty()
         numberText = d.number.toString()
         runCatching { first.requestFocus() }
     }
@@ -140,6 +147,11 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         val d = draft ?: return@LaunchedEffect
         val contents = library ?: return@LaunchedEffect
         poolMs = withContext(Dispatchers.Default) { Resolver.pool(d, contents, minimumLevel).sumOf { it.durationMs } }
+    }
+
+    LaunchedEffect(relatedWord, library) {
+        val contents = library ?: return@LaunchedEffect
+        related = withContext(Dispatchers.Default) { Facets.related(relatedWord, contents) }
     }
 
     val d = draft
@@ -192,12 +204,57 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
                             PlayOrder.SHUFFLE -> "Shuffle"
                             PlayOrder.IN_ORDER -> "In order"
                             PlayOrder.CHRONOLOGICAL -> "Universe timeline"
+                            PlayOrder.MARATHON -> "Marathon"
                         }
                         TvButton(label, { draft = d.copy(order = o) }, selected = d.order == o)
                     }
                     chipRow(listOf("Kids-safe", "Disabled")) { label ->
                         if (label == "Kids-safe") TvButton(label, { draft = d.copy(kidsSafe = !d.kidsSafe) }, selected = d.kidsSafe)
                         else TvButton(label, { draft = d.copy(hidden = !d.hidden) }, selected = d.hidden)
+                    }
+                }
+            }
+            if (d.kind != ChannelKind.MUSIC) item {
+                Section("Find related") {
+                    BasicText(
+                        if (d.order == PlayOrder.MARATHON) {
+                            "Marathon: ticked shows play start to finish in order, specials last, then repeat. " +
+                                "Type a word to find every show, movie and collection that mentions it."
+                        } else {
+                            "Type a word to find every show, movie and collection that mentions it."
+                        },
+                        style = Retro.Caption,
+                    )
+                    Field("Word", relatedWord, Modifier.width(520.dp).testTag("related-word")) { relatedWord = it }
+                    val r = related
+                    when {
+                        r == null -> BasicText("Searching…", style = Retro.Caption)
+                        r.shows.isEmpty() && r.movies.isEmpty() && r.collections.isEmpty() ->
+                            BasicText("Nothing in your library mentions that word", style = Retro.Caption)
+                        else -> {
+                            if (r.shows.isNotEmpty()) {
+                                BasicText("Shows", style = Retro.Caption.copy(color = Retro.Cyan))
+                                chipRow(r.shows, COLLAPSED_CHIP_COUNT, "expand-related-shows") { show ->
+                                    val copies = if (show.copies > 1) " · ${show.copies} copies, plays once" else ""
+                                    TvButton(show.title, { update(d.rules.toggle(show)) }, selected = d.rules.has(show),
+                                        sub = "${show.episodes} episodes · ${show.hours} h$copies")
+                                }
+                            }
+                            if (r.movies.isNotEmpty()) {
+                                BasicText("Movies", style = Retro.Caption.copy(color = Retro.Cyan))
+                                chipRow(r.movies, COLLAPSED_CHIP_COUNT, "expand-related-movies") { movie ->
+                                    TvButton(movie.title, { update(d.rules.toggle(movie)) }, selected = d.rules.has(movie),
+                                        sub = movie.year?.toString())
+                                }
+                            }
+                            if (r.collections.isNotEmpty()) {
+                                BasicText("Collections", style = Retro.Caption.copy(color = Retro.Cyan))
+                                chipRow(r.collections, COLLAPSED_CHIP_COUNT, "expand-related-collections") { c ->
+                                    TvButton(c, { update(d.rules.copy(collections = d.rules.collections.toggle(c))) },
+                                        selected = c in d.rules.collections)
+                                }
+                            }
+                        }
                     }
                 }
             }

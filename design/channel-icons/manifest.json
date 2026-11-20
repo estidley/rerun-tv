@@ -365,6 +365,28 @@
       "wordmark": "wordmarks/adultswim.svg"
     },
     {
+      "id": "marathon:naruto",
+      "name": "Naruto Marathon",
+      "number": 170,
+      "section": "Marathons",
+      "slug": "marathon-naruto",
+      "accent": "#5185EF",
+      "concept": "Original: ninja scroll pinned by a shuriken",
+      "icon": "icons/marathon-naruto.svg",
+      "wordmark": "wordmarks/marathon-naruto.svg"
+    },
+    {
+      "id": "marathon:shippuden",
+      "name": "Shippuden Marathon",
+      "number": 171,
+      "section": "Marathons",
+      "slug": "marathon-shippuden",
+      "accent": "#3B7664",
+      "concept": "Original: crossed kunai over a rising moon",
+      "icon": "icons/marathon-shippuden.svg",
+      "wordmark": "wordmarks/marathon-shippuden.svg"
+    },
+    {
       "id": "nickjr",
       "name": "Slime Jr.",
       "number": 168,

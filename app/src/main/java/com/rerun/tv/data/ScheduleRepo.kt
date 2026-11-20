@@ -10,10 +10,12 @@ import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
+import com.rerun.core.model.PlayOrder
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import com.rerun.core.schedule.ChannelState
 import com.rerun.core.schedule.EntryKind
+import com.rerun.core.schedule.MarathonOrder
 import com.rerun.core.schedule.ScheduleEntry
 import com.rerun.core.schedule.Scheduler
 import com.rerun.core.schedule.needsTopUp
@@ -154,8 +156,17 @@ class ScheduleRepo internal constructor(
                 val previous = db.settings().get(Settings.SELECTED_LIBRARIES)
                 val encoded = com.rerun.core.codec.SetCodec.encode(selectedLibraries)
                 if (previous != encoded) {
+                    // Marathons keep their place: the episode on now (or last started) restarts after the wipe.
+                    val wipeNow = System.currentTimeMillis()
+                    val marathonResume = existing.filter { it.def.order == PlayOrder.MARATHON }.mapNotNull { ch ->
+                        lastProgramKey(ch.def.id, wipeNow + 1)?.let { ch.def.id to it }
+                    }
                     db.entries().clear()
                     db.states().clear()
+                    for ((id, key) in marathonResume) {
+                        val resumed = MarathonOrder.resumeAt(ChannelState(seed = kotlin.random.Random.nextLong()), key)
+                        db.states().put(StateRow(id, StateCodec.encode(resumed)))
+                    }
                 }
                 db.settings().put(SettingRow(Settings.SELECTED_LIBRARIES, encoded))
             }
@@ -318,6 +329,10 @@ class ScheduleRepo internal constructor(
         _guideRevision.value++
     }
 
+    /** The last stored PROGRAM starting before [beforeMs]; marathon channels continue from it. */
+    private suspend fun lastProgramKey(channelId: String, beforeMs: Long): String? =
+        db.entries().range(channelId, 0, beforeMs).lastOrNull { it.kind == EntryKind.PROGRAM.name && it.startMs < beforeMs }?.itemKey
+
     private suspend fun topUp(row: ChannelRow, nowMs: Long) {
         if (row.dormant || row.hidden) return
         if (row.id == Lineup.RESTART_ID) return
@@ -333,7 +348,8 @@ class ScheduleRepo internal constructor(
         val ext = scheduler.extend(def, pool, state, last, nowMs,
             backToBack = row.id == Lineup.ADS_ID || def.kind == ChannelKind.MUSIC,
             adCatalog = adCatalog,
-            lastEntryKind = lastEntry?.kind?.let(EntryKind::valueOf))
+            lastEntryKind = lastEntry?.kind?.let(EntryKind::valueOf),
+            lastProgramKey = if (def.order == PlayOrder.MARATHON) lastProgramKey(row.id, Long.MAX_VALUE) else null)
         if (ext.entries.isNotEmpty()) db.entries().insertAll(ext.entries.map(EntryRow::of))
         db.states().put(StateRow(row.id, StateCodec.encode(ext.state)))
     }
