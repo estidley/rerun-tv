@@ -53,8 +53,11 @@ object ChannelDescriptions {
             filters += "${def.blocks.size} scheduled block${if (def.blocks.size == 1) "" else "s"}" +
                 if (blockTitles > 0) " with $blockTitles named shows" else ""
         }
+        val marathon = if (def.order == com.rerun.core.model.PlayOrder.MARATHON) {
+            " Marathon: start to finish in order, specials last, then repeats."
+        } else ""
         return (if (sources.isEmpty()) "All included libraries" else sources.joinToString(" or ")) +
-            " · $media" + (if (filters.isEmpty()) "." else "; ${filters.joinToString("; ")}.")
+            " · $media" + (if (filters.isEmpty()) "." else "; ${filters.joinToString("; ")}.") + marathon
     }
 
     private fun names(values: Set<String>): String {

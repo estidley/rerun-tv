@@ -404,6 +404,38 @@ class ScheduleRepoTest {
     }
 
     @Test
+    fun narutoMarathonRunsBackToBackInOrderAndKeepsItsPlaceThroughEditsAndLibraryChanges() = runBlocking {
+        val t = System.currentTimeMillis()
+        val eps = (1..40).map { naruto(it) }
+        repo.refreshChannels(items = eps, selectedLibraries = setOf("anime"))
+        val id = "marathon:naruto"
+        assertFalse(requireNotNull(repo.channel(id)).dormant)
+        repo.ensure(id, t)
+        val first = repo.entries(id, t, t + DAY)
+        assertEquals((1..5).map { "n$it" }, first.take(5).map { it.itemKey })
+        assertTrue(first.all { it.kind == EntryKind.PROGRAM })
+        first.zipWithNext().forEach { (a, b) -> assertEquals(a.endMs, b.startMs) }
+
+        // Editing keeps what's on and carries on with the very next episode.
+        val later = first[2].startMs + 1
+        repo.resetFuture(id, later)
+        val rebuilt = repo.entries(id, later, later + DAY)
+        assertEquals(listOf("n3", "n4", "n5"), rebuilt.take(3).map { it.itemKey })
+
+        // Changing the included libraries wipes schedules; the episode airing now restarts.
+        val airing = repo.entries(id, t, t + 1).single().itemKey
+        repo.refreshChannels(items = eps, selectedLibraries = setOf("anime", "movies"))
+        assertTrue(repo.entries(id, 0, Long.MAX_VALUE).isEmpty())
+        repo.ensure(id, t)
+        assertEquals(airing, repo.entries(id, t, t + DAY).first().itemKey)
+    }
+
+    private fun naruto(n: Int) = movie("n$n").copy(
+        kind = com.rerun.core.model.MediaKind.EPISODE, title = "Episode $n", showKey = "show:naruto",
+        showTitle = "Naruto", season = 1, episode = n, durationMs = 23 * 60_000L, tmdbId = "46260",
+    )
+
+    @Test
     fun newChannelStatesGetRandomSeedsSoResyncsDoNotReplayTheSameOrder() = runBlocking {
         repo.refreshChannels(items = listOf(movie("1")))
         repo.ensure("movies:1", now)

@@ -35,6 +35,8 @@ class Scheduler(private val zone: ZoneId) {
         backToBack: Boolean = def.kind == ChannelKind.MUSIC,
         adCatalog: List<MediaItem> = emptyList(),
         lastEntryKind: EntryKind? = null,
+        /** Last PROGRAM still in the stored schedule; marathon channels continue right after it. */
+        lastProgramKey: String? = null,
     ): Extension {
         if (pool.isEmpty()) return Extension(emptyList(), state)
         val items = pool.sortedBy { it.key } // input order must not change the schedule
@@ -51,6 +53,11 @@ class Scheduler(private val zone: ZoneId) {
         var cursor = if (lastEndMs == null || lastEndMs < floor) floor else lastEndMs
         val end = nowMs + horizonMs
         val run = Run(state)
+        val marathon = def.order == PlayOrder.MARATHON
+        if (marathon) {
+            run.marathonNext = MarathonOrder.nextIndex(base.marathon, state, lastProgramKey)
+            run.pointers.remove(MarathonOrder.RESUME_KEY)
+        }
         val out = ArrayList<ScheduleEntry>()
         if (nonClockVideo && def.showAds && lastEntryKind == EntryKind.PROGRAM &&
             lastEndMs != null && lastEndMs >= nowMs && cursor < end
@@ -76,7 +83,7 @@ class Scheduler(private val zone: ZoneId) {
         while (cursor < end) {
             val local = Instant.ofEpochMilli(cursor).atZone(zone)
             val bi = def.blocks.indexOfFirst { it.activeAt(local) }
-            val candidates = if (bi >= 0 && blockSets[bi].items.isNotEmpty()) blockSets[bi] else base
+            val candidates = if (!marathon && bi >= 0 && blockSets[bi].items.isNotEmpty()) blockSets[bi] else base
             val item = run.pick(def, candidates, poolKeys)
 
             val length = item.durationMs.coerceAtLeast(1L)
@@ -104,6 +111,7 @@ class Scheduler(private val zone: ZoneId) {
     /** Pools stay fixed throughout an extension; prepare lookup/order data once, not per airing. */
     private class Candidates(val items: List<MediaItem>, music: Boolean) {
         val chronology by lazy { com.rerun.core.catalog.ComicCatalog.ordered(items) }
+        val marathon by lazy { MarathonOrder.plan(items) }
         val byKey by lazy { items.associateBy { it.key } }
         val movies = items.filter { it.kind == MediaKind.MOVIE }
         val episodes = if (music) items else items.filter { it.kind == MediaKind.EPISODE }
@@ -127,6 +135,7 @@ class Scheduler(private val zone: ZoneId) {
         val pointers: MutableMap<String, Int> = s.episodePointers.toMutableMap()
         var msSinceMovie = s.msSinceMovie
         var rngCalls = s.rngCalls
+        var marathonNext = 0
 
         fun toState() = ChannelState(seed, deck.toList(), recent, pointers.toMap(), msSinceMovie, rngCalls)
 
@@ -135,6 +144,12 @@ class Scheduler(private val zone: ZoneId) {
         fun pick(def: ChannelDef, candidates: Candidates, poolKeys: Set<String>): MediaItem {
             if (def.order == PlayOrder.CHRONOLOGICAL) return pickChronological(candidates, poolKeys)
             if (pointers.remove(CHRONOLOGY_KEY) != null) deck.clear()
+            if (def.order == PlayOrder.MARATHON) {
+                val items = candidates.marathon.items
+                val item = items[marathonNext % items.size]
+                marathonNext = (marathonNext + 1) % items.size
+                return item
+            }
             if (def.kind == ChannelKind.MUSIC) return pickEpisode(def, candidates)
             val movies = candidates.movies
             val episodes = candidates.episodes

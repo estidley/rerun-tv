@@ -1,6 +1,6 @@
 # Rerun channel identities / 1990s
 
-121 icons and 121 outlined wordmarks: 79 named channels, 40 supported TV/music decade templates, and music/custom fallbacks. The approved Marvelous family and centered Toonuki artwork are preserved. All SVGs contain standalone vector paths with no external fonts or images.
+123 icons and 123 outlined wordmarks: 81 named channels, 40 supported TV/music decade templates, and music/custom fallbacks. The approved Marvelous family and centered Toonuki artwork are preserved. The two Marathon stations use original artwork (a scroll pinned by a shuriken; crossed kunai over a moon) with no franchise logos, characters or symbols. All SVGs contain standalone vector paths with no external fonts or images.
 
 `manifest.json` maps stable channel IDs to the static files. Arbitrary Plex music genres use `MusicGenreArt.kt` to generate name-specific icons and wordmarks with deterministic colors and initials; the bundled `music-generic` remains the static asset-library fallback. Unknown/custom channels use `custom-generic`. Static guide wordmarks retain their designed names; the selected channel's current name appears in the program panel, so custom names and user renames stay readable.
 

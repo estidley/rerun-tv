@@ -116,6 +116,18 @@ Each of the first three stations shuffles the same eligible movie library indepe
 | 361 | Second Feature | A second movie shuffle; requires at least 24 hours, or a higher selected minimum. |
 | 362 | Late Seating | A third movie shuffle; requires at least 48 hours, or a higher selected minimum. |
 
+## Series marathons
+
+Each marathon plays one series start to finish in episode order, back to back with no ad breaks, then starts
+over at episode 1. Specials (season 0) air after the last regular episode. They appear only when the show is in
+your library. Edit one to change which shows it plays: **Find related** lists every show, movie and collection
+whose title contains a word, as checkboxes. Any custom channel can use the same **Marathon** play order.
+
+| Number | Channel | Programming |
+|---|---|---|
+| 170 | Naruto Marathon | Naruto (TMDB 46260, or a show titled Naruto), episodes only. |
+| 171 | Shippuden Marathon | Naruto Shippuden (TMDB 31910, or the title with or without the accent or colon), episodes only. |
+
 ## Comic-universe stations
 
 These channels use curated title/year matching, specific franchise metadata, and explicit labels or collections. Generic studio ownership or broad genres alone do not qualify.

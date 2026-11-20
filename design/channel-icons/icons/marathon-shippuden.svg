@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><defs>
+<g id="kunai"><path d="M0-50 8-24 4-14H-4L-8-24Z" fill="#8FA3B8" stroke-width="3"/><path d="M0-46 4-25" fill="none" stroke="#D6E2EE" stroke-width="1.8"/>
+<rect x="-10" y="-15" width="20" height="5" rx="2" fill="#46382C" stroke-width="2.4"/>
+<rect x="-4" y="-10" width="8" height="28" fill="#3B7664" stroke-width="2.6"/><path d="M-4-4 4 0M-4 4 4 8M-4 12 4 16" fill="none" stroke="#FFF0CE" stroke-width="1.6"/>
+<circle cx="0" cy="25" r="7" fill="none" stroke="#161327" stroke-width="5.5"/><circle cx="0" cy="25" r="7" fill="none" stroke="#E8BE6B" stroke-width="2.4"/></g>
+<g id="kunai-halo"><path d="M0-50 8-24 4-14H-4L-8-24Z"/><rect x="-10" y="-15" width="20" height="5"/><rect x="-4" y="-10" width="8" height="28"/><circle cx="0" cy="25" r="8"/></g>
+</defs><g stroke-linejoin="round" stroke-linecap="round">
+<g fill="#FFF0CE" stroke="#FFF0CE" stroke-width="9"><circle cx="64" cy="58" r="40"/><path d="M8 98Q34 80 64 88T120 92V112H8Z"/>
+<use href="#kunai-halo" transform="translate(64 70) rotate(-38)"/><use href="#kunai-halo" transform="translate(64 70) rotate(38)"/></g>
+<g stroke="#161327">
+<circle cx="64" cy="58" r="40" fill="#E8BE6B" stroke-width="3"/>
+<circle cx="46" cy="44" r="7" fill="#D9A95A" stroke="none"/><circle cx="80" cy="36" r="5" fill="#D9A95A" stroke="none"/><circle cx="84" cy="70" r="8" fill="#D9A95A" stroke="none"/><circle cx="52" cy="74" r="4" fill="#D9A95A" stroke="none"/>
+<path d="M36 34Q44 24 58 22" fill="none" stroke="#FFF0CE" stroke-width="2.4"/>
+<path d="M8 98Q34 80 64 88T120 92V112H8Z" fill="#46382C" stroke-width="3"/>
+<path d="M22 100q12-6 24-4m30 2q14-4 28-1" fill="none" stroke="#906143" stroke-width="2"/>
+<use href="#kunai" transform="translate(64 70) rotate(-38)"/><use href="#kunai" transform="translate(64 70) rotate(38)"/>
+</g></g></svg>

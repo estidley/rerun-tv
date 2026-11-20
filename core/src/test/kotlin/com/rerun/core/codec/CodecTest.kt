@@ -46,6 +46,15 @@ class CodecTest {
     }
 
     @Test
+    fun marathonStationsAndResumeStateRoundTrip() {
+        for (def in com.rerun.core.catalog.Lineup.marathonChannels()) {
+            assertEquals(def, ChannelCodec.decode(ChannelCodec.encode(def)), def.id)
+        }
+        val resumed = com.rerun.core.schedule.MarathonOrder.resumeAt(com.rerun.core.schedule.ChannelState(seed = 7), "n42")
+        assertEquals(resumed, StateCodec.decode(StateCodec.encode(resumed)))
+    }
+
+    @Test
     fun stateRoundTrips() {
         val st = ChannelState(seed = -42, deck = listOf("a", "b"), recent = listOf("c"), episodePointers = mapOf("show:x" to 3), msSinceMovie = 99, rngCalls = 7)
         assertEquals(st, StateCodec.decode(StateCodec.encode(st)))

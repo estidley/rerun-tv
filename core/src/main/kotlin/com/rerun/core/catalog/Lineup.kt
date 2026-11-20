@@ -4,6 +4,7 @@ import com.rerun.core.model.ChannelDef
 import com.rerun.core.model.ChannelKind
 import com.rerun.core.model.MediaItem
 import com.rerun.core.model.MediaKind
+import com.rerun.core.model.PlayOrder
 import com.rerun.core.model.Rules
 import com.rerun.core.resolve.Resolver
 import java.util.UUID
@@ -65,7 +66,7 @@ object Lineup {
     fun isGenerated(id: String): Boolean =
         id == ADS_ID || id == CATCHALL_ID || id.startsWith("decade:") || id.startsWith("opt:") ||
             id.startsWith("movies:") || id.startsWith("music:") || id.startsWith("marvel:") ||
-            id.startsWith("dc:") || id.startsWith("language:")
+            id.startsWith("dc:") || id.startsWith("language:") || id.startsWith("marathon:")
 
     /** Built-ins plus every extra that currently has enough content. */
     fun channels(
@@ -78,7 +79,8 @@ object Lineup {
         val decades = decadeChannels(library, music, minimum)
         val languages = languageTemplates(library, minimum)
         val catchall = if (qualified(catchAllChannel, library, minimum)) listOf(catchAllChannel) else emptyList()
-        return Catalog.builtInChannels() + extras + features + stations + decades + languages + catchall
+        val runs = marathons.filter { qualified(it, library, minimum) }
+        return Catalog.builtInChannels() + extras + features + runs + stations + decades + languages + catchall
     }
 
     fun decadeChannels(
@@ -92,6 +94,9 @@ object Lineup {
     }
 
     fun optionalThemes(): List<ChannelDef> = optional
+
+    /** Stock series marathons (170–179): each runs one show start to finish, back to back, no ads. */
+    fun marathonChannels(): List<ChannelDef> = marathons
     fun movieChannels(): List<ChannelDef> = movies
 
     fun optionalThemes(
@@ -134,7 +139,7 @@ object Lineup {
             }
         val builtIn = Catalog.builtInChannels()
         val stations = musicTemplates(library)
-        val templates = builtIn + optional + movies + stations + decadeTemplates + languages + catchAllChannel
+        val templates = builtIn + optional + movies + marathons + stations + decadeTemplates + languages + catchAllChannel
         val upserts = ArrayList<PlannedChannel>()
         val seen = HashSet<String>()
 
@@ -438,6 +443,20 @@ object Lineup {
         ChannelDef("movies:1", 360, "The Big Picture", ChannelKind.THEME, Rules(kinds = setOf(MediaKind.MOVIE))),
         ChannelDef("movies:2", 361, "Second Feature", ChannelKind.THEME, Rules(kinds = setOf(MediaKind.MOVIE))),
         ChannelDef("movies:3", 362, "Late Seating", ChannelKind.THEME, Rules(kinds = setOf(MediaKind.MOVIE))),
+    )
+
+    private val marathons: List<ChannelDef> = listOf(
+        marathon("marathon:naruto", 170, "Naruto Marathon", tmdbId = "46260", title = "Naruto"),
+        marathon("marathon:shippuden", 171, "Shippuden Marathon", tmdbId = "31910", title = "Naruto Shippuden"),
+    )
+
+    private fun marathon(id: String, number: Int, name: String, tmdbId: String, title: String) = ChannelDef(
+        id, number, name, ChannelKind.THEME,
+        Rules(
+            tmdbIds = setOf(tmdbId), titles = setOf(title),
+            titleKinds = setOf(MediaKind.EPISODE), kinds = setOf(MediaKind.EPISODE),
+        ),
+        order = PlayOrder.MARATHON, showAds = false, nonClockAligned = true,
     )
 
     private fun opt(id: String, number: Int, name: String, rules: Rules, kidsSafe: Boolean = false) =

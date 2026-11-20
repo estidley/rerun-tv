@@ -110,6 +110,24 @@ Network metadata is not a content-rating guarantee. Existing kids-safe markers d
 automatically screen every title or ad; the family/kids theme rules below have explicit
 rating filters. Review Plex tags, channel rules and the ad library for household suitability.
 
+## Series marathons
+
+`marathon:` stations are generated stock rows in **170–179**: they exist only while their pool meets the
+minimum, and user edits are preserved like other stock extras. Each uses `PlayOrder.MARATHON`, `showAds = false`
+and `nonClockAligned = true`, so episodes play back to back without padding or ad breaks.
+
+| Number | Name | Rules |
+|---|---|---|
+| 170 | Naruto Marathon | `tmdbIds = {46260}` or title "Naruto"; episodes only |
+| 171 | Shippuden Marathon | `tmdbIds = {31910}` or title "Naruto Shippuden"; episodes only |
+
+Title rules compare with `matchKey()`, which folds accents and drops punctuation and a leading "The", so
+"Naruto: Shippūden" matches "Naruto Shippuden" while "Naruto" never matches Shippuden or Boruto. Marathon order:
+series oldest first; inside a series seasons in order, season 0 last; movies (only when ticked) after every
+series; then repeat. Two Plex copies of one series (same TMDB id or title) air once, from the more complete copy.
+The run continues after the last stored program, so edits, resyncs and repairs never restart or skip it; a
+library-selection change restarts the episode that was airing.
+
 ## Genre and movie-era stations
 
 These names describe actual genre/year rules, rather than a network association.

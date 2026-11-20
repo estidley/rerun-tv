@@ -1,6 +1,6 @@
 # Marathon channels (Naruto, Shippuden) — design
 
-*2026-11-20. Status: draft for owner approval.*
+*2026-11-20. Status: approved and built (owner: "make sure it's built"; Naruto stations have no ads).*
 
 ## Intent
 
@@ -86,10 +86,13 @@ belongs. Each stock station gets an icon.
 
 ### 2. Keeping its place across rebuilds
 
-The cursor reflects the end of the locked 48h horizon, not what is on screen. So whenever a
-marathon channel's future is rebuilt or wiped, the cursor is reset to **just before the item that
-is airing at that moment** (retained entry → the item after it; wiped entry → that same episode
-restarts). This applies to:
+*(As built: the cursor is the last stored PROGRAM entry, passed to `Scheduler.extend` as
+`lastProgramKey`, with `ChannelState.recent` as fallback, instead of separate pointer ints.)*
+
+A saved cursor reflects the end of the locked 48h horizon, not what is on screen. So whenever a
+marathon channel's future is rebuilt or wiped, it continues from the item that is airing at that
+moment (retained entry → the item after it; wiped entry → that same episode restarts). This
+applies to:
 
 - channel edits (future rebuild),
 - missing-item repair after resync,
@@ -115,7 +118,8 @@ stored.
     `titles`/`collections` the same way.
   - Exact title matches start ticked when a *new* marathon channel is created; nothing is
     auto-ticked on an existing channel.
-  - Selecting Marathon sets `kinds` to episodes only unless a movie is ticked.
+  - Selecting Marathon only changes the order; ticking a movie adds `MOVIE` to `kinds` (and to
+    `titleKinds` when that filter is set). *(Builder call: no hidden kind changes.)*
   - Rows use the existing 20-at-a-time paging and `TvPanel` layout rules.
 
 ### 4. Stock stations (`core/catalog`)
@@ -127,9 +131,10 @@ New "Marathons" group, numbers **170–179** (free today; collisions resolve lik
 | `marathon:naruto` | 170 | Naruto Marathon | `tmdbIds={46260}`, `titles={"Naruto"}`, `titleKinds={EPISODE}`, `kinds={EPISODE}` |
 | `marathon:shippuden` | 171 | Shippuden Marathon | `tmdbIds={31910}`, `titles={"Naruto Shippuden"}`, `titleKinds={EPISODE}`, `kinds={EPISODE}` |
 
-- Both `order = MARATHON`, kind `CURATED`, default ad/clock settings (≈23-min episodes on the
-  15-min grid → a ~7-min break after each, like real TV; Ethan can switch a station to No ads /
-  back-to-back per channel).
+- Both `order = MARATHON`, kind `THEME`, **No ads + non-clock aligned** (owner decision 2026-11-20:
+  "the second the next one starts, go to the next one"), so episodes play back to back with no
+  break. Other channels keep their ad settings; custom marathons default to ordinary channel
+  settings and can pick No ads in the editor.
 - Generated like other stock extras (`isGenerated` gains `marathon:`): appear when the pool meets
   the minimum-content preset, dormant otherwise, user edits preserved via `looksStock`.
 - `matchKey` keeps "Naruto" from also matching "Naruto Shippuden" (exact key, not substring), so the
