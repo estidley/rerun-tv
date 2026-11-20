@@ -139,7 +139,7 @@ fun ChannelEditor(controller: TvController, channelId: String?, app: RerunApp = 
         library = contents
         originalDraft = d
         draft = d
-        relatedWord = d.rules.titles.minOrNull() ?: d.name
+        relatedWord = d.rules.titles.minOrNull().orEmpty()
         numberText = d.number.toString()
         runCatching { first.requestFocus() }
     }

@@ -7,9 +7,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -172,6 +176,32 @@ class ChannelEditorTest {
             org.mockito.ArgumentMatchers.any(ChannelRow::class.java) ?: ChannelRow.of(fixture.def, builtIn = false),
         )
         verify(fixture.controller).go(Screen.Channels)
+    }
+
+    @Test
+    fun findRelatedTicksAShowAndSavesAMarathon() = runBlocking<Unit> {
+        fun ep(key: String, show: String, n: Int) = MediaItem(
+            key = key, kind = com.rerun.core.model.MediaKind.EPISODE, title = "$show $n", year = 2002,
+            durationMs = 23 * 60_000L, genres = setOf("Anime"), network = null, studio = null, contentRating = "TV-PG",
+            showKey = "show:$show", showTitle = show, season = 1, episode = n, tmdbId = null, labels = emptySet(),
+            collections = emptySet(), partKey = null, container = "mkv", videoCodec = "h264", audioCodec = "aac", thumb = null,
+        )
+        val fixture = editorFixture(listOf(ep("n1", "Naruto", 1), ep("n2", "Naruto", 2), ep("s1", "Naruto Shippūden", 1), ep("b1", "Bleach", 1)))
+        showEditor(fixture)
+
+        scrollTo("Word")
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("related-word")))[0].performTextReplacement("naruto")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Naruto Shippūden").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("Bleach").assertCountEquals(0)
+        compose.onAllNodesWithText("Naruto")[0].performClick()
+        scrollTo("Marathon")
+        compose.onNodeWithText("Marathon").performClick()
+        scrollTo("Save")
+        compose.onNodeWithText("Save").performClick()
+        compose.waitForIdle()
+
+        val expected = fixture.def.copy(order = com.rerun.core.model.PlayOrder.MARATHON, rules = fixture.def.rules.copy(titles = setOf("Naruto")))
+        verify(fixture.schedule).saveChannel(ChannelRow.of(expected, builtIn = false))
     }
 
     @Test
