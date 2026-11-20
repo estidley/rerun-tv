@@ -66,8 +66,10 @@ if (-not $SkipBuild) {
 $apk = Join-Path $root 'app\build\outputs\apk\release\app-release.apk'
 if (-not (Test-Path $apk)) { throw "APK not found at $($apk)" }
 
-adb connect "$($TvIp):5555" | Write-Information -InformationAction Continue
-if ($LASTEXITCODE -ne 0) { throw 'ADB connection failed' }
+# Capture the text first: Windows PowerShell 5.1's Write-Information does not accept pipeline input.
+$connect = (adb connect "$($TvIp):5555" 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $connect -notmatch 'connected to') { throw "ADB connection failed: $connect" }
+Write-Information $connect -InformationAction Continue
 Write-Information "If the TV shows 'Allow USB debugging?', choose Always allow, then press Enter here." -InformationAction Continue
 adb -s "$($TvIp):5555" wait-for-device
 if ($LASTEXITCODE -ne 0) { throw 'Waiting for the TV failed' }
